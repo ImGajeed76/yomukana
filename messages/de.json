@@ -33,6 +33,8 @@
   "settings_data_title": "Deine Daten",
   "settings_delete_confirm": "Alles löschen",
   "settings_delete_description": "Das löscht jedes gelernte Zeichen und jeden gelesenen Satz. Es gibt keine Kopie, also lässt es sich nicht rückgängig machen. Exportiere vorher, wenn du es behalten willst.",
+  "settings_delete_done": "Jedes gelernte Zeichen und jeder gelesene Satz ist weg.",
+  "settings_delete_done_title": "Gelöscht",
   "settings_delete_title": "Allen Fortschritt löschen?",
   "settings_language_title": "Sprache",
   "settings_page_title": "Einstellungen",

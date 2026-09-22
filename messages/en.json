@@ -33,6 +33,8 @@
   "settings_data_title": "Your data",
   "settings_delete_confirm": "Delete everything",
   "settings_delete_description": "This deletes every character you have learned and every sentence you have read. There is no copy anywhere else, so it cannot be undone. Export first if you want to keep it.",
+  "settings_delete_done": "Every character you had learned and every sentence you had read is gone.",
+  "settings_delete_done_title": "Deleted",
   "settings_delete_title": "Delete all progress?",
   "settings_language_title": "Language",
   "settings_page_title": "Settings",

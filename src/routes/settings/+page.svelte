@@ -10,6 +10,9 @@
   const progress = new Progress();
 
   let isLoaded = $state(false);
+  /** Whether the dialog is open, and whether it is past the point of no return. */
+  let isAsking = $state(false);
+  let isCleared = $state(false);
 
   // Shown in their own language, the way a language menu always is: someone who
   // only reads German should not have to find "German" written in English.
@@ -51,6 +54,14 @@
 
   async function clearData(): Promise<void> {
     await progress.clear();
+    isCleared = true;
+  }
+
+  function onDialogOpen(open: boolean): void {
+    isAsking = open;
+    // Closing puts it back to asking, so opening it again does not reopen on
+    // last time's confirmation.
+    if (!open) isCleared = false;
   }
 </script>
 
@@ -119,7 +130,7 @@
         will be lost rather than asking whether the reader is sure.
         See CLAUDE.md 12.4.
       -->
-      <AlertDialog.Root>
+      <AlertDialog.Root bind:open={isAsking} onOpenChange={onDialogOpen}>
         <AlertDialog.Trigger>
           {#snippet child({ props })}
             <Button {...props} variant="destructive" disabled={!isLoaded}>
@@ -128,26 +139,42 @@
           {/snippet}
         </AlertDialog.Trigger>
         <AlertDialog.Content>
-          <AlertDialog.Header>
-            <AlertDialog.Title>{m.settings_delete_title()}</AlertDialog.Title>
-            <AlertDialog.Description>{m.settings_delete_description()}</AlertDialog.Description>
-          </AlertDialog.Header>
-          <AlertDialog.Footer>
-            <AlertDialog.Cancel>{m.common_button_cancel()}</AlertDialog.Cancel>
-            <AlertDialog.Action>
-              {#snippet child({ props })}
-                <Button
-                  {...props}
-                  variant="destructive"
-                  onclick={() => {
-                    void clearData();
-                  }}
-                >
-                  {m.settings_delete_confirm()}
-                </Button>
-              {/snippet}
-            </AlertDialog.Action>
-          </AlertDialog.Footer>
+          <!--
+            The dialog answers where it asked. Left unchanged, the one
+            irreversible action in the app looked like the one that did nothing,
+            and the reader is looking at the dialog: that is where focus is
+            trapped. See CLAUDE.md 12.1.
+          -->
+          {#if isCleared}
+            <AlertDialog.Header>
+              <AlertDialog.Title>{m.settings_delete_done_title()}</AlertDialog.Title>
+              <AlertDialog.Description>{m.settings_delete_done()}</AlertDialog.Description>
+            </AlertDialog.Header>
+            <AlertDialog.Footer>
+              <!-- A real restart: the practice page builds a fresh reader on mount. -->
+              <Button href="/">{m.stats_empty_button()}</Button>
+            </AlertDialog.Footer>
+          {:else}
+            <AlertDialog.Header>
+              <AlertDialog.Title>{m.settings_delete_title()}</AlertDialog.Title>
+              <AlertDialog.Description>{m.settings_delete_description()}</AlertDialog.Description>
+            </AlertDialog.Header>
+            <AlertDialog.Footer>
+              <AlertDialog.Cancel>{m.common_button_cancel()}</AlertDialog.Cancel>
+              <!--
+                A plain button, not AlertDialog.Action: the Action closes the
+                dialog on click, and there is something left to say afterwards.
+              -->
+              <Button
+                variant="destructive"
+                onclick={() => {
+                  void clearData();
+                }}
+              >
+                {m.settings_delete_confirm()}
+              </Button>
+            </AlertDialog.Footer>
+          {/if}
         </AlertDialog.Content>
       </AlertDialog.Root>
     </div>
