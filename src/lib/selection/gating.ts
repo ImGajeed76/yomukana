@@ -7,7 +7,6 @@
 import { toCodePoints } from "../japanese/text";
 import { MORAIC_N, MORA_SPELLINGS } from "../romaji/kana-table";
 import { kanaItem, type ItemStore } from "../srs";
-import { bucketFor } from "./select";
 
 function isCoreHiragana(mora: string): boolean {
   const characters = toCodePoints(mora);
@@ -41,8 +40,8 @@ export const CORE_HIRAGANA: readonly string[] = [
 ];
 
 /** How much of the core hiragana the reader can currently read, from 0 to 1. */
-export function hiraganaMastery(store: ItemStore, now: Date): number {
-  return masteryOf(CORE_HIRAGANA, store, now);
+export function hiraganaMastery(store: ItemStore): number {
+  return masteryOf(CORE_HIRAGANA, store);
 }
 
 /**
@@ -54,19 +53,36 @@ export const CORE_KATAKANA: readonly string[] = CORE_HIRAGANA.map((mora) => {
   return code === undefined ? mora : String.fromCodePoint(code + 0x60);
 });
 
-function masteryOf(moras: readonly string[], store: ItemStore, now: Date): number {
+/**
+ * Days of FSRS stability at which a character counts as learned.
+ *
+ * Learned, not currently fresh. The gates used to ask whether the reader would
+ * recall a character right now, which is the same question FSRS asks to decide
+ * whether it is due. So every character a reader had not seen this week counted
+ * as unknown, their mastery fell below the thresholds, and katakana and kanji
+ * silently disappeared from their sentences for taking a week off. Learning a
+ * character is not something a holiday undoes.
+ */
+const LEARNED_STABILITY_DAYS = 1;
+
+function isLearned(store: ItemStore, mora: string): boolean {
+  const state = store.items.get(kanaItem(mora).id);
+  return state !== undefined && state.reviews > 0 && state.card.stability >= LEARNED_STABILITY_DAYS;
+}
+
+function masteryOf(moras: readonly string[], store: ItemStore): number {
   if (moras.length === 0) return 1;
 
   let known = 0;
   for (const mora of moras) {
-    if (bucketFor(store.items.get(kanaItem(mora).id), now) === "known") known += 1;
+    if (isLearned(store, mora)) known += 1;
   }
   return known / moras.length;
 }
 
 /** How much of the core katakana the reader can currently read, from 0 to 1. */
-export function katakanaMastery(store: ItemStore, now: Date): number {
-  return masteryOf(CORE_KATAKANA, store, now);
+export function katakanaMastery(store: ItemStore): number {
+  return masteryOf(CORE_KATAKANA, store);
 }
 
 /** Hiragana mastery at which katakana starts appearing. */
@@ -85,12 +101,8 @@ export const KANJI_KATAKANA_THRESHOLD = 0.5;
  * into hiragana: コーヒー written as こーひー is not Japanese, and practising it
  * would teach a shape the reader will never see again.
  */
-export function allowsKatakana(
-  store: ItemStore,
-  now: Date,
-  threshold: number = KATAKANA_THRESHOLD,
-): boolean {
-  return hiraganaMastery(store, now) >= threshold;
+export function allowsKatakana(store: ItemStore, threshold: number = KATAKANA_THRESHOLD): boolean {
+  return hiraganaMastery(store) >= threshold;
 }
 
 /**
@@ -100,9 +112,9 @@ export function allowsKatakana(
  * under way. A reader still working out か has no attention left for 学校, and
  * showing it early turns the sentence into a wall rather than a lesson.
  */
-export function allowsKanji(store: ItemStore, now: Date): boolean {
+export function allowsKanji(store: ItemStore): boolean {
   return (
-    hiraganaMastery(store, now) >= KANJI_HIRAGANA_THRESHOLD &&
-    katakanaMastery(store, now) >= KANJI_KATAKANA_THRESHOLD
+    hiraganaMastery(store) >= KANJI_HIRAGANA_THRESHOLD &&
+    katakanaMastery(store) >= KANJI_KATAKANA_THRESHOLD
   );
 }

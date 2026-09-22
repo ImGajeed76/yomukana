@@ -6,8 +6,8 @@ import { DEFAULT_OPTIONS, pickSentence, scoreSentence, type Candidate } from "./
 
 const now = new Date("2026-01-01T00:00:00Z");
 
-function candidate(id: string, text: string): Candidate {
-  return { id, items: itemsForSegments(segmentKana(text)) };
+function candidate(id: string, text: string, band = 0): Candidate {
+  return { id, band, items: itemsForSegments(segmentKana(text)) };
 }
 
 /** A store where every character of `text` has been read cleanly and quickly. */

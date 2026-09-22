@@ -14,6 +14,7 @@
   "session_summary_label_accuracy": "Accuracy",
   "session_summary_label_errors": "Errors",
   "session_summary_label_speed": "Characters per minute",
+  "session_typing_error_corpus": "The sentence library could not be loaded, so you are seeing the same few practice sentences. Reloading may help.",
   "session_typing_hint_label": "Type",
   "session_typing_hint_reading": "Up arrow or click for the reading",
   "session_typing_hint_skip": "Esc to skip",

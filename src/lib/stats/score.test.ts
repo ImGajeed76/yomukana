@@ -9,7 +9,6 @@ import {
   type ItemStore,
 } from "../srs";
 import { dailyScores, scoreOf, type ScoredAttempt } from "./score";
-import { CARRY_FORWARD_DAYS } from "./series";
 
 const now = new Date("2026-01-01T00:00:00Z");
 
@@ -94,17 +93,12 @@ describe("dailyScores", () => {
     expect(series[0]?.value).toBe(55);
   });
 
-  test("gives up carrying a score forward once it stops being a reading of anyone", () => {
-    const stale = new Date(today.getTime() - (CARRY_FORWARD_DAYS + 5) * 86_400_000);
-    const series = dailyScores(
-      [{ finishedAt: stale.getTime(), score: 40 }],
-      CARRY_FORWARD_DAYS + 6,
-      today,
-    );
-    // The day it was read still reads 40, and so do the weeks after it. Today,
-    // a month of silence later, is back to nothing.
+  test("holds a score through a long gap rather than dropping it to the floor", () => {
+    // Two months away does not undo what the reader knows, so the line holds.
+    // It used to fall to zero, which read as having lost everything.
+    const series = dailyScores([at("2026-01-02", 40)], 60, new Date("2026-03-02T18:00:00"));
     expect(series[0]?.value).toBe(40);
-    expect(series.at(-1)?.value).toBe(0);
+    expect(series.at(-1)?.value).toBe(40);
   });
 
   test("ignores attempts recorded before scores existed", () => {

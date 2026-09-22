@@ -8,7 +8,7 @@ import { expandKana, planDisplay, tokenSpans, type DisplayToken } from "../corpu
 import { Corpus } from "../corpus/load";
 import { STARTER_SENTENCES } from "../corpus/starter";
 import type { CorpusToken } from "../corpus/types";
-import { Progress, type AttemptRecord } from "../db";
+import { Progress, type AttemptRecord, type SessionRecord } from "../db";
 import { segmentKana, type Segment } from "../romaji";
 import {
   DEFAULT_OPTIONS,
@@ -43,6 +43,15 @@ import {
 
 /** Sentences held back from the running, so the reader is not shown the same few. */
 const RECENT_MEMORY = 8;
+
+/**
+ * Sentences the cooldown remembers.
+ *
+ * Enough for months of reading, and small enough to write out at a sentence
+ * boundary without thinking about it. Past this the oldest are forgotten, which
+ * is the same thing the cooldown was going to do to them anyway.
+ */
+const COOLDOWN_MEMORY = 5_000;
 
 /** Shared empty set, so the common case allocates nothing. */
 const NOTHING_REVEALED: ReadonlySet<number> = new Set<number>();
@@ -83,6 +92,7 @@ export class Practice {
   /** Kana-only sentences to start on while the first band downloads. */
   readonly #starter: readonly Candidate[] = STARTER_SENTENCES.map((sentence) => ({
     id: sentence.id,
+    band: 0,
     items: itemsForSegments(segmentKana(sentence.text)),
   }));
 
@@ -124,9 +134,14 @@ export class Practice {
   #band = 0;
   #isCorpusReady = false;
 
-  constructor() {
-    this.#choose();
-  }
+  /**
+   * Whether the corpus could not be loaded at all.
+   *
+   * A reader has to be told. Silently, a bad deploy left everyone cycling the
+   * same handful of cold-start sentences forever with no way to tell that
+   * anything was wrong. See CLAUDE.md 16 on swallowing errors.
+   */
+  hasCorpusFailed = $state(false);
 
   /**
    * Reads stored progress, then the corpus.
@@ -135,24 +150,55 @@ export class Practice {
    * which is the reason the cold-start set exists.
    */
   async load(): Promise<void> {
+    // Nothing is chosen before this point, and that ordering is the whole
+    // trick. Choosing against a store that has not been read back yet means
+    // choosing for a reader who knows nothing, and the selector answers that
+    // question the same way every time: the shortest sentence with the fewest
+    // unknown characters in it. Every reader got ねこ, on every refresh, no
+    // matter how much Japanese they could read.
+    //
+    // It must also not happen in the constructor, which runs while the page is
+    // being prerendered and would bake one sentence into the HTML for everyone.
     await this.#progress.load();
+    this.#restore(await this.#progress.session());
     this.isPersistent = this.#progress.isPersistent;
     this.isLoaded = true;
     this.#choose();
 
-    await this.#corpus.open();
-    await this.#corpus.ensure(bandsAround(this.#band, this.#corpus.highestBand));
+    try {
+      await this.#corpus.open();
+      await this.#corpus.ensure(bandsAround(this.#band, this.#corpus.highestBand));
+    } catch {
+      // The corpus is a static file on the same origin, so this is a bad deploy
+      // or a dead connection. Neither is something the reader can fix, but both
+      // are things they should be told about rather than left guessing at.
+      this.hasCorpusFailed = true;
+      return;
+    }
+
     this.#isCorpusReady = true;
     this.#choose();
+  }
+
+  /** Puts the reader back where they left off. */
+  #restore(session: SessionRecord | null): void {
+    if (session === null) return;
+
+    this.#progression = {
+      band: session.band,
+      easyStreak: session.easyStreak,
+      hardStreak: session.hardStreak,
+    };
+    this.#band = session.band;
+    for (const [id, at] of session.seenAt) this.#seenAt.set(id, at);
   }
 
   #candidates(): readonly Candidate[] {
     if (!this.#isCorpusReady) return this.#starter;
 
-    const at = now();
     const candidates = this.#corpus.candidates(bandsAround(this.#band, this.#corpus.highestBand), {
-      allowKatakana: allowsKatakana(this.#progress.store, at),
-      allowKanji: allowsKanji(this.#progress.store, at),
+      allowKatakana: allowsKatakana(this.#progress.store),
+      allowKanji: allowsKanji(this.#progress.store),
     });
     // A reader whose bands hold nothing the gates allow still needs something to
     // read, so fall back rather than showing them an empty screen.
@@ -196,7 +242,12 @@ export class Practice {
     // sentence, and reading it back afterwards would measure the store the
     // reader's own answers have already changed.
     const scored = scoreSentence(candidate, this.#progress.store, at, options);
-    this.#challenge = scored.newCount + scored.weakCount;
+
+    // A sentence with nothing left to teach is exactly the sentence the
+    // selector refuses to pick, so waiting for one to be chosen meant waiting
+    // forever. Having to reach into the band above for something worth reading
+    // says the same thing and actually happens: this band is finished.
+    this.#challenge = candidate.band > this.#band ? 0 : scored.newCount + scored.weakCount;
 
     const segments = this.#segmentsFor(candidate.id);
     const tokens = this.#tokensFor(candidate.id);
@@ -205,7 +256,7 @@ export class Practice {
     const store = this.#progress.store;
     // eslint-disable-next-line svelte/prefer-svelte-reactivity -- a local, read once while building the plan
     const nothingRevealed = new Set<number>();
-    const revealed = allowsKanji(store, at) ? chooseRevealed(tokens, store, at) : nothingRevealed;
+    const revealed = allowsKanji(store) ? chooseRevealed(tokens, store, at) : nothingRevealed;
 
     const plan = planDisplay(spans, (_token, index) => revealed.has(index));
     const words: WordSpan[] = plan
@@ -281,6 +332,12 @@ export class Practice {
     this.#seenAt.set(current.id, at.getTime());
     this.#recent = [current.id, ...this.#recent].slice(0, RECENT_MEMORY);
     await this.#progress.commit(store, changed, record);
+    await this.#progress.saveSession({
+      band: this.#progression.band,
+      easyStreak: this.#progression.easyStreak,
+      hardStreak: this.#progression.hardStreak,
+      seenAt: [...this.#seenAt].slice(-COOLDOWN_MEMORY),
+    });
 
     if (this.#isCorpusReady) {
       await this.#corpus.ensure(bandsAround(this.#band, this.#corpus.highestBand));

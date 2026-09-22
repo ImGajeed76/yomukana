@@ -122,6 +122,10 @@ function doubledConsonants(next: RawSegment | undefined): string[] {
     // A doubled vowel is a different mora, not a sokuon, and っん is not a sound.
     if (initial === undefined || VOWELS.has(initial) || initial === "n") continue;
     initials.add(initial);
+    // Hepburn doubles ち and ちゃ with a t, not a c: 抹茶 is matcha, not maccha.
+    // It is the spelling anyone taught Hepburn reaches for, and っち turns up in
+    // a hundred or so corpus sentences.
+    if (spelling.startsWith("ch")) initials.add("t");
   }
   return [...initials];
 }

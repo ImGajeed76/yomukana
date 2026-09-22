@@ -14,6 +14,7 @@
   "session_summary_label_accuracy": "Genauigkeit",
   "session_summary_label_errors": "Fehler",
   "session_summary_label_speed": "Zeichen pro Minute",
+  "session_typing_error_corpus": "Die Satzsammlung konnte nicht geladen werden, darum siehst du immer dieselben paar Übungssätze. Neu laden hilft vielleicht.",
   "session_typing_hint_label": "Tippe",
   "session_typing_hint_reading": "Pfeil nach oben oder Klick für die Lesung",
   "session_typing_hint_skip": "Esc zum Überspringen",

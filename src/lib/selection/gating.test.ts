@@ -45,12 +45,12 @@ describe("CORE_HIRAGANA", () => {
 
 describe("hiraganaMastery", () => {
   test("is zero for a reader who has never typed", () => {
-    expect(hiraganaMastery(EMPTY_STORE, now)).toBe(0);
+    expect(hiraganaMastery(EMPTY_STORE)).toBe(0);
   });
 
   test("rises as the reader learns characters", () => {
-    const some = hiraganaMastery(storeKnowing("あいうえおかきくけこ"), now);
-    const more = hiraganaMastery(storeKnowing("あいうえおかきくけこさしすせそたちつてと"), now);
+    const some = hiraganaMastery(storeKnowing("あいうえおかきくけこ"));
+    const more = hiraganaMastery(storeKnowing("あいうえおかきくけこさしすせそたちつてと"));
 
     expect(some).toBeGreaterThan(0);
     expect(more).toBeGreaterThan(some);
@@ -58,25 +58,25 @@ describe("hiraganaMastery", () => {
 
   test("ignores katakana practice", () => {
     // Reading アイウエオ says nothing about whether あいうえお is readable.
-    expect(hiraganaMastery(storeKnowing("アイウエオカキクケコ"), now)).toBe(0);
+    expect(hiraganaMastery(storeKnowing("アイウエオカキクケコ"))).toBe(0);
   });
 
   test("reaches one when every core kana is known", () => {
-    expect(hiraganaMastery(storeKnowing(CORE_HIRAGANA.join("")), now)).toBe(1);
+    expect(hiraganaMastery(storeKnowing(CORE_HIRAGANA.join("")))).toBe(1);
   });
 });
 
 describe("allowsKatakana", () => {
   test("keeps katakana away from a beginner", () => {
-    expect(allowsKatakana(EMPTY_STORE, now)).toBe(false);
+    expect(allowsKatakana(EMPTY_STORE)).toBe(false);
   });
 
   test("opens once hiragana is solid", () => {
-    expect(allowsKatakana(storeKnowing(CORE_HIRAGANA.join("")), now)).toBe(true);
+    expect(allowsKatakana(storeKnowing(CORE_HIRAGANA.join("")))).toBe(true);
   });
 
   test("stays shut partway through", () => {
     const half = CORE_HIRAGANA.slice(0, 30).join("");
-    expect(allowsKatakana(storeKnowing(half), now)).toBe(false);
+    expect(allowsKatakana(storeKnowing(half))).toBe(false);
   });
 });

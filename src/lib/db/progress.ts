@@ -5,7 +5,14 @@
 // keystroke. See CLAUDE.md 1.8.
 
 import { EMPTY_STORE, INITIAL_READER, type ItemId, type ItemState, type ItemStore } from "../srs";
-import { READER_KEY, openProgressDb, type AttemptRecord, type ProgressDb } from "./schema";
+import {
+  READER_KEY,
+  SESSION_KEY,
+  openProgressDb,
+  type AttemptRecord,
+  type ProgressDb,
+  type SessionRecord,
+} from "./schema";
 
 export interface ProgressExport {
   readonly version: number;
@@ -72,6 +79,18 @@ export class Progress {
     await transaction.done;
   }
 
+  /** Where the reader left off, or nothing if they have not been here before. */
+  async session(): Promise<SessionRecord | null> {
+    if (this.#db === null) return null;
+    return (await this.#db.get("session", SESSION_KEY)) ?? null;
+  }
+
+  /** Writes where the reader is. Called at a sentence boundary, never during one. */
+  async saveSession(record: SessionRecord): Promise<void> {
+    if (this.#db === null) return;
+    await this.#db.put("session", record, SESSION_KEY);
+  }
+
   /** Finished sentences, most recent first. */
   async recentAttempts(limit: number): Promise<AttemptRecord[]> {
     if (this.#db === null) return [];
@@ -108,10 +127,14 @@ export class Progress {
     this.#store = EMPTY_STORE;
     if (this.#db === null) return;
 
-    const transaction = this.#db.transaction(["items", "reader", "attempts"], "readwrite");
+    const transaction = this.#db.transaction(
+      ["items", "reader", "attempts", "session"],
+      "readwrite",
+    );
     void transaction.objectStore("items").clear();
     void transaction.objectStore("reader").clear();
     void transaction.objectStore("attempts").clear();
+    void transaction.objectStore("session").clear();
     await transaction.done;
   }
 }

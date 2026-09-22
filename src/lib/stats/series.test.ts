@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import type { DailyLatency } from "../srs";
-import { CARRY_FORWARD_DAYS, dailyLatencies } from "./series";
+import { dailyLatencies } from "./series";
 
 const today = new Date("2026-03-10T18:00:00");
 
@@ -23,16 +23,11 @@ describe("dailyLatencies", () => {
     ]);
   });
 
-  test("gives up carrying a reading forward once it stops describing anyone", () => {
-    // The read is the oldest day in the span, and the span runs five days past
-    // the point a stale reading is allowed to stand in.
-    const series = dailyLatencies(
-      [day("2026-01-02", 400)],
-      CARRY_FORWARD_DAYS + 6,
-      new Date("2026-02-06T18:00:00"),
-    );
-    expect(series[0]?.value).toBe(400);
-    expect(series.at(-1)?.value).toBe(0);
+  test("holds a reading through a long gap rather than reading as instant", () => {
+    // Drawn as zero, a gap said the reader had got infinitely fast while they
+    // were not there.
+    const series = dailyLatencies([day("2026-01-02", 400)], 60, new Date("2026-03-02T18:00:00"));
+    expect(series.at(-1)?.value).toBe(400);
   });
 
   test("draws nothing for a character with no reads at all", () => {

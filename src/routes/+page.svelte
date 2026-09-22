@@ -73,6 +73,14 @@
       {/if}
 
       <!--
+        Said out loud rather than left to be guessed at. Without it a failed
+        download just looks like an app that only has six sentences in it.
+      -->
+      {#if practice.hasCorpusFailed}
+        <p class="text-sm text-destructive">{m.session_typing_error_corpus()}</p>
+      {/if}
+
+      <!--
         The summary appears below the sentence the reader just finished rather than
         replacing it, so their eye does not have to go looking for it.
       -->

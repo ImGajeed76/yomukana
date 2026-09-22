@@ -5,7 +5,14 @@
 // plain value a test can drive keystroke by keystroke. The caller takes the time
 // at the DOM event, before any framework work has run. See CLAUDE.md 1.8.
 
-import { backspace, press, startTyping, type Segment, type TypingState } from "../romaji";
+import {
+  backspace,
+  press,
+  startTyping,
+  typedInCurrentSegment,
+  type Segment,
+  type TypingState,
+} from "../romaji";
 
 export interface SegmentTiming {
   readonly segment: number;
@@ -22,8 +29,17 @@ export interface SegmentTiming {
    *
    * It is not when a backspace disturbed the segment, and it is not for the
    * first segment of a sentence: there is no earlier segment to measure the
-   * pause from, and the reader may have been looking away. Grading drops these
-   * rather than scoring them as instant reads.
+   * pause from, and the reader may have been looking away.
+   *
+   * It is also not when the key that settled the previous segment was already
+   * part of this one. ん is the common case: it can be spelled `n` or `nn`, so
+   * it does not settle until the next key rules one of those out, and that key
+   * is the first key of the mora after it. The pause before that mora happened
+   * inside ん's window and is already counted there; what is left is the gap
+   * between two keystrokes, which is typing speed. Recording it as recognition
+   * marked every mora after ん as instantly read.
+   *
+   * Grading drops all of these rather than scoring them as instant reads.
    */
   readonly isReliable: boolean;
 }
@@ -47,6 +63,8 @@ export interface Attempt {
   readonly pendingErrors: number;
   /** Whether a backspace has disturbed the current segment. */
   readonly isCurrentCorrected: boolean;
+  /** Whether the current segment was already begun by the key that freed it. */
+  readonly isCurrentCarried: boolean;
 }
 
 export function startAttempt(segments: readonly Segment[], at: number): Attempt {
@@ -61,6 +79,7 @@ export function startAttempt(segments: readonly Segment[], at: number): Attempt 
     firstKeyAt: null,
     pendingErrors: 0,
     isCurrentCorrected: false,
+    isCurrentCarried: false,
   };
 }
 
@@ -91,17 +110,27 @@ export function pressKey(attempt: Attempt, key: string, at: number): Attempt {
   const timings = [...attempt.timings];
   const isFirstSettle = attempt.timings.length === 0;
   for (const segment of result.settledSegments) {
+    // Punctuation is shown and stepped over, never typed, so it settles for
+    // free alongside the mora before it. Counting it as a character read
+    // inflates reading speed, and by more in sentences that happen to have
+    // more commas in them. See CLAUDE.md 3.3.
+    if (attempt.typing.segments[segment]?.kind === "punctuation") continue;
+
     timings.push({
       segment,
       availableAt: attempt.availableAt,
       firstKeyAt,
       settledAt: at,
       errors: attempt.pendingErrors,
-      isReliable: !attempt.isCurrentCorrected && !isFirstSettle,
+      isReliable: !attempt.isCurrentCorrected && !isFirstSettle && !attempt.isCurrentCarried,
     });
   }
 
   const hasSettled = result.settledSegments.length > 0;
+  // This key both finished the last segment and began the next one, so the next
+  // one has no measurable pause of its own.
+  const carried = hasSettled && typedInCurrentSegment(result.state).length > 0;
+
   return {
     ...attempt,
     typing: result.state,
@@ -112,6 +141,7 @@ export function pressKey(attempt: Attempt, key: string, at: number): Attempt {
     firstKeyAt: hasSettled ? null : firstKeyAt,
     pendingErrors: hasSettled ? 0 : attempt.pendingErrors,
     isCurrentCorrected: hasSettled ? false : attempt.isCurrentCorrected,
+    isCurrentCarried: hasSettled ? carried : attempt.isCurrentCarried,
   };
 }
 
@@ -135,11 +165,14 @@ export function backspaceKey(attempt: Attempt, at: number): Attempt {
     ...attempt,
     typing,
     timings,
-    keyCount: attempt.keyCount + 1,
+    // Not counted as a key. Accuracy is accepted keys over keys pressed, so
+    // counting corrections as keys means the more a reader backspaces the more
+    // accurate they look: five wrong keys plus enough retyping reads as 99%.
     availableAt: at,
     firstKeyAt: null,
     pendingErrors: 0,
     isCurrentCorrected: true,
+    isCurrentCarried: false,
   };
 }
 

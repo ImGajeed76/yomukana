@@ -7,15 +7,6 @@ import { dayKey } from "../time";
 // tells the reader how many sentences they read, not how they are doing over a
 // month. The carrying rule lives here once rather than in each chart.
 
-/**
- * How long a reading stands in for the days after it.
- *
- * A reader who takes a week off has not lost what they know, so a line holds
- * rather than falling to the floor. Past this it stops being a reading of them
- * and starts being a guess, so it drops.
- */
-export const CARRY_FORWARD_DAYS = 30;
-
 const MS_PER_DAY = 86_400_000;
 
 export interface DailyPoint {
@@ -27,9 +18,11 @@ export interface DailyPoint {
 /**
  * One point for each of the last `days` days, oldest first.
  *
- * A day with no reading repeats the last one known, up to
- * {@link CARRY_FORWARD_DAYS}. Days before the first reading are zero, which is
- * not a gap in the data, it is what was true.
+ * A day with no reading repeats the last one known, for as long as it takes. A
+ * gap is the reader not being there, not the reader changing: a month away does
+ * not undo a score and does not make a character take zero milliseconds to
+ * recognise. Days before the first reading are zero, which is not a gap in the
+ * data, it is what was true.
  */
 export function carryForward(
   byDay: ReadonlyMap<string, number>,
@@ -38,20 +31,10 @@ export function carryForward(
 ): DailyPoint[] {
   const series: DailyPoint[] = [];
   let carried: number | null = null;
-  let carriedFor = 0;
 
   for (let back = days - 1; back >= 0; back--) {
     const date = dayKey(new Date(now.getTime() - back * MS_PER_DAY));
-    const recorded = byDay.get(date);
-
-    if (recorded !== undefined) {
-      carried = recorded;
-      carriedFor = 0;
-    } else if (carried !== null) {
-      carriedFor += 1;
-      if (carriedFor > CARRY_FORWARD_DAYS) carried = null;
-    }
-
+    carried = byDay.get(date) ?? carried;
     series.push({ date, value: carried ?? 0 });
   }
   return series;

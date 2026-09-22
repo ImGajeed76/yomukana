@@ -62,8 +62,8 @@ function writtenWords(sentence: CorpusSentence): Item[] {
 function toEntry(sentence: CorpusSentence): Entry {
   const kana = itemsForSegments(segmentKana(readingOf(sentence)));
   return {
-    kana: { id: sentence.id, items: kana },
-    written: { id: sentence.id, items: [...kana, ...writtenWords(sentence)] },
+    kana: { id: sentence.id, band: sentence.band, items: kana },
+    written: { id: sentence.id, band: sentence.band, items: [...kana, ...writtenWords(sentence)] },
     sentence,
     hasKatakana: hasKatakana(sentence),
   };

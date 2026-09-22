@@ -41,6 +41,18 @@ interface Expansion {
 }
 
 /**
+ * The spellings a doubled consonant may be followed by.
+ *
+ * Normally the same letter: the `t` of `った` can only be followed by a spelling
+ * of た that starts with `t`. Hepburn doubles ち and ちゃ with a `t` as well,
+ * because `maccha` is not how anyone writes 抹茶, so a `t` also opens `ch`.
+ */
+function followsDoubled(spelling: string, doubled: string): boolean {
+  if (spelling.startsWith(doubled)) return true;
+  return doubled === "t" && spelling.startsWith("ch");
+}
+
+/**
  * Opens every spelling of the next typeable segment at or after `index`.
  * `requiredInitial` carries a sokuon's chosen consonant forward: once the reader
  * has typed the `t` of `った`, only spellings of た starting with `t` remain.
@@ -60,7 +72,7 @@ function expand(
 
   const paths: Path[] = [];
   for (const spelling of segment.spellings) {
-    if (requiredInitial !== null && !spelling.startsWith(requiredInitial)) continue;
+    if (requiredInitial !== null && !followsDoubled(spelling, requiredInitial)) continue;
     paths.push({ segment: cursor, spelling, position: 0 });
   }
   return { paths, isComplete: false };

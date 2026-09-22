@@ -1,7 +1,7 @@
 export { NO_TOTALS, characterStats, totalsOf } from "./summary";
 export type { CharacterStat, Totals } from "./summary";
 
-export { CARRY_FORWARD_DAYS, carryForward, dailyLatencies } from "./series";
+export { carryForward, dailyLatencies } from "./series";
 export type { DailyPoint } from "./series";
 
 export { dailyScores, scoreOf } from "./score";

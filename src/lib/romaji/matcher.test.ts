@@ -55,8 +55,9 @@ describe("accepted spellings", () => {
   test("doubles whichever consonant the reader chose for the next mora", () => {
     expect(accepts("いっち", "itti")).toBe(true);
     expect(accepts("いっち", "icchi")).toBe(true);
-    // The doubled letter has to match the spelling that follows it.
-    expect(accepts("いっち", "itchi")).toBe(false);
+    // The doubled letter has to match the spelling that follows it, with the
+    // one exception Hepburn insists on. See the sokuon spellings below.
+    expect(accepts("いっち", "ikchi")).toBe(false);
   });
 
   test("takes n, nn and n' for the moraic nasal", () => {
@@ -213,5 +214,22 @@ describe("spelling systems", () => {
     expect(accepts("ぢ", "ji")).toBe(false);
     expect(accepts("づ", "du")).toBe(true);
     expect(accepts("づ", "zu")).toBe(false);
+  });
+});
+
+describe("sokuon spellings", () => {
+  test("takes the Hepburn t before ち and ちゃ", () => {
+    // 抹茶 is matcha. Nobody writes maccha, and rejecting it scored the reader
+    // an error on a word they had spelled the way they were taught.
+    expect(accepts("まっちゃ", "matcha")).toBe(true);
+    expect(accepts("いっち", "itchi")).toBe(true);
+    // The other doublings still work.
+    expect(accepts("まっちゃ", "maccha")).toBe(true);
+    expect(accepts("いっち", "itti")).toBe(true);
+  });
+
+  test("still refuses a doubling that does not match what follows", () => {
+    expect(accepts("がっこう", "gatkou")).toBe(false);
+    expect(accepts("いった", "icta")).toBe(false);
   });
 });

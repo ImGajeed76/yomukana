@@ -118,7 +118,7 @@ describe.skipIf(!hasCorpus)("practice over the shipped corpus", () => {
   for (const sentence of (chunk.sentences ?? []).slice(0, 600)) {
     const segments = segmentKana(readingOf(sentence));
     segmentsOf.set(sentence.id, segments);
-    candidates.push({ id: sentence.id, items: itemsForSegments(segments) });
+    candidates.push({ id: sentence.id, band: sentence.band, items: itemsForSegments(segments) });
   }
 
   test("the first band is readable without katakana or kanji", () => {
@@ -156,10 +156,9 @@ describe.skipIf(!hasCorpus)("practice over the shipped corpus", () => {
   test("hiragana knowledge grows and the katakana gate is shut until it does", () => {
     const early = practise(candidates, segmentsOf, 10);
     const later = practise(candidates, segmentsOf, 150);
-    const at = new Date(Date.UTC(2026, 0, 2));
 
-    expect(hiraganaMastery(later.store, at)).toBeGreaterThan(hiraganaMastery(early.store, at));
-    expect(allowsKatakana(EMPTY_STORE, at)).toBe(false);
+    expect(hiraganaMastery(later.store)).toBeGreaterThan(hiraganaMastery(early.store));
+    expect(allowsKatakana(EMPTY_STORE)).toBe(false);
   });
 
   test("token spans line up with the segments for every sentence", () => {

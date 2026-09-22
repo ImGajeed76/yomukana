@@ -89,9 +89,9 @@
   let at = $derived(isLoaded ? new Date() : new Date(0));
   let allStats = $derived(isLoaded ? characterStats(store, at) : []);
   let words = $derived(allStats.filter((stat) => stat.item.kind === "kanji"));
-  let isKanjiOpen = $derived(isLoaded && allowsKanji(store, at));
-  let hiragana = $derived(isLoaded ? hiraganaMastery(store, at) : 0);
-  let katakana = $derived(isLoaded ? katakanaMastery(store, at) : 0);
+  let isKanjiOpen = $derived(isLoaded && allowsKanji(store));
+  let hiragana = $derived(isLoaded ? hiraganaMastery(store) : 0);
+  let katakana = $derived(isLoaded ? katakanaMastery(store) : 0);
 
   function percent(value: number): string {
     return `${String(Math.round(value * 100))}%`;

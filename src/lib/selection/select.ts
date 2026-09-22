@@ -9,6 +9,8 @@ import { recallProbability, type Item, type ItemState, type ItemStore } from "..
 
 export interface Candidate {
   readonly id: string;
+  /** Which difficulty band it came from. */
+  readonly band: number;
   /** The items this sentence tests, deduplicated. */
   readonly items: readonly Item[];
 }

@@ -61,7 +61,13 @@ const BASELINE_WEIGHT = 0.05;
 
 // Latency above this is a break, not a read: the reader looked away, took a
 // call, or left the tab. Folding it into the baseline would wreck it.
-const OUTLIER_LATENCY_MS = 5_000;
+//
+// Generous on purpose. At five seconds it was catching real reading: a beginner
+// genuinely stuck on a character for six seconds had that character thrown out
+// of the record, graded Good, scheduled further away, and then scored as if
+// they had read it at the reference pace. Fifteen seconds is someone who has
+// stopped, not someone who is working it out.
+const OUTLIER_LATENCY_MS = 15_000;
 
 /** Whether a latency is plausible as reading time rather than an interruption. */
 export function isPlausibleLatency(latencyMs: number): boolean {

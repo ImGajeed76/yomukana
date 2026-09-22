@@ -7,7 +7,16 @@ import { openDB, type IDBPDatabase, type DBSchema } from "idb";
 import type { ItemId, ItemState, ReaderModel } from "../srs";
 
 export const DATABASE_NAME = "yomukana";
-export const DATABASE_VERSION = 1;
+/**
+ * Bump this whenever a store or an index is added.
+ *
+ * A browser that already holds the database at the old version never runs the
+ * upgrade, so a new store simply is not there and every transaction touching it
+ * throws. Each step is additive and guarded by the version it arrived in, so a
+ * reader coming from any earlier version ends up in the same place with their
+ * history intact. See CLAUDE.md 0 on migrations being forward-only.
+ */
+export const DATABASE_VERSION = 2;
 
 /** One finished sentence, kept for the stats page. */
 export interface AttemptRecord {
@@ -29,6 +38,25 @@ export interface AttemptRecord {
   readonly score?: number;
 }
 
+/**
+ * Where the reader is between sessions.
+ *
+ * The band used to live only in memory, so every reload put a reader who had
+ * worked up to band six back on band zero material and made them climb again.
+ * The cooldown went with it, so sentences they had just read came straight back
+ * the next day.
+ */
+export interface SessionRecord {
+  readonly band: number;
+  readonly easyStreak: number;
+  readonly hardStreak: number;
+  /** Sentence id to when it was last read, in epoch milliseconds. */
+  readonly seenAt: readonly (readonly [string, number])[];
+}
+
+/** The single key the session record is stored under. */
+export const SESSION_KEY = "session";
+
 export interface KakukanaDb extends DBSchema {
   items: {
     key: ItemId;
@@ -42,6 +70,10 @@ export interface KakukanaDb extends DBSchema {
     key: number;
     value: AttemptRecord;
     indexes: { "by-finished": number };
+  };
+  session: {
+    key: string;
+    value: SessionRecord;
   };
 }
 
@@ -67,6 +99,9 @@ export async function openProgressDb(): Promise<ProgressDb | null> {
           db.createObjectStore("reader");
           const attempts = db.createObjectStore("attempts", { autoIncrement: true });
           attempts.createIndex("by-finished", "finishedAt");
+        }
+        if (oldVersion < 2) {
+          db.createObjectStore("session");
         }
       },
     });

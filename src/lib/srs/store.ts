@@ -84,15 +84,24 @@ export function reviewsForWords(
 
   const reviews: Review[] = [];
   for (const word of words) {
-    const first = bySegment.get(word.from);
+    // The first segment of a sentence is never a measurement, so a word that
+    // starts one used to be skipped entirely: 私は, 今日は and 彼は stayed
+    // unread forever, permanently new to the selector and burning the reveal
+    // budget in every sentence they turned up in. Any timed segment inside the
+    // word is enough to say the reader read it.
+    let first: TimedSegment | undefined;
+    let wasWrong = false;
+    for (let segment = word.from; segment < word.to; segment++) {
+      const timing = bySegment.get(segment);
+      if (timing === undefined) continue;
+      first ??= timing;
+      if (timing.errors > 0) wasWrong = true;
+    }
     if (first === undefined) continue;
 
-    let errors = 0;
-    for (let segment = word.from; segment < word.to; segment++) {
-      errors += bySegment.get(segment)?.errors ?? 0;
-    }
-
-    reviews.push({ item: word.item, latencyMs: first.latencyMs, errors });
+    // One, not one per mora. Summed, a five-mora word collected five times the
+    // errors of a kana for the same mistake, and scored worse for being longer.
+    reviews.push({ item: word.item, latencyMs: first.latencyMs, errors: wasWrong ? 1 : 0 });
   }
   return reviews;
 }
@@ -112,9 +121,14 @@ export function applyReviews(store: ItemStore, reviews: readonly Review[], now: 
       errors: existing.errors + review.errors,
     });
 
-    // Only clean reads shape the baseline. A review the reader got wrong says
-    // nothing about how fast they read when they know the character.
-    if (review.errors === 0) reader = updateReader(reader, review.latencyMs);
+    // Only clean reads shape the baseline, and only single characters. A word
+    // review reuses the latency of the first mora in it, so letting words in
+    // too would weigh that one measurement twice, and it is always one of the
+    // slowest in the sentence. The baseline every other grade is normalised
+    // against would drift upward for no reason but kanji being present.
+    if (review.errors === 0 && review.item.kind === "kana") {
+      reader = updateReader(reader, review.latencyMs);
+    }
   }
 
   return { items, reader };
