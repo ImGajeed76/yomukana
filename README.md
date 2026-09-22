@@ -8,6 +8,17 @@ kanji reading, and picks the next sentence from that.
 
 The name is 読む + かな, "read kana". It also reads as 読むかな, "shall I read?"
 
+## Before you use it
+
+I did not write this code. Claude wrote all of it, in one session, while I
+steered. I have read some of it.
+
+This is a quick project. I do not know yet whether it actually teaches you to
+read, and there is slop in here. Sorry about that. It does work, and it has
+helped me, which is why it is up.
+
+I might come back to it.
+
 ## How it works
 
 Time to the first key is recognition, everything after it is typing speed, and
