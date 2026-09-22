@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <!-- In the document itself rather than a component head, so it is there before
+         any JavaScript runs and the browser never falls back to /favicon.ico. -->
+    <link rel="icon" href="%sveltekit.assets%/favicon.svg" />
+    <meta name="text-scale" content="scale" />
+    <meta name="theme-color" content="#0c0a09" />
+    <!--
+      Privacy-friendly analytics by Plausible, self-hosted. Cookieless, no
+      personal data, no cross-site profile. It counts page views and is told
+      nothing else: it never sees a sentence, a keystroke or a score, and all of
+      those stay in the reader's browser. See CLAUDE.md 1.7.
+    -->
+    <script async src="https://analytics.oseifert.ch/js/pa-qu6BibCIjMnKgqszi7CP3.js"></script>
+    <script>
+      window.plausible =
+        window.plausible ||
+        function () {
+          (plausible.q = plausible.q || []).push(arguments);
+        };
+      plausible.init =
+        plausible.init ||
+        function (i) {
+          plausible.o = i || {};
+        };
+      plausible.init();
+    </script>
+    %sveltekit.head%
+  </head>
+
+  <body data-sveltekit-preload-data="hover">
+    <div style="display: contents">%sveltekit.body%</div>
+  </body>
+</html>

@@ -1,0 +1,57 @@
+{
+  "version": 1,
+  "builtAt": "2026-09-22T06:52:04.007Z",
+  "bands": [
+    {
+      "band": 0,
+      "file": "band-0.json",
+      "sentences": 3000
+    },
+    {
+      "band": 1,
+      "file": "band-1.json",
+      "sentences": 3000
+    },
+    {
+      "band": 2,
+      "file": "band-2.json",
+      "sentences": 3000
+    },
+    {
+      "band": 3,
+      "file": "band-3.json",
+      "sentences": 3000
+    },
+    {
+      "band": 4,
+      "file": "band-4.json",
+      "sentences": 3000
+    },
+    {
+      "band": 5,
+      "file": "band-5.json",
+      "sentences": 3000
+    },
+    {
+      "band": 6,
+      "file": "band-6.json",
+      "sentences": 3000
+    },
+    {
+      "band": 7,
+      "file": "band-7.json",
+      "sentences": 3000
+    },
+    {
+      "band": 8,
+      "file": "band-8.json",
+      "sentences": 3000
+    },
+    {
+      "band": 9,
+      "file": "band-9.json",
+      "sentences": 3000
+    }
+  ],
+  "attribution": "Sentences from Tatoeba (https://tatoeba.org), used under CC BY 2.0 FR. Readings generated with kuromoji and IPADic."
+}

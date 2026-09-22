@@ -1,0 +1,126 @@
+// Everything the app knows about one reader: their per-item schedules and the
+// typing baseline their grades are measured against.
+//
+// A plain value with no storage in it. `db/` persists it and hands it back.
+
+import type { Segment } from "../romaji";
+import { gradeReview, isPlausibleLatency, updateReader, type ReaderModel } from "./grade";
+import { INITIAL_READER } from "./grade";
+import { itemForSegment, type Item, type ItemId } from "./item";
+import { newItemState, reviewItem, type ItemState } from "./schedule";
+
+export interface ItemStore {
+  readonly items: ReadonlyMap<ItemId, ItemState>;
+  readonly reader: ReaderModel;
+}
+
+export const EMPTY_STORE: ItemStore = {
+  items: new Map<ItemId, ItemState>(),
+  reader: INITIAL_READER,
+};
+
+/** One segment's measurement, already stripped of anything a backspace touched. */
+export interface TimedSegment {
+  /** Index into the sentence's segments. */
+  readonly segment: number;
+  readonly latencyMs: number;
+  readonly errors: number;
+}
+
+export interface Review {
+  readonly item: Item;
+  readonly latencyMs: number;
+  readonly errors: number;
+}
+
+/**
+ * Pairs each measurement with the item it tested.
+ *
+ * A sentence can test the same item more than once. Each occurrence is its own
+ * review, because reading か twice in one sentence is two reads, and the second
+ * one being faster is exactly the signal worth keeping.
+ */
+export function reviewsFor(segments: readonly Segment[], timed: readonly TimedSegment[]): Review[] {
+  const reviews: Review[] = [];
+
+  for (const timing of timed) {
+    const segment = segments[timing.segment];
+    if (segment === undefined) continue;
+    const item = itemForSegment(segment);
+    if (item === null) continue;
+
+    reviews.push({ item, latencyMs: timing.latencyMs, errors: timing.errors });
+  }
+  return reviews;
+}
+
+/** One written word and the stretch of segments the reader typed for it. */
+export interface WordSpan {
+  readonly item: Item;
+  /** First segment of the word. */
+  readonly from: number;
+  /** One past the last segment of the word. */
+  readonly to: number;
+}
+
+/**
+ * Reviews for the words shown in their written form.
+ *
+ * The recognition time for 学校 is the pause before its first keystroke: that is
+ * where the reader worked out what the kanji said. Everything after is them
+ * spelling out a reading they had already recovered. Errors anywhere in the word
+ * count against it, because a wrong key halfway through means the reading was
+ * not as recovered as it looked.
+ *
+ * A word whose first segment was not cleanly measured is skipped rather than
+ * guessed at.
+ */
+export function reviewsForWords(
+  words: readonly WordSpan[],
+  timed: readonly TimedSegment[],
+): Review[] {
+  const bySegment = new Map<number, TimedSegment>();
+  for (const timing of timed) bySegment.set(timing.segment, timing);
+
+  const reviews: Review[] = [];
+  for (const word of words) {
+    const first = bySegment.get(word.from);
+    if (first === undefined) continue;
+
+    let errors = 0;
+    for (let segment = word.from; segment < word.to; segment++) {
+      errors += bySegment.get(segment)?.errors ?? 0;
+    }
+
+    reviews.push({ item: word.item, latencyMs: first.latencyMs, errors });
+  }
+  return reviews;
+}
+
+/** Applies a sentence's worth of reviews, in order. */
+export function applyReviews(store: ItemStore, reviews: readonly Review[], now: Date): ItemStore {
+  const items = new Map(store.items);
+  let reader = store.reader;
+
+  for (const review of reviews) {
+    const existing = items.get(review.item.id) ?? newItemState(review.item.id, now);
+    const grade = gradeReview(review.latencyMs, review.errors, reader);
+    const latency = isPlausibleLatency(review.latencyMs) ? review.latencyMs : null;
+
+    items.set(review.item.id, {
+      ...reviewItem(existing, grade, latency, now),
+      errors: existing.errors + review.errors,
+    });
+
+    // Only clean reads shape the baseline. A review the reader got wrong says
+    // nothing about how fast they read when they know the character.
+    if (review.errors === 0) reader = updateReader(reader, review.latencyMs);
+  }
+
+  return { items, reader };
+}
+
+/** The state of one item, or a fresh one if the reader has never seen it. */
+export function itemState(store: ItemStore, id: ItemId, now: Date): ItemState {
+  return store.items.get(id) ?? newItemState(id, now);
+}
