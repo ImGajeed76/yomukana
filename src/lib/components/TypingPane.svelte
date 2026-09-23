@@ -27,7 +27,6 @@
   // keystroke. Proxying it would put allocation on the one path that cannot
   // afford any. See CLAUDE.md 1.8.
   let attempt = $state.raw<Attempt>(startAttempt([], 0));
-  let hasError = $state(false);
   let hasStarted = $state(false);
   // Written words the reader asked the reading for. They are not measurements
   // any more, so the caller drops them rather than grading a lookup as a read.
@@ -39,12 +38,14 @@
   // reader who looks away before starting is not charged for it.
   $effect.pre(() => {
     attempt = startAttempt(segments, performance.now());
-    hasError = false;
     hasStarted = false;
     revealed.clear();
   });
 
   let typed = $derived(typedInCurrentSegment(attempt.typing));
+  // Red for as long as a wrong key is on screen, not just for the frame after
+  // it was pressed: the reader has to delete it, and should be able to see why.
+  let hasError = $derived(attempt.stray !== "");
   let current = $derived(segments[attempt.typing.settled]);
   let hints = $derived(
     attempt.pendingErrors >= ERRORS_BEFORE_HINT
@@ -87,7 +88,6 @@
 
     const outcome = applyKey(attempt, action, at);
     attempt = outcome.attempt;
-    hasError = outcome.wasRejected;
 
     // After the timestamp, after the key is matched and after the state the
     // reader can see is updated. Nothing decorative sits between a key being
@@ -105,15 +105,19 @@
     {tokens}
     settled={attempt.typing.settled}
     {hasError}
+    typedBySegment={attempt.typedBySegment}
+    typing={typed}
+    stray={attempt.stray}
     {revealed}
     onReveal={reveal}
   />
 
   <!-- Height is reserved so the line appearing never moves the sentence. -->
   <div class="flex min-h-6 items-baseline gap-4">
-    <span class="font-mono text-base" class:text-destructive={hasError}>
-      {typed || (hasStarted ? "" : m.session_typing_status_ready())}
-    </span>
+    <!-- What was typed now sits under each character; this only invites a start. -->
+    {#if !hasStarted}
+      <span class="text-sm text-muted-foreground">{m.session_typing_status_ready()}</span>
+    {/if}
 
     {#if hints.length > 0}
       <span class="text-sm text-muted-foreground">

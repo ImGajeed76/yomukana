@@ -47,6 +47,7 @@ describe("timing", () => {
       ["k", 0],
       ["a", 100],
       ["t", 200],
+      ["\b", 300],
       ["s", 400],
       ["a", 450],
     ]);
@@ -62,6 +63,7 @@ describe("timing", () => {
   test("counts errors against the segment that was current", () => {
     const attempt = run("かさ", [
       ["z", 10],
+      ["\b", 15],
       ["k", 20],
       ["a", 30],
       ["s", 40],
@@ -181,6 +183,7 @@ describe("summarise", () => {
   test("reports accuracy and reading speed", () => {
     const attempt = run("かさ", [
       ["z", 0],
+      ["\b", 50],
       ["k", 100],
       ["a", 200],
       ["s", 300],
@@ -189,6 +192,7 @@ describe("summarise", () => {
 
     const summary = summarise(attempt);
     expect(summary.durationMs).toBe(400);
+    // The backspace is not a key: correcting is not typing.
     expect(summary.keyCount).toBe(5);
     expect(summary.errors).toBe(1);
     expect(summary.accuracy).toBe(0.8);
@@ -228,5 +232,96 @@ describe("measuredLatency", () => {
       isReliable: true,
     };
     expect(measuredLatency(timing)).toBe(1400);
+  });
+});
+
+describe("wrong keys", () => {
+  test("land on the screen and hold everything after them until deleted", () => {
+    // In the reader's head the z is typed, so it is typed on screen too. The k
+    // after it is sitting after a mistake and lands with it.
+    const attempt = run("かさ", [
+      ["z", 0],
+      ["k", 10],
+    ]);
+
+    expect(attempt.stray).toBe("zk");
+    expect(attempt.typing.keystrokes).toEqual([]);
+    expect(attempt.errors).toBe(2);
+  });
+
+  test("are deleted before anything the reader got right", () => {
+    const attempt = run("かさ", [
+      ["k", 0],
+      ["z", 10],
+      ["\b", 20],
+    ]);
+
+    // The z went. The k, which was right, is still there.
+    expect(attempt.stray).toBe("");
+    expect(attempt.typing.keystrokes).toEqual(["k"]);
+  });
+
+  test("do not make a character unreliable when deleted", () => {
+    // Deleting a mistake is the ordinary way through one. The character is
+    // still timed, to the moment it finally came out right.
+    const attempt = run("かさ", [
+      ["k", 0],
+      ["a", 100],
+      ["z", 300],
+      ["\b", 350],
+      ["s", 400],
+      ["a", 500],
+    ]);
+
+    const second = attempt.timings[1];
+    expect(second?.isReliable).toBe(true);
+    expect(second?.errors).toBe(1);
+    if (second !== undefined) expect(measuredLatency(second)).toBe(400);
+  });
+});
+
+describe("backspace", () => {
+  test("cannot reach back into a character that is finished and right", () => {
+    const attempt = run("かさ", [
+      ["k", 0],
+      ["a", 100],
+      ["\b", 200],
+      ["\b", 300],
+    ]);
+
+    expect(attempt.typing.keystrokes).toEqual(["k", "a"]);
+    expect(attempt.typing.settled).toBe(1);
+  });
+
+  test("deletes keys in the character still being typed", () => {
+    const attempt = run("かさ", [
+      ["k", 0],
+      ["a", 100],
+      ["s", 200],
+      ["\b", 300],
+    ]);
+
+    expect(attempt.typing.keystrokes).toEqual(["k", "a"]);
+  });
+});
+
+/** Types a whole string, one key every 10ms. */
+function typeAll(text: string, keys: readonly string[]): Attempt {
+  return run(
+    text,
+    keys.map((key, index) => [key, index * 10] as const),
+  );
+}
+
+describe("typed keys", () => {
+  test("are kept for each character as the reader typed them", () => {
+    // Kunrei all the way: the spelling the reader chose, not the preferred one.
+    const attempt = typeAll("しゃしん", ["s", "y", "a", "s", "i", "n"]);
+    expect(attempt.typedBySegment).toEqual(["sya", "si", "n"]);
+  });
+
+  test("give a doubled consonant its own key", () => {
+    const attempt = typeAll("がっこう", ["g", "a", "k", "k", "o", "u"]);
+    expect(attempt.typedBySegment).toEqual(["ga", "k", "ko", "u"]);
   });
 });

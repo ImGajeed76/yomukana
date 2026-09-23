@@ -5,10 +5,10 @@
 // the session; the browser's own HTTP cache handles the rest.
 
 import { isKatakana, toCodePoints } from "../japanese/text";
-import { segmentKana, type Segment } from "../romaji";
+import { segmentWords, type Segment, type SpelledWord } from "../romaji";
 import type { Candidate } from "../selection";
 import { itemsForSegments, kanjiItem, type Item } from "../srs";
-import { readingOf, type CorpusIndex, type CorpusSentence } from "./types";
+import type { CorpusIndex, CorpusSentence } from "./types";
 
 const BASE_PATH = "/corpus";
 
@@ -44,6 +44,32 @@ function hasKatakana(sentence: CorpusSentence): boolean {
 }
 
 /**
+ * The particles, and how else they are typed.
+ *
+ * Written は and へ, read wa and e. A reader who reads 私は correctly hears
+ * "watashi wa" and should be able to type what they heard; one who types `ha`
+ * because that is how an IME wants it is right too. Only a word that is the
+ * particle on its own qualifies: the は in はな is ha and nothing else, and the
+ * analyser splits particles out as their own token, so standing alone is what
+ * identifies one.
+ */
+const PARTICLE_SPELLINGS: ReadonlyMap<string, readonly string[]> = new Map([
+  ["は", ["wa"]],
+  ["へ", ["e"]],
+]);
+
+function spelledWord(token: CorpusSentence["tokens"][number]): SpelledWord {
+  const alsoTyped =
+    token.surface === token.reading ? PARTICLE_SPELLINGS.get(token.reading) : undefined;
+  return alsoTyped === undefined ? { kana: token.reading } : { kana: token.reading, alsoTyped };
+}
+
+/** What the reader types for a sentence, word by word. */
+export function segmentsOf(sentence: CorpusSentence): Segment[] {
+  return segmentWords(sentence.tokens.map(spelledWord));
+}
+
+/**
  * Every word in the sentence that is written rather than spelled out.
  *
  * These are what a difficulty band actually is. Ranked on kanji rarity when the
@@ -60,7 +86,7 @@ function writtenWords(sentence: CorpusSentence): Item[] {
 }
 
 function toEntry(sentence: CorpusSentence): Entry {
-  const kana = itemsForSegments(segmentKana(readingOf(sentence)));
+  const kana = itemsForSegments(segmentsOf(sentence));
   return {
     kana: { id: sentence.id, band: sentence.band, items: kana },
     written: { id: sentence.id, band: sentence.band, items: [...kana, ...writtenWords(sentence)] },
@@ -139,6 +165,6 @@ export class Corpus {
   /** The typing segments for one sentence, computed on demand. */
   segmentsFor(id: string): readonly Segment[] {
     const sentence = this.#byId.get(id);
-    return sentence === undefined ? [] : segmentKana(readingOf(sentence));
+    return sentence === undefined ? [] : segmentsOf(sentence);
   }
 }

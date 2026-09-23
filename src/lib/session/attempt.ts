@@ -65,6 +65,21 @@ export interface Attempt {
   readonly isCurrentCorrected: boolean;
   /** Whether the current segment was already begun by the key that freed it. */
   readonly isCurrentCarried: boolean;
+
+  /**
+   * Wrong keys the reader has typed and not yet deleted.
+   *
+   * They land rather than being refused. A refused key is still typed in the
+   * reader's head, so their next backspace reaches for it and deletes a key
+   * they got right instead, and the input stops matching what they believe
+   * they typed. Landing, shown in red, and deleted by hand, the screen and
+   * their head agree. Nothing else is accepted until they are gone.
+   */
+  readonly stray: string;
+  /** What the reader typed for each settled segment, by segment index. */
+  readonly typedBySegment: readonly string[];
+  /** Keystrokes already handed to settled segments. */
+  readonly settledKeys: number;
 }
 
 export function startAttempt(segments: readonly Segment[], at: number): Attempt {
@@ -80,7 +95,35 @@ export function startAttempt(segments: readonly Segment[], at: number): Attempt 
     pendingErrors: 0,
     isCurrentCorrected: false,
     isCurrentCarried: false,
+    stray: "",
+    typedBySegment: [],
+    settledKeys: 0,
   };
+}
+
+/**
+ * Shares the keys that settled a run of segments out between them.
+ *
+ * Usually one segment settles and it gets every key. When several settle on the
+ * same key, the spellings decide where each one's keys end: っ then た from
+ * `tta` is `t` and `ta`. Only what is shown under each character depends on it,
+ * so when no split fits, the first segment takes the lot rather than anything
+ * being lost.
+ */
+function shareKeys(segments: readonly Segment[], keys: string): string[] {
+  if (segments.length === 0) return [];
+
+  const [first, ...rest] = segments;
+  if (first === undefined) return [];
+  if (first.spellings.length === 0) return ["", ...shareKeys(rest, keys)];
+  if (rest.length === 0) return [keys];
+
+  for (const spelling of first.spellings) {
+    if (!keys.startsWith(spelling)) continue;
+    const tail = shareKeys(rest, keys.slice(spelling.length));
+    if (tail.join("") === keys.slice(spelling.length)) return [spelling, ...tail];
+  }
+  return [keys, ...rest.map(() => "")];
 }
 
 /**
@@ -93,28 +136,34 @@ export function startAttempt(segments: readonly Segment[], at: number): Attempt 
 export function pressKey(attempt: Attempt, key: string, at: number): Attempt {
   if (attempt.finishedAt !== null) return attempt;
 
-  const result = press(attempt.typing, key);
   const firstKeyAt = attempt.firstKeyAt ?? at;
   const keyCount = attempt.keyCount + 1;
 
-  if (!result.isAccepted) {
+  // Once something wrong is on the screen, everything after it is wrong too:
+  // it is sitting after a mistake. It lands with the mistake and waits for the
+  // reader to delete back to where they went off.
+  const result = attempt.stray === "" ? press(attempt.typing, key) : null;
+
+  if (result?.isAccepted !== true) {
     return {
       ...attempt,
       keyCount,
       firstKeyAt,
       errors: attempt.errors + 1,
       pendingErrors: attempt.pendingErrors + 1,
+      stray: attempt.stray + key,
     };
   }
 
   const timings = [...attempt.timings];
   const isFirstSettle = attempt.timings.length === 0;
   for (const segment of result.settledSegments) {
-    // Punctuation is shown and stepped over, never typed, so it settles for
-    // free alongside the mora before it. Counting it as a character read
-    // inflates reading speed, and by more in sentences that happen to have
-    // more commas in them. See CLAUDE.md 3.3.
-    if (attempt.typing.segments[segment]?.kind === "punctuation") continue;
+    // Punctuation, and a っ with nothing after it to double, are shown and
+    // stepped over, never typed, so they settle for free alongside the mora
+    // before them. Counting them as characters read inflates reading speed, and
+    // by more in sentences that happen to have more commas in them.
+    // See CLAUDE.md 3.3.
+    if (attempt.typing.segments[segment]?.spellings.length === 0) continue;
 
     timings.push({
       segment,
@@ -127,15 +176,36 @@ export function pressKey(attempt: Attempt, key: string, at: number): Attempt {
   }
 
   const hasSettled = result.settledSegments.length > 0;
+  const current = typedInCurrentSegment(result.state);
   // This key both finished the last segment and began the next one, so the next
   // one has no measurable pause of its own.
-  const carried = hasSettled && typedInCurrentSegment(result.state).length > 0;
+  const carried = hasSettled && current.length > 0;
+
+  // The keys between the last settle and the start of whatever is in progress
+  // belong to the segments that just settled.
+  let typedBySegment = attempt.typedBySegment;
+  let settledKeys = attempt.settledKeys;
+  if (hasSettled) {
+    const end = result.state.keystrokes.length - current.length;
+    const keys = result.state.keystrokes.slice(settledKeys, end).join("");
+    const settled = result.settledSegments.map((index) => result.state.segments[index]);
+    typedBySegment = [
+      ...typedBySegment,
+      ...shareKeys(
+        settled.filter((segment) => segment !== undefined),
+        keys,
+      ),
+    ];
+    settledKeys = end;
+  }
 
   return {
     ...attempt,
     typing: result.state,
     keyCount,
     timings,
+    typedBySegment,
+    settledKeys,
     finishedAt: result.state.isComplete ? at : null,
     availableAt: hasSettled ? at : attempt.availableAt,
     firstKeyAt: hasSettled ? null : firstKeyAt,
@@ -146,31 +216,53 @@ export function pressKey(attempt: Attempt, key: string, at: number): Attempt {
 }
 
 /**
- * Undoes the last accepted key.
+ * Deletes one key.
  *
- * Everything a backspace touches stops being a clean measurement: the reader has
- * now seen the character for longer than the timer says, and may be copying the
- * spelling rather than reading it. So the affected segments lose their timing and
- * the current one is flagged, and grading drops them rather than trusting them.
+ * Wrong keys go first, since they are the last thing on the screen. Deleting
+ * them is the ordinary way through a mistake and changes nothing else: the
+ * mistake is already counted, and the segment is timed to when it finally came
+ * out right.
+ *
+ * Past those, only keys in the character still being typed can be deleted. A
+ * character that is finished and right stays finished. Going back into one
+ * means the reader has seen it for longer than the timer says and may be
+ * copying the spelling rather than reading it, and nothing about a finished,
+ * correct character needs fixing.
+ *
+ * Deleting a key they got right does flag the current character, and grading
+ * drops it rather than trusting it.
  */
 export function backspaceKey(attempt: Attempt, at: number): Attempt {
   if (attempt.finishedAt !== null) return attempt;
 
+  if (attempt.stray !== "") return { ...attempt, stray: attempt.stray.slice(0, -1) };
+  if (typedInCurrentSegment(attempt.typing) === "") return attempt;
+
   const typing = backspace(attempt.typing);
   if (typing.keystrokes.length === attempt.typing.keystrokes.length) return attempt;
 
+  // Deleting the key that began this character can reopen the one before it,
+  // when that one was waiting on this key to settle: ん, finished by the `w`
+  // of を, is open again once the `w` is gone. Its timing and its typed keys go
+  // back with it.
   const timings = attempt.timings.filter((timing) => timing.segment < typing.settled);
+  const typedBySegment = attempt.typedBySegment.slice(0, typing.settled);
+  let settledKeys = 0;
+  for (const keys of typedBySegment) settledKeys += keys.length;
 
   return {
     ...attempt,
     typing,
     timings,
+    typedBySegment,
+    settledKeys,
     // Not counted as a key. Accuracy is accepted keys over keys pressed, so
     // counting corrections as keys means the more a reader backspaces the more
     // accurate they look: five wrong keys plus enough retyping reads as 99%.
     availableAt: at,
     firstKeyAt: null,
-    pendingErrors: 0,
+    // Kept. The reader did get this character wrong, whatever they delete now.
+    pendingErrors: attempt.pendingErrors,
     isCurrentCorrected: true,
     isCurrentCarried: false,
   };

@@ -84,7 +84,12 @@ describe("applyKey", () => {
   });
 
   test("runs a whole sentence through, wrong keys and all", () => {
-    const attempt = type("こんかい", "kozznkai");
+    let attempt = type("こんかい", "kozz");
+    attempt = applyKey(attempt, classifyKey(event("Backspace")), 5000).attempt;
+    attempt = applyKey(attempt, classifyKey(event("Backspace")), 5100).attempt;
+    for (const [index, key] of ["n", "k", "a", "i"].entries()) {
+      attempt = applyKey(attempt, classifyKey(event(key)), 5200 + index * 100).attempt;
+    }
 
     expect(attempt.finishedAt).not.toBeNull();
     expect(attempt.errors).toBe(2);

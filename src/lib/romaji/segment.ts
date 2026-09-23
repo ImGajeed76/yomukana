@@ -131,14 +131,18 @@ function doubledConsonants(next: RawSegment | undefined): string[] {
 }
 
 /**
- * Whether a bare `n` is enough for the moraic nasal here.
+ * Whether a bare `n` is ever right for the moraic nasal here.
  *
- * It is not when the next mora starts with a vowel or with `y`, because an IME
- * would read the reader's `n` as the start of that mora instead: `na` is な, not
- * ん + あ, and `nya` is にゃ, not ん + や. So きんようび has to be typed
- * `kinnyoubi`; `kinyoubi` is きにょうび everywhere else and should be here too.
+ * Not when every spelling of the next mora starts with a vowel or with `y`,
+ * because an IME would read the reader's `n` as the start of that mora instead:
+ * `na` is な, not ん + あ, and `nya` is にゃ, not ん + や. So きんようび has to be
+ * typed `kinnyoubi`; `kinyoubi` is きにょうび everywhere else and is here too.
  *
- * A following `n` is the case that looks like it belongs on that list and does
+ * When only some of them do, `n` stays, and the matcher rules out the vowel
+ * ones on the path that took it. That is the particle へ after ん: `nihonhe` is
+ * right and `nihone` is にほね. See `followOf` in matcher.ts.
+ *
+ * A following `n` is the case that looks like it belongs on the list and does
  * not. No mora begins `nn`, so an IME has nothing to wait for: it commits ん and
  * hands the second `n` to the next mora. That is why こんにちは is `konnichiha`,
  * the spelling everyone already knows, and あんない is `annai`. Both stay
@@ -146,19 +150,23 @@ function doubledConsonants(next: RawSegment | undefined): string[] {
  * live reading and whichever one finishes the sentence wins.
  */
 function allowsBareN(next: RawSegment | undefined): boolean {
-  if (next === undefined) return true;
+  if (next === undefined || next.spellings.length === 0) return true;
   for (const spelling of next.spellings) {
     const initial = spelling[0];
-    if (initial === undefined) continue;
-    if (VOWELS.has(initial) || initial === "y") return false;
+    if (initial !== undefined && !VOWELS.has(initial) && initial !== "y") return true;
   }
-  return true;
+  return false;
 }
 
 function resolveContextual(segments: RawSegment[]): Segment[] {
   return segments.map((segment, index) => {
     if (segment.kind === "sokuon") {
       const doubled = doubledConsonants(segments[index + 1]);
+      // Nothing after it to double: the end of the sentence, punctuation, or a
+      // vowel, as in あっ、 and くそっ。 It is a glottal stop, and the only way
+      // to type one alone is `xtu`, which is IME trivia and not reading. So it
+      // is shown and stepped over, like the punctuation it sits against.
+      if (doubled.length === 0) return { ...segment, spellings: [] };
       return { ...segment, spellings: [...doubled, ...SOKUON_SPELLINGS] };
     }
     if (segment.kind === "moraic-n") {
@@ -167,6 +175,52 @@ function resolveContextual(segments: RawSegment[]): Segment[] {
     }
     return segment;
   });
+}
+
+/** One word of a sentence, as the reader types it. */
+export interface SpelledWord {
+  readonly kana: string;
+  /**
+   * Further ways to type the word, when it is a single mora.
+   *
+   * For the particles, which are read differently from how they are written:
+   * は as `wa` and へ as `e`. Added before the spellings around them are
+   * resolved, so a ん or っ in front of them sees every way they can be typed.
+   */
+  readonly alsoTyped?: readonly string[];
+}
+
+/**
+ * Splits a sentence into typing segments, with each word's extra spellings.
+ *
+ * The sentence is split as one reading, not word by word. The analyser now and
+ * then cuts a word through the middle of a mora, handing back もち and ゃ as two
+ * words, and splitting those separately would ask the reader for `chi` then
+ * `lya` where they read ちゃ. The words are used only to find which segment each
+ * one landed on.
+ */
+export function segmentWords(words: readonly SpelledWord[]): Segment[] {
+  const raw = split(words.map((word) => word.kana).join(""));
+
+  let segment = 0;
+  let consumed = 0;
+  for (const word of words) {
+    const from = segment;
+    const length = toCodePoints(word.kana).length;
+    while (segment < raw.length && consumed < length) {
+      consumed += toCodePoints(raw[segment]?.display ?? "").length;
+      segment += 1;
+    }
+    consumed -= length;
+
+    // Only a word that is exactly one mora, start to end. One that shares a
+    // mora with its neighbour is not a particle standing on its own.
+    const only = segment - from === 1 && consumed === 0 ? raw[from] : undefined;
+    if (only?.kind === "mora" && word.alsoTyped !== undefined) {
+      raw[from] = { ...only, spellings: [...only.spellings, ...word.alsoTyped] };
+    }
+  }
+  return resolveContextual(raw);
 }
 
 /**

@@ -52,16 +52,42 @@ function followsDoubled(spelling: string, doubled: string): boolean {
   return doubled === "t" && spelling.startsWith("ch");
 }
 
+const VOWELS_AND_Y: ReadonlySet<string> = new Set(["a", "i", "u", "e", "o", "y"]);
+
+/** Which spellings of the next segment a finished spelling leaves open. */
+type Follow = (spelling: string) => boolean;
+
+const ANYTHING: Follow = () => true;
+
 /**
- * Opens every spelling of the next typeable segment at or after `index`.
- * `requiredInitial` carries a sokuon's chosen consonant forward: once the reader
- * has typed the `t` of `った`, only spellings of た starting with `t` remain.
+ * What a finished spelling allows to come after it.
+ *
+ * Two spellings constrain the next mora. A one-letter sokuon is the doubled
+ * consonant, so the next mora has to start with it: the `t` of `った` leaves only
+ * spellings of た that start with `t`.
+ *
+ * A bare `n` for ん forbids the next mora starting with a vowel or `y`, because
+ * an IME would read the two keys together: `n` then `e` is ね, not ん then え, and
+ * `n` then `yo` is にょ. That is decided here, per path, rather than by leaving
+ * `n` out of ん's spellings. The particle へ can be typed `he` or `e`, so in
+ * にほんへ a bare `n` is right before `he` and wrong before `e`, and only the
+ * path knows which one the reader is on.
  */
-function expand(
-  segments: readonly Segment[],
-  index: number,
-  requiredInitial: string | null,
-): Expansion {
+function followOf(segment: Segment | undefined, spelling: string): Follow {
+  if (segment?.kind === "sokuon" && spelling.length === 1) {
+    return (next) => followsDoubled(next, spelling);
+  }
+  if (segment?.kind === "moraic-n" && spelling === "n") {
+    return (next) => !VOWELS_AND_Y.has(next[0] ?? "");
+  }
+  return ANYTHING;
+}
+
+/**
+ * Opens every spelling of the next typeable segment at or after `index` that
+ * the spelling before it allows.
+ */
+function expand(segments: readonly Segment[], index: number, follow: Follow): Expansion {
   let cursor = index;
   while (cursor < segments.length && segments[cursor]?.spellings.length === 0) {
     cursor += 1;
@@ -72,7 +98,7 @@ function expand(
 
   const paths: Path[] = [];
   for (const spelling of segment.spellings) {
-    if (requiredInitial !== null && !followsDoubled(spelling, requiredInitial)) continue;
+    if (!follow(spelling)) continue;
     paths.push({ segment: cursor, spelling, position: 0 });
   }
   return { paths, isComplete: false };
@@ -89,7 +115,7 @@ function settledCount(segments: readonly Segment[], paths: readonly Path[]): num
 
 /** Starts a fresh attempt at the given segments. */
 export function startTyping(segments: readonly Segment[]): TypingState {
-  const opening = expand(segments, 0, null);
+  const opening = expand(segments, 0, ANYTHING);
   return {
     segments,
     keystrokes: [],
@@ -121,13 +147,8 @@ export function press(state: TypingState, key: string): PressResult {
       continue;
     }
 
-    // A one-letter sokuon spelling is the doubled consonant, so the following
-    // segment has to start with that same letter.
-    const segment = state.segments[path.segment];
-    const requiredInitial =
-      segment?.kind === "sokuon" && path.spelling.length === 1 ? path.spelling : null;
-
-    const expansion = expand(state.segments, path.segment + 1, requiredInitial);
+    const follow = followOf(state.segments[path.segment], path.spelling);
+    const expansion = expand(state.segments, path.segment + 1, follow);
     if (expansion.isComplete) hasCompleted = true;
     paths.push(...expansion.paths);
   }

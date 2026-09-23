@@ -82,7 +82,11 @@ export function parseItemId(id: ItemId): Item | null {
  * differently depending on what surrounds them, and both trip up learners.
  */
 export function itemForSegment(segment: Segment): Item | null {
-  if (segment.kind === "punctuation" || segment.kind === "untypeable") return null;
+  // Punctuation, anything the engine cannot spell, and a っ with nothing after
+  // it to double are all shown and stepped over. None of them is read by
+  // pressing a key, so none of them can be measured, and an item that can never
+  // be reviewed would sit as "new" forever and pull on every sentence it is in.
+  if (segment.spellings.length === 0) return null;
 
   // Keyed by what the reader saw, not by the normalised hiragana. コ and こ are
   // typed with the same keys but recognised by different knowledge, and merging
