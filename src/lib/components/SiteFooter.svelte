@@ -1,6 +1,9 @@
 <script lang="ts">
   import { ATTRIBUTION } from "$lib/corpus/types";
   import { m } from "$lib/paraglide/messages";
+
+  /** Where feedback goes. An alias, so it can be retired if it draws spam. */
+  const FEEDBACK_EMAIL = "yomukana@alias.oseifert.ch";
 </script>
 
 <!--
@@ -23,16 +26,25 @@
       </a>. Readings from {ATTRIBUTION.readings}.
     </p>
 
-    <p>
-      {m.footer_made_by()}
-      <span aria-hidden="true">&#x2764;&#xfe0f;</span>
-      by
-      <a
-        class="underline underline-offset-2"
-        href="https://oseifert.ch"
-        rel="noreferrer"
-        target="_blank">Oliver</a
-      >
-    </p>
+    <!--
+      A mail link, not a form: a form would need a server or a service to post
+      to, and nothing here sends anything unless the reader does it themselves.
+    -->
+    <div class="flex flex-wrap items-baseline gap-x-6 gap-y-2">
+      <a class="underline underline-offset-2" href="mailto:{FEEDBACK_EMAIL}?subject=yomukana">
+        {m.footer_feedback()}
+      </a>
+      <p>
+        {m.footer_made_by()}
+        <span aria-hidden="true">&#x2764;&#xfe0f;</span>
+        by
+        <a
+          class="underline underline-offset-2"
+          href="https://oseifert.ch"
+          rel="noreferrer"
+          target="_blank">Oliver</a
+        >
+      </p>
+    </div>
   </div>
 </footer>
