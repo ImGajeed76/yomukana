@@ -21,7 +21,7 @@
   import { Progress, type AttemptRecord } from "$lib/db";
   import { m } from "$lib/paraglide/messages";
   import { allowsKanji, hiraganaMastery, katakanaMastery } from "$lib/selection";
-  import { EMPTY_STORE, kanaItem, type Item, type ItemStore } from "$lib/srs";
+  import { EMPTY_STORE, kanaItem, primaryInput, type Item, type ItemStore } from "$lib/srs";
   import {
     NO_TOTALS,
     characterStats,
@@ -81,7 +81,7 @@
       }
 
       totals = totalsOf(attempts);
-      score = scoreOf(store);
+      score = scoreOf(store, new Date());
       isLoaded = true;
     })();
   });
@@ -113,7 +113,15 @@
    * started are zero, which is not a gap, it is what was true.
    */
   let series = $derived(isLoaded ? dailyScores(attempts, span, new Date()) : []);
-  let chart = $derived(series.map((day) => ({ label: dayLabel(day.date), value: day.value })));
+  // Today is the score as it stands now, not the last one written down. The
+  // score falls as the reader forgets, so after a week away the last snapshot
+  // is a week out of date, and the line should say so.
+  let chart = $derived(
+    series.map((day, index) => ({
+      label: dayLabel(day.date),
+      value: index === series.length - 1 ? score : day.value,
+    })),
+  );
 
   function inspect(item: Item): void {
     selected = item;
@@ -271,7 +279,7 @@
                 <KanaGrid
                   rows={tab.basic.slice(0, BASIC_SPLIT)}
                   {store}
-                  baselineMs={store.reader.baselineLatencyMs}
+                  baselineMs={primaryInput(store.reader).baselineMs}
                   onSelect={(kana: string) => {
                     inspect(kanaItem(kana));
                   }}
@@ -279,7 +287,7 @@
                 <KanaGrid
                   rows={tab.basic.slice(BASIC_SPLIT)}
                   {store}
-                  baselineMs={store.reader.baselineLatencyMs}
+                  baselineMs={primaryInput(store.reader).baselineMs}
                   onSelect={(kana: string) => {
                     inspect(kanaItem(kana));
                   }}
@@ -291,7 +299,7 @@
               <KanaGrid
                 rows={tab.voiced}
                 {store}
-                baselineMs={store.reader.baselineLatencyMs}
+                baselineMs={primaryInput(store.reader).baselineMs}
                 onSelect={(kana: string) => {
                   inspect(kanaItem(kana));
                 }}
@@ -315,7 +323,7 @@
           <p class="text-sm text-muted-foreground">{m.stats_words_description()}</p>
           <WordGrid
             words={words.slice(0, CHARACTERS_SHOWN)}
-            baselineMs={store.reader.baselineLatencyMs}
+            baselineMs={primaryInput(store.reader).baselineMs}
             onSelect={inspect}
           />
         {/if}

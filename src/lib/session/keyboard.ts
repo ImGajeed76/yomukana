@@ -5,6 +5,7 @@
 // component is left with nothing but rendering. See CLAUDE.md 3.2.
 
 import { toCodePoints } from "../japanese/text";
+import type { InputMethod } from "../srs";
 import { backspaceKey, pressKey, type Attempt } from "./attempt";
 
 export type KeyAction =
@@ -51,17 +52,28 @@ export interface KeyOutcome {
  * reader looks at it. Measuring the first segment from then would record how long
  * they spent getting a coffee.
  */
-function startClock(attempt: Attempt, at: number): Attempt {
-  return { ...attempt, startedAt: at, availableAt: at };
+function startClock(attempt: Attempt, at: number, method: InputMethod): Attempt {
+  return { ...attempt, startedAt: at, availableAt: at, input: method };
 }
 
-export function applyKey(attempt: Attempt, action: KeyAction, at: number): KeyOutcome {
+/**
+ * Applies one key to an attempt.
+ *
+ * `method` is where the key came from. The first key of a sentence decides it
+ * for the whole sentence, since nobody changes device halfway through one.
+ */
+export function applyKey(
+  attempt: Attempt,
+  action: KeyAction,
+  at: number,
+  method: InputMethod = "keyboard",
+): KeyOutcome {
   if (action.kind === "ignore") return { attempt, wasRejected: false };
   if (action.kind === "backspace") {
     return { attempt: backspaceKey(attempt, at), wasRejected: false };
   }
 
-  const started = attempt.keyCount === 0 ? startClock(attempt, at) : attempt;
+  const started = attempt.keyCount === 0 ? startClock(attempt, at, method) : attempt;
   const next = pressKey(started, action.key, at);
 
   return { attempt: next, wasRejected: next.errors > started.errors };

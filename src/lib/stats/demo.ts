@@ -138,7 +138,7 @@ export function demoProgress(now: Date): DemoProgress {
         keyCount,
         errors,
         segments: segments.length,
-        score: scoreOf(store),
+        score: scoreOf(store, at),
       });
     }
   }

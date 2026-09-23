@@ -4,8 +4,14 @@
 // A plain value with no storage in it. `db/` persists it and hands it back.
 
 import type { Segment } from "../romaji";
-import { gradeReview, isPlausibleLatency, updateReader, type ReaderModel } from "./grade";
-import { INITIAL_READER } from "./grade";
+import {
+  INITIAL_READER,
+  gradeReview,
+  isPlausibleLatency,
+  updateReader,
+  type InputMethod,
+  type ReaderModel,
+} from "./grade";
 import { itemForSegment, type Item, type ItemId } from "./item";
 import { newItemState, reviewItem, type ItemState } from "./schedule";
 
@@ -107,18 +113,34 @@ export function reviewsForWords(
 }
 
 /** Applies a sentence's worth of reviews, in order. */
-export function applyReviews(store: ItemStore, reviews: readonly Review[], now: Date): ItemStore {
+/**
+ * Folds one attempt's reviews into the store.
+ *
+ * `method` is how the reader typed it. It picks which baseline each review is
+ * graded against and which motor floor comes off before the reading time is
+ * kept.
+ */
+export function applyReviews(
+  store: ItemStore,
+  reviews: readonly Review[],
+  now: Date,
+  method: InputMethod = "keyboard",
+): ItemStore {
   const items = new Map(store.items);
   let reader = store.reader;
 
   for (const review of reviews) {
     const existing = items.get(review.item.id) ?? newItemState(review.item.id, now);
-    const grade = gradeReview(review.latencyMs, review.errors, reader);
+    const grade = gradeReview(review.latencyMs, review.errors, reader, method);
     const latency = isPlausibleLatency(review.latencyMs) ? review.latencyMs : null;
 
     items.set(review.item.id, {
-      ...reviewItem(existing, grade, latency, now),
-      errors: existing.errors + review.errors,
+      ...reviewItem(existing, grade, latency, reader[method].floorMs, now),
+      // One per read that went wrong, however many keys went wrong in it. Once
+      // a reader has slipped, every key after the slip lands as a mistake
+      // until they delete back to it, so counting keys would let one bad moment
+      // outweigh a dozen clean reads of the same character.
+      errors: existing.errors + Math.min(review.errors, 1),
     });
 
     // Only clean reads shape the baseline, and only single characters. A word
@@ -127,7 +149,7 @@ export function applyReviews(store: ItemStore, reviews: readonly Review[], now: 
     // slowest in the sentence. The baseline every other grade is normalised
     // against would drift upward for no reason but kanji being present.
     if (review.errors === 0 && review.item.kind === "kana") {
-      reader = updateReader(reader, review.latencyMs);
+      reader = updateReader(reader, review.latencyMs, method);
     }
   }
 

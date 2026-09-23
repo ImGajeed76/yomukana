@@ -6,6 +6,7 @@ import {
   kanjiItem,
   reviewsFor,
   reviewsForWords,
+  type InputMethod,
   type ItemStore,
 } from "../srs";
 import { dailyScores, scoreOf, type ScoredAttempt } from "./score";
@@ -27,23 +28,23 @@ function afterReading(text: string, latencyMs: number): ItemStore {
 
 describe("scoreOf", () => {
   test("is zero for a reader who has not started", () => {
-    expect(scoreOf(EMPTY_STORE)).toBe(0);
+    expect(scoreOf(EMPTY_STORE, now)).toBe(0);
   });
 
   test("grows with every character learned, so it has no ceiling", () => {
-    const few = scoreOf(afterReading("かきく", 400));
-    const more = scoreOf(afterReading("かきくけこさしすせそ", 400));
+    const few = scoreOf(afterReading("かきく", 400), now);
+    const more = scoreOf(afterReading("かきくけこさしすせそ", 400), now);
     expect(more).toBeGreaterThan(few);
   });
 
   test("pays more for reading the same characters faster", () => {
-    const slow = scoreOf(afterReading("かきくけこ", 1200));
-    const fast = scoreOf(afterReading("かきくけこ", 250));
+    const slow = scoreOf(afterReading("かきくけこ", 1200), now);
+    const fast = scoreOf(afterReading("かきくけこ", 250), now);
     expect(fast).toBeGreaterThan(slow);
   });
 
   test("pays more for a kanji reading than for a kana", () => {
-    const kana = scoreOf(afterReading("か", 500));
+    const kana = scoreOf(afterReading("か", 500), now);
 
     const word = scoreOf(
       applyReviews(
@@ -54,6 +55,7 @@ describe("scoreOf", () => {
         ),
         now,
       ),
+      now,
     );
 
     expect(word).toBeGreaterThan(kana);
@@ -103,5 +105,38 @@ describe("dailyScores", () => {
 
   test("ignores attempts recorded before scores existed", () => {
     expect(dailyScores([{ finishedAt: today.getTime() }], 1, today)[0]?.value).toBe(0);
+  });
+});
+
+describe("the score after the formula change", () => {
+  test("falls when the reader stops, because they forget", () => {
+    // What someone can read today, not what they have ever learned.
+    const store = afterReading("かきくけこ", 400);
+    const later = new Date(now.getTime() + 365 * 86_400_000);
+    expect(scoreOf(store, later)).toBeLessThan(scoreOf(store, now));
+  });
+
+  test("does not reward typing speed, only reading speed", () => {
+    // Two readers who read the same, one of whom takes longer to reach the
+    // keys. Measured on their own inputs, their scores come out the same.
+    const segments = segmentKana("かきくけこ");
+    const read = (latencyMs: number, method: InputMethod): ItemStore => {
+      let store = EMPTY_STORE;
+      // Enough reads for each reader's motor floor to settle where theirs is.
+      for (let pass = 0; pass < 400; pass++) {
+        const reach = method === "keyboard" ? 250 : 450;
+        const timed = segments.map((_segment, segment) => ({
+          segment,
+          latencyMs: reach + (pass % 10 === 0 ? 0 : latencyMs),
+          errors: 0,
+        }));
+        store = applyReviews(store, reviewsFor(segments, timed), now, method);
+      }
+      return store;
+    };
+
+    const atDesk = scoreOf(read(300, "keyboard"), now);
+    const onPhone = scoreOf(read(300, "touch"), now);
+    expect(Math.abs(atDesk - onPhone) / atDesk).toBeLessThan(0.15);
   });
 });

@@ -304,13 +304,13 @@ export class Practice {
     const reviews = [...reviewsFor(current.segments, timed), ...reviewsForWords(readWords, timed)];
     const at = now();
     const before = this.#progress.store;
-    const store = applyReviews(before, reviews, at);
+    const store = applyReviews(before, reviews, at, attempt.input);
 
     // Measured against the baseline the reader had going in, which is what this
     // sentence actually asked of them.
     this.#progression = advance(this.#progression, {
       accuracy: summary.accuracy,
-      easeRatio: easeRatio(timed, before.reader.baselineLatencyMs),
+      easeRatio: easeRatio(timed, before.reader[attempt.input].baselineMs),
       challenge: this.#challenge,
     });
     this.#band = this.#progression.band;
@@ -326,7 +326,7 @@ export class Practice {
       segments: attempt.timings.length,
       // Written down now because it cannot be worked out later: an item state
       // says what the reader knows today, not what they knew in March.
-      score: scoreOf(store),
+      score: scoreOf(store, at),
     };
 
     this.#seenAt.set(current.id, at.getTime());

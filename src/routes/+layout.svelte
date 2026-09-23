@@ -42,7 +42,7 @@
   <DitherBackdrop />
 
   <SiteNav />
-  <div class="mx-auto flex w-full max-w-[1152px] flex-1 flex-col px-6 py-12">
+  <div class="mx-auto flex w-full max-w-[1152px] flex-1 flex-col px-6 py-6 md:py-12">
     {@render children()}
   </div>
   <SiteFooter />

@@ -41,27 +41,28 @@
   else here either arrives after the sentence is finished or is a warning the
   reader has to see.
 -->
-<main class="flex w-full flex-1 flex-col justify-center">
+<!--
+  On a phone the keyboard takes the bottom half of the screen, so the sentence
+  sits at the top where it stays visible above it, not on a centre line the
+  keyboard would cover. See CLAUDE.md 11.
+-->
+<main class="flex w-full flex-1 flex-col md:justify-center">
   <div class="mx-auto flex w-full max-w-[896px] flex-col gap-8">
-    <!--
-      Said plainly instead of handing a phone an exercise it cannot do. It stays
-      above the sentence rather than replacing it, because a tablet with a
-      keyboard attached is a perfectly good place to read. See CLAUDE.md 11.1.
-    -->
-    <p
-      class="rounded-md border border-border bg-background px-4 py-3 text-sm text-muted-foreground md:hidden"
-    >
-      {m.session_typing_notice_keyboard()}
-    </p>
-
     {#if practice.current}
-      {#key practice.round}
-        <TypingPane
-          segments={practice.current.segments}
-          tokens={practice.current.tokens}
-          onFinished={finish}
-        />
-      {/key}
+      <!--
+        Not rebuilt per sentence. It resets on the round instead, because
+        rebuilding it would take the phone keyboard's field with it and close
+        the keyboard between every sentence.
+      -->
+      <TypingPane
+        segments={practice.current.segments}
+        tokens={practice.current.tokens}
+        round={practice.round}
+        onFinished={finish}
+        onSkip={() => {
+          practice.skip();
+        }}
+      />
 
       <!--
         Said once, plainly, where it matters: a reader in a private window should

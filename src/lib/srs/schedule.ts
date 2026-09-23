@@ -22,6 +22,16 @@ export interface ItemState {
   readonly reviews: number;
   /** Rolling mean recognition latency for this item, in milliseconds. */
   readonly meanLatencyMs: number | null;
+  /**
+   * The same, with the reach for the key taken off: how long this character
+   * takes the reader to read, on whatever they read it on.
+   *
+   * Recognition latency is what the reader sees on the stats page, because it
+   * is what they can feel. This is what the score is built on, because it is
+   * the part that is about reading. Two readers, or one reader on a phone and
+   * at a desk, differ in how fast they press keys, and that is not Japanese.
+   */
+  readonly meanReadingMs: number | null;
   /** Wrong keys against this item, over its whole history. */
   readonly errors: number;
   /**
@@ -53,36 +63,48 @@ export function newItemState(id: ItemId, now: Date): ItemState {
     card: createEmptyCard(now),
     reviews: 0,
     meanLatencyMs: null,
+    meanReadingMs: null,
     errors: 0,
     history: [],
   };
 }
 
 /** Applies one graded review to an item. */
+/** Moves a rolling mean toward one new value. */
+function rolled(mean: number | null, value: number): number {
+  return (mean ?? value) + LATENCY_WEIGHT * (value - (mean ?? value));
+}
+
+/**
+ * Applies one graded review to an item.
+ *
+ * `floorMs` is the reader's motor floor on the input this was read on: the
+ * part of the latency that was reaching for the key rather than reading.
+ */
 export function reviewItem(
   state: ItemState,
   grade: Grade,
   latencyMs: number | null,
+  floorMs: number,
   now: Date,
 ): ItemState {
   const { card } = scheduler.next(state.card, now, grade);
 
   // Trimmed against what this character already costs, so one interrupted read
   // cannot redraw it. The grade above was worked out from the raw reading.
-  const reading = latencyMs === null ? null : trimReading(latencyMs, state.meanLatencyMs);
-  const meanLatencyMs =
-    reading === null
-      ? state.meanLatencyMs
-      : (state.meanLatencyMs ?? reading) +
-        LATENCY_WEIGHT * (reading - (state.meanLatencyMs ?? reading));
+  const trimmed = latencyMs === null ? null : trimReading(latencyMs, state.meanLatencyMs);
 
   return {
     id: state.id,
     card,
     reviews: state.reviews + 1,
-    meanLatencyMs,
+    meanLatencyMs: trimmed === null ? state.meanLatencyMs : rolled(state.meanLatencyMs, trimmed),
+    meanReadingMs:
+      trimmed === null
+        ? state.meanReadingMs
+        : rolled(state.meanReadingMs, Math.max(0, trimmed - floorMs)),
     errors: state.errors,
-    history: reading === null ? state.history : withRead(state.history, reading, now),
+    history: trimmed === null ? state.history : withRead(state.history, trimmed, now),
   };
 }
 

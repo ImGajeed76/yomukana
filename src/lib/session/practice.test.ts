@@ -97,7 +97,7 @@ function practise(
 
     progression = advance(progression, {
       accuracy: summarise(attempt).accuracy,
-      easeRatio: easeRatioOf(timed, store.reader.baselineLatencyMs),
+      easeRatio: easeRatioOf(timed, store.reader.keyboard.baselineMs),
       challenge: score.newCount + score.weakCount,
     });
     store = applyReviews(store, reviewsFor(segments, timed), at);
@@ -149,8 +149,8 @@ describe.skipIf(!hasCorpus)("practice over the shipped corpus", () => {
 
     // Typing one key every 90ms, most characters take one or two keys, so the
     // pause before a character lands in the low hundreds of milliseconds.
-    expect(session.store.reader.baselineLatencyMs).toBeGreaterThan(50);
-    expect(session.store.reader.baselineLatencyMs).toBeLessThan(400);
+    expect(session.store.reader.keyboard.baselineMs).toBeGreaterThan(50);
+    expect(session.store.reader.keyboard.baselineMs).toBeLessThan(400);
   });
 
   test("hiragana knowledge grows and the katakana gate is shut until it does", () => {

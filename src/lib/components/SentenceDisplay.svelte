@@ -23,10 +23,21 @@
      */
     revealed: ReadonlySet<number>;
     onReveal?: (segment: number) => void;
+    /** Lets the caller keep a tap on a word from taking focus. */
+    onPointerDown?: (event: PointerEvent) => void;
   }
 
-  let { tokens, settled, hasError, typedBySegment, typing, stray, revealed, onReveal }: Props =
-    $props();
+  let {
+    tokens,
+    settled,
+    hasError,
+    typedBySegment,
+    typing,
+    stray,
+    revealed,
+    onReveal,
+    onPointerDown,
+  }: Props = $props();
 
   function isCurrent(token: DisplayToken): boolean {
     return settled >= token.from && settled < token.to;
@@ -67,6 +78,7 @@
         class:current={isCurrent(token)}
         class:error={hasError && isCurrent(token)}
         aria-label={m.session_typing_reveal_label({ word: token.token.surface })}
+        onpointerdown={onPointerDown}
         onclick={() => {
           onReveal?.(token.from);
         }}

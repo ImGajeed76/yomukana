@@ -13,6 +13,7 @@ import {
   type Segment,
   type TypingState,
 } from "../romaji";
+import type { InputMethod } from "../srs";
 
 export interface SegmentTiming {
   readonly segment: number;
@@ -46,6 +47,8 @@ export interface SegmentTiming {
 
 export interface Attempt {
   readonly typing: TypingState;
+  /** What the reader typed this on, set by the first key. */
+  readonly input: InputMethod;
   readonly startedAt: number;
   readonly finishedAt: number | null;
   /** Settled segments, in the order they settled. */
@@ -85,6 +88,7 @@ export interface Attempt {
 export function startAttempt(segments: readonly Segment[], at: number): Attempt {
   return {
     typing: startTyping(segments),
+    input: "keyboard",
     startedAt: at,
     finishedAt: null,
     timings: [],

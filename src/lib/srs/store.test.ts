@@ -78,7 +78,9 @@ describe("applyReviews", () => {
     if (easy === undefined || failed === undefined) return;
 
     expect(failed.card.due.getTime()).toBeLessThan(easy.card.due.getTime());
-    expect(failed.errors).toBe(2);
+    // One read that went wrong is one mistake, however many keys went wrong in
+    // it. Otherwise a slip followed by blind typing buries the character.
+    expect(failed.errors).toBe(1);
   });
 
   test("builds the baseline from clean reads only", () => {
@@ -93,9 +95,9 @@ describe("applyReviews", () => {
       now,
     );
 
-    expect(clean.reader.reviews).toBe(1);
-    expect(failed.reader.reviews).toBe(0);
-    expect(failed.reader.baselineLatencyMs).toBe(EMPTY_STORE.reader.baselineLatencyMs);
+    expect(clean.reader.keyboard.reviews).toBe(1);
+    expect(failed.reader.keyboard.reviews).toBe(0);
+    expect(failed.reader.keyboard.baselineMs).toBe(EMPTY_STORE.reader.keyboard.baselineMs);
   });
 
   test("leaves the store it was given untouched", () => {

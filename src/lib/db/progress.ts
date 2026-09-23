@@ -4,7 +4,7 @@
 // keystroke-timed trainer is that nothing expensive shares a frame with a
 // keystroke. See CLAUDE.md 1.8.
 
-import { EMPTY_STORE, INITIAL_READER, type ItemId, type ItemState, type ItemStore } from "../srs";
+import { EMPTY_STORE, readerFrom, type ItemId, type ItemState, type ItemStore } from "../srs";
 import {
   READER_KEY,
   SESSION_KEY,
@@ -13,6 +13,28 @@ import {
   type ProgressDb,
   type SessionRecord,
 } from "./schema";
+
+/**
+ * Reads an item as it was stored, whatever version wrote it.
+ *
+ * Items written before reading time existed have only their recognition
+ * latency. Their reading time is that latency with the starting keyboard floor
+ * taken off, since every reader then was at a keyboard. It is an estimate, and
+ * the next clean read of the item replaces it with a measured one.
+ */
+function itemFrom(stored: ItemState): ItemState {
+  const item: Omit<ItemState, "meanReadingMs"> & { meanReadingMs?: number | null } = stored;
+  if (item.meanReadingMs !== undefined) return stored;
+
+  const meanReadingMs =
+    item.meanLatencyMs === null
+      ? null
+      : Math.max(0, item.meanLatencyMs - KEYBOARD_FLOOR_ESTIMATE_MS);
+  return { ...item, meanReadingMs };
+}
+
+/** What a keyboard reader's reach for a key is assumed to cost, before measuring. */
+const KEYBOARD_FLOOR_ESTIMATE_MS = 250;
 
 export interface ProgressExport {
   readonly version: number;
@@ -50,8 +72,8 @@ export class Progress {
     ]);
 
     this.#store = {
-      items: new Map(items.map((item) => [item.id, item])),
-      reader: reader ?? INITIAL_READER,
+      items: new Map(items.map((item) => [item.id, itemFrom(item)])),
+      reader: readerFrom(reader),
     };
     return this.#store;
   }

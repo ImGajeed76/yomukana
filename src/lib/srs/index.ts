@@ -7,10 +7,13 @@ export {
   INITIAL_READER,
   gradeReview,
   isPlausibleLatency,
+  primaryInput,
+  readerFrom,
+  readingTime,
   trimReading,
   updateReader,
 } from "./grade";
-export type { GradingThresholds, ReaderModel } from "./grade";
+export type { GradingThresholds, InputMethod, InputModel, ReaderModel } from "./grade";
 
 export { HISTORY_DAYS, newItemState, recallProbability, reviewItem } from "./schedule";
 export type { DailyLatency, ItemState } from "./schedule";

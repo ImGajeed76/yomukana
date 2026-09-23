@@ -13,6 +13,15 @@
   const REACH_UP = 0.5;
   /** And sideways from the middle, as a fraction of the window width. */
   const REACH_ACROSS = 0.55;
+  /**
+   * The narrowest the arc may be, in CSS pixels from the middle to one side.
+   *
+   * Sized off the width alone, a phone held upright gets an arc half as wide as
+   * it is tall: a thin column of light rather than a glow along the bottom. Held
+   * to this, it runs off both edges on a narrow screen, the way it runs almost
+   * to the edges of a wide one, and keeps its shape.
+   */
+  const MIN_ACROSS_PX = 560;
   /** How fast it falls off. Above 1 it collapses toward the source. */
   const FALLOFF = 2.2;
   /** Alpha of a lit cell, per theme. Dark rooms take a little more. */
@@ -68,7 +77,10 @@
     // fades out toward the top is the texture itself. That is also why this is
     // not the gradient CLAUDE.md 8.5 rules out. It is one flat colour, scattered.
     const centre = cols / 2;
-    const across = cols * layer.across;
+    const across = Math.max(
+      cols * layer.across,
+      (MIN_ACROSS_PX * layer.across) / REACH_ACROSS / CELL,
+    );
     const up = rows * layer.up;
     // Nothing above the reach can be lit, so those rows are never walked.
     const ceiling = Math.max(0, Math.floor(rows - up));

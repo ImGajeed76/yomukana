@@ -2,7 +2,14 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <!--
+      resizes-content: when a phone keyboard opens, the page shrinks to the space
+      above it instead of sliding under it, so the sentence stays in view.
+    -->
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, interactive-widget=resizes-content"
+    />
     <!-- In the document itself rather than a component head, so it is there before
          any JavaScript runs and the browser never falls back to /favicon.ico. -->
     <link rel="icon" href="%sveltekit.assets%/favicon.svg" />

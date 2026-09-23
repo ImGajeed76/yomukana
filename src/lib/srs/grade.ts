@@ -35,12 +35,38 @@ export const DEFAULT_THRESHOLDS: GradingThresholds = {
   minBaselineMs: 120,
 };
 
-/** What the reader's typing looks like in general, used to normalise latency. */
-export interface ReaderModel {
+/**
+ * How the reader's keys reached the page.
+ *
+ * Told apart by where the key came from, not by guessing at the device: a
+ * tablet with a keyboard attached types through the keyboard path and is a
+ * keyboard reader.
+ */
+export type InputMethod = "keyboard" | "touch";
+
+/** What the reader's typing looks like on one kind of input. */
+export interface InputModel {
   /** Rolling mean recognition latency across clean reviews, in milliseconds. */
-  readonly baselineLatencyMs: number;
+  readonly baselineMs: number;
+  /**
+   * The fastest the reader reliably gets a first key down, in milliseconds.
+   *
+   * Everything a reader does before their first key is reading plus reaching
+   * for the key. This is the reaching part: how long it takes this reader, on
+   * this input, to press a key for a character they know cold. Taken away from
+   * a latency, what is left is reading. It is why a fast typist and a slow one
+   * with the same reading score the same, and why reading on the train does
+   * not cost points against reading at a desk.
+   */
+  readonly floorMs: number;
   /** Clean reviews the baseline is built from. */
   readonly reviews: number;
+}
+
+/** What the reader's typing looks like, per input, used to normalise latency. */
+export interface ReaderModel {
+  readonly keyboard: InputModel;
+  readonly touch: InputModel;
 }
 
 /**
@@ -50,14 +76,63 @@ export interface ReaderModel {
  */
 export const INITIAL_BASELINE_MS = 800;
 
+/**
+ * Where the motor floor starts on each input, before the reader has shown theirs.
+ *
+ * A phone is slower to hit than a keyboard: the key is smaller, the thumb
+ * travels further, and there is no home row to rest on.
+ */
+const INITIAL_FLOOR_MS: Readonly<Record<InputMethod, number>> = { keyboard: 250, touch: 350 };
+
+function initialInput(method: InputMethod): InputModel {
+  return { baselineMs: INITIAL_BASELINE_MS, floorMs: INITIAL_FLOOR_MS[method], reviews: 0 };
+}
+
 export const INITIAL_READER: ReaderModel = {
-  baselineLatencyMs: INITIAL_BASELINE_MS,
-  reviews: 0,
+  keyboard: initialInput("keyboard"),
+  touch: initialInput("touch"),
 };
+
+/**
+ * Reads a reader model as it was stored, whatever version wrote it.
+ *
+ * The first version kept one baseline with no idea which input it came from.
+ * Every reader then was at a keyboard, because the app could not be typed on
+ * anything else, so that baseline is their keyboard one.
+ */
+export function readerFrom(stored: unknown): ReaderModel {
+  if (typeof stored !== "object" || stored === null) return INITIAL_READER;
+
+  if ("keyboard" in stored && "touch" in stored) return stored as ReaderModel;
+
+  if ("baselineLatencyMs" in stored && typeof stored.baselineLatencyMs === "number") {
+    const reviews = "reviews" in stored && typeof stored.reviews === "number" ? stored.reviews : 0;
+    return {
+      keyboard: { ...initialInput("keyboard"), baselineMs: stored.baselineLatencyMs, reviews },
+      touch: initialInput("touch"),
+    };
+  }
+  return INITIAL_READER;
+}
+
+/** The input the reader mostly reads on, for anything that needs one yardstick. */
+export function primaryInput(reader: ReaderModel): InputModel {
+  return reader.touch.reviews > reader.keyboard.reviews ? reader.touch : reader.keyboard;
+}
 
 // How fast the baseline follows the reader. Low enough that one slow sentence,
 // or one interruption, does not move it much.
 const BASELINE_WEIGHT = 0.05;
+
+/**
+ * How the motor floor moves. It tracks a low percentile of the reader's clean
+ * latencies without keeping any of them: a read under the floor pulls it down
+ * hard, a read over it nudges it up a little, and it settles where one read in
+ * ten comes in under it.
+ */
+const FLOOR_PERCENTILE = 0.1;
+const FLOOR_STEP_MS = 20;
+const FLOOR_MINIMUM_MS = 80;
 
 // Latency above this is a break, not a read: the reader looked away, took a
 // call, or left the tab. Folding it into the baseline would wreck it.
@@ -106,15 +181,36 @@ export function trimReading(latencyMs: number, estimateMs: number | null): numbe
   return Math.min(latencyMs, estimateMs * SLOW_READ_MULTIPLE);
 }
 
-/** Folds one clean review into the reader's baseline. */
-export function updateReader(reader: ReaderModel, latencyMs: number): ReaderModel {
+/** Folds one clean review into the reader's model for the input it came from. */
+export function updateReader(
+  reader: ReaderModel,
+  latencyMs: number,
+  method: InputMethod,
+): ReaderModel {
   if (!isPlausibleLatency(latencyMs)) return reader;
 
+  const input = reader[method];
+  // Down 18ms for a read under the floor, up 2ms for one over it, which comes
+  // to rest where one read in ten is under.
+  const below = latencyMs < input.floorMs ? 1 : 0;
+  const floorMs = Math.max(
+    FLOOR_MINIMUM_MS,
+    input.floorMs + FLOOR_STEP_MS * (FLOOR_PERCENTILE - below),
+  );
+
   return {
-    baselineLatencyMs:
-      reader.baselineLatencyMs + BASELINE_WEIGHT * (latencyMs - reader.baselineLatencyMs),
-    reviews: reader.reviews + 1,
+    ...reader,
+    [method]: {
+      baselineMs: input.baselineMs + BASELINE_WEIGHT * (latencyMs - input.baselineMs),
+      floorMs,
+      reviews: input.reviews + 1,
+    },
   };
+}
+
+/** How much of a latency was reading, with the reach for the key taken off. */
+export function readingTime(latencyMs: number, reader: ReaderModel, method: InputMethod): number {
+  return Math.max(0, latencyMs - reader[method].floorMs);
 }
 
 /**
@@ -128,6 +224,7 @@ export function gradeReview(
   latencyMs: number,
   errors: number,
   reader: ReaderModel,
+  method: InputMethod,
   thresholds: GradingThresholds = DEFAULT_THRESHOLDS,
 ): Grade {
   if (errors > 0) return Rating.Again;
@@ -136,7 +233,10 @@ export function gradeReview(
   // so it is graded as if it were ordinary rather than counted against them.
   if (!isPlausibleLatency(latencyMs)) return Rating.Good;
 
-  const baseline = Math.max(reader.baselineLatencyMs, thresholds.minBaselineMs);
+  // Against this reader on this input. A phone is slower than a keyboard for
+  // everyone, and measured against a keyboard baseline every read on the train
+  // would grade Hard.
+  const baseline = Math.max(reader[method].baselineMs, thresholds.minBaselineMs);
   const ratio = latencyMs / baseline;
 
   if (ratio > thresholds.hardRatio) return Rating.Hard;
