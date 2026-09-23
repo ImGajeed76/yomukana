@@ -23,7 +23,8 @@
     "lint": "eslint .",
     "lint:fix": "eslint --fix .",
     "db:generate": "drizzle-kit generate",
-    "db:migrate": "bun scripts/db/migrate.ts && neon data-api refresh-schema"
+    "db:migrate": "bun scripts/db/migrate.ts && neon data-api refresh-schema --branch dev",
+    "db:migrate:production": "bun --env-file=.env.production.local scripts/db/migrate.ts && neon data-api refresh-schema --branch production"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

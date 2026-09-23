@@ -1,6 +1,10 @@
 // The connection to the synced copy: Neon Auth for the account, the Neon Data
 // API for the rows.
 //
+// Which Neon branch they point at comes from the build: `.env.local` names the
+// `dev` branch for `bun run dev`, and Vercel's settings name `production` for
+// the live site. So testing never touches a real reader's progress.
+//
 // Both URLs are public on purpose. They name where to knock, not a way in: the
 // Data API only answers with a token from signing in, and Postgres row-level
 // security decides from that token which rows it may touch. The database
@@ -8,13 +12,12 @@
 // drizzle/schema.ts.
 
 import type { createClient as CreateClient } from "@neondatabase/neon-js";
+import { PUBLIC_NEON_AUTH_URL, PUBLIC_NEON_DATA_API_URL } from "$env/static/public";
 import type { AttemptRecord, SessionRecord } from "../db";
 import type { ItemState, ReaderModel } from "../srs";
 
-export const AUTH_URL =
-  "https://ep-bitter-sky-b2binkni.neonauth.c-6.eu-central-1.aws.neon.tech/neondb/auth";
-const DATA_API_URL =
-  "https://ep-bitter-sky-b2binkni.apirest.c-6.eu-central-1.aws.neon.tech/neondb/rest/v1";
+export const AUTH_URL = PUBLIC_NEON_AUTH_URL;
+const DATA_API_URL = PUBLIC_NEON_DATA_API_URL;
 
 /** A table as the Data API sees it. `user_id` is never sent: the server fills it in. */
 interface Table<Row, Insert> {

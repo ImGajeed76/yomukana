@@ -10,9 +10,12 @@ export default defineConfig({
   auth: true,
   dataApi: true,
 
+  // `production` is what yomukana.oseifert.ch uses. `dev` is where the app is
+  // developed and tested, with its own readers and its own auth, so testing
+  // never touches a real reader's progress. Both are kept.
   branch: (branch) => {
-    if (branch.isDefault) return {};
-    // New branches are for trying a migration against real data, then gone.
+    if (branch.isDefault || branch.name === "dev") return {};
+    // Any other new branch is for trying a migration against real data, then gone.
     if (!branch.exists) return { ttl: "7d" };
     return {};
   },
