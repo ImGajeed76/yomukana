@@ -29,6 +29,8 @@
     "@inlang/paraglide-js": "^2.18.2",
     "@internationalized/date": "^3.12.0",
     "@lucide/svelte": "^1.47.0",
+    "@neon/config": "^1.7.3",
+    "@neon/env": "^1.4.4",
     "@sglkc/kuromoji": "^1.1.0",
     "@sveltejs/adapter-static": "^3.0.10",
     "@sveltejs/kit": "^2.63.0",

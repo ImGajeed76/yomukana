@@ -87,7 +87,9 @@ export default ts.config(
     },
   },
   {
-    files: ["*.config.{js,ts}", "*.config.*.{js,ts}"],
+    // Tool configuration at the repo root, outside any tsconfig. neon.ts is one
+    // of these in everything but name.
+    files: ["*.config.{js,ts}", "*.config.*.{js,ts}", "neon.ts"],
     languageOptions: {
       parserOptions: {
         projectService: false,
