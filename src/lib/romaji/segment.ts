@@ -31,6 +31,15 @@ export interface Segment {
 
 const VOWELS: ReadonlySet<string> = new Set(["a", "i", "u", "e", "o"]);
 
+/** The vowel each small vowel kana stands for when it stands alone. */
+const STRETCHED_VOWELS: ReadonlyMap<string, string> = new Map([
+  ["ぁ", "a"],
+  ["ぃ", "i"],
+  ["ぅ", "u"],
+  ["ぇ", "e"],
+  ["ぉ", "o"],
+]);
+
 interface RawSegment {
   display: string;
   kana: string;
@@ -97,6 +106,22 @@ function split(text: string): RawSegment[] {
         index += 2;
         continue;
       }
+    }
+
+    // A small vowel nothing combines with, as in なぁ, やぁ and ねぇ, is not a
+    // mora of its own. It draws out the vowel before it, and it is read as that
+    // vowel, so the reader types the vowel. `la` and `xa` still work: they are
+    // how an IME spells it exactly, and some readers will reach for that.
+    const stretched = STRETCHED_VOWELS.get(kana);
+    if (stretched !== undefined) {
+      segments.push({
+        display,
+        kana,
+        kind: "mora",
+        spellings: [stretched, ...(lookUp(kana) ?? [])],
+      });
+      index += 1;
+      continue;
     }
 
     const spellings = lookUp(kana);

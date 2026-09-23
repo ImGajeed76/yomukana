@@ -115,4 +115,13 @@ describe("spelling variants", () => {
     // ん at the end has nothing to be confused with.
     expect(spellingsOf("ほん", 1)).toContain("n");
   });
+
+  test("reads a small vowel standing alone as the vowel it draws out", () => {
+    // なぁ is なあ said with feeling. It was asking for `la`, which is IME
+    // trivia, and refusing the `a` every reader types.
+    expect(spellingsOf("なぁ", 1)).toEqual(["a", "la", "xa"]);
+    expect(spellingsOf("ねぇ", 1)[0]).toBe("e");
+    // Where it does combine, it is still part of one mora.
+    expect(displays("ふぁ")).toEqual(["ふぁ"]);
+  });
 });
