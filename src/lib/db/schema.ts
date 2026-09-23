@@ -16,7 +16,7 @@ export const DATABASE_NAME = "yomukana";
  * reader coming from any earlier version ends up in the same place with their
  * history intact. See CLAUDE.md 0 on migrations being forward-only.
  */
-export const DATABASE_VERSION = 2;
+export const DATABASE_VERSION = 3;
 
 /** One finished sentence, kept for the stats page. */
 export interface AttemptRecord {
@@ -57,6 +57,33 @@ export interface SessionRecord {
 /** The single key the session record is stored under. */
 export const SESSION_KEY = "session";
 
+/**
+ * Where syncing with the server left off.
+ *
+ * Two different clocks on purpose. What was pulled is tracked by the server's
+ * own timestamps, so "what changed since I last looked" never depends on this
+ * device's clock agreeing with another's. What was pushed is tracked by this
+ * device's own review times, which only ever need to agree with themselves.
+ */
+export interface SyncRecord {
+  /**
+   * The email this device is signed in with, or null if it is not.
+   *
+   * Kept here so a reader who never turned sync on never loads the sync code or
+   * talks to the server at all, not even to ask whether they are signed in.
+   */
+  readonly account: string | null;
+  /** When the last sync finished, in epoch milliseconds. */
+  readonly syncedAt: number | null;
+  /** The newest server change already pulled, per table, as the server wrote it. */
+  readonly pulledUpTo: Readonly<Record<string, string>>;
+  /** The newest local review or attempt already pushed, in epoch milliseconds. */
+  readonly pushedUpTo: number;
+}
+
+/** The single key the sync record is stored under. */
+export const SYNC_KEY = "sync";
+
 export interface KakukanaDb extends DBSchema {
   items: {
     key: ItemId;
@@ -74,6 +101,10 @@ export interface KakukanaDb extends DBSchema {
   session: {
     key: string;
     value: SessionRecord;
+  };
+  meta: {
+    key: string;
+    value: SyncRecord;
   };
 }
 
@@ -102,6 +133,9 @@ export async function openProgressDb(): Promise<ProgressDb | null> {
         }
         if (oldVersion < 2) {
           db.createObjectStore("session");
+        }
+        if (oldVersion < 3) {
+          db.createObjectStore("meta");
         }
       },
     });

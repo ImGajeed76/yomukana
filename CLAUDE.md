@@ -20,8 +20,9 @@ Core ideas:
 
 Design goals:
 
-- **Local-first.** All progress lives in the reader's browser (IndexedDB). No account, no server. The site is static, hosted on Vercel at yomukana.oseifert.ch. This is the privacy position and it is also why the app costs nothing to run.
-- **One exception, made deliberately.** Plausible counts page views. It is cookieless, stores no personal data and builds no cross-site profile, and it never sees a sentence, a keystroke or a score. Nothing else leaves the browser, and nothing about a reader's progress ever will.
+- **Local-first.** All progress lives in the reader's browser (IndexedDB), and that copy is the source of truth. The site is static, hosted on Vercel at yomukana.oseifert.ch. There is no app server.
+- **Sync is opt-in.** A reader who signs in (email and password, Neon Auth) gets a copy in Neon Postgres, Frankfurt, read and written from the browser through the Neon Data API. Row-level security keys every row to the token's user, so the browser only ever holds a short-lived token, never a connection string. A reader who never signs in never loads the sync code and never contacts Neon. Schema and migrations are Drizzle, dev-time only, under `drizzle/`; `bun run db:generate` then `bun run db:migrate`. Merge rules live in `src/lib/sync/merge.ts` and are mirrored by triggers in `drizzle/migrations/0001_merge_rules.sql`: newest review wins per item, attempts are append-only.
+- **One exception, made deliberately.** Plausible counts page views. It is cookieless, stores no personal data and builds no cross-site profile, and it never sees a sentence, a keystroke or a score. Apart from opt-in sync, nothing else leaves the browser, and nothing about a reader's progress is ever sent anywhere they did not choose.
 - **Two inputs, one exercise.** A physical keyboard is read through `keydown`; a phone keyboard through `input` events on a focused field, because phone keyboards compose text and report most keydowns as `"Unidentified"`. The reader model keeps a baseline and a motor floor per input, so grading and the score are fair on both. See `InputMethod` in `src/lib/srs/grade.ts`.
 - **Keystrokes must stay fast.** A typing trainer that stutters measures the stutter instead of the reader. Keystroke handling must stay off the critical path of anything expensive: no layout thrash per keystroke, no synchronous IndexedDB writes mid-sentence, no re-render of the whole sentence to advance one character.
 - **The corpus is precomputed.** Readings, difficulty bands and token alignment are resolved offline by `scripts/corpus/` and shipped as static, difficulty-chunked assets under `static/corpus/`. Nothing morphologically analyses Japanese at runtime. Rebuild with `bun run corpus:build`.
@@ -165,10 +166,10 @@ As a rule of thumb, once a file draws near 400 lines (barring long constants or 
 
 ### 1.7 Privacy by Default \[5/5]
 
-There is no server and no account, and that is a feature. Keep it that way unless there is a reason strong enough to write down.
+There is no app server, and an account is something a reader chooses, not something they need. Keep it that way unless there is a reason strong enough to write down.
 
-- Reading data never leaves the browser. No error reporting service, no fonts fetched from a third party at runtime. The one third-party script is Plausible, which counts page views and is told nothing else; see section 0.
-- Any future sync is opt-in, and the local store stays the source of truth.
+- Reading data never leaves the browser unless the reader signs in to sync. No error reporting service, no fonts fetched from a third party at runtime. The one third-party script is Plausible, which counts page views and is told nothing else; see section 0.
+- Sync is opt-in, and the local store stays the source of truth. Deleting everything deletes the synced copy first, and refuses to go on if it cannot.
 - Export and delete must both exist. The reader owns their history and must be able to take it or destroy it.
 
 When privacy and another goal conflict, document the tradeoff in a comment or commit message, and default toward more private.
@@ -908,7 +909,7 @@ Users must always be able to escape, undo, or go back.
 - Reversible: Provide undo (toast with undo button)
 - Irreversible: Require confirmation dialog with clear consequences
 
-Clearing progress is irreversible and unrecoverable, since there is no server copy. Confirm it by name, and offer an export first.
+Clearing progress is irreversible and unrecoverable: it deletes the synced copy too. Confirm it by name, and offer an export first.
 
 ### 12.5 Progressive Disclosure \[4/5]
 

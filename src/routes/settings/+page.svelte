@@ -1,11 +1,13 @@
 <script lang="ts">
   import { setMode, userPrefersMode } from "mode-watcher";
   import ChoiceRow, { type Choice } from "$lib/components/ChoiceRow.svelte";
+  import SyncSettings from "$lib/components/SyncSettings.svelte";
   import * as AlertDialog from "$lib/components/ui/alert-dialog";
   import { Button } from "$lib/components/ui/button";
   import { Progress } from "$lib/db";
   import { m } from "$lib/paraglide/messages";
   import { getLocale, locales, setLocale } from "$lib/paraglide/runtime";
+  import { deleteSyncedCopy, signOut } from "$lib/sync/account";
 
   const progress = new Progress();
 
@@ -13,6 +15,11 @@
   /** Whether the dialog is open, and whether it is past the point of no return. */
   let isAsking = $state(false);
   let isCleared = $state(false);
+  let isClearing = $state(false);
+  /** Whether the server copy could not be deleted, which stops the local one being deleted too. */
+  let hasClearFailed = $state(false);
+  /** The account this device syncs with, if any, which changes what deleting deletes. */
+  let account = $state<string | null>(null);
 
   // Shown in their own language, the way a language menu always is: someone who
   // only reads German should not have to find "German" written in English.
@@ -31,6 +38,7 @@
   $effect(() => {
     void (async () => {
       await progress.load();
+      account = (await progress.syncState()).account;
       isLoaded = true;
     })();
   });
@@ -53,7 +61,20 @@
   }
 
   async function clearData(): Promise<void> {
+    isClearing = true;
+    hasClearFailed = false;
+    // The server copy goes first. If it cannot be reached, nothing is deleted:
+    // a reader who deleted everything and found it all back on their next
+    // sign-in would have been lied to.
+    if (account !== null && !(await deleteSyncedCopy())) {
+      hasClearFailed = true;
+      isClearing = false;
+      return;
+    }
+    if (account !== null) await signOut(progress);
     await progress.clear();
+    account = null;
+    isClearing = false;
     isCleared = true;
   }
 
@@ -61,7 +82,10 @@
     isAsking = open;
     // Closing puts it back to asking, so opening it again does not reopen on
     // last time's confirmation.
-    if (!open) isCleared = false;
+    if (!open) {
+      isCleared = false;
+      hasClearFailed = false;
+    }
   }
 </script>
 
@@ -102,6 +126,8 @@
       }}
     />
   </section>
+
+  <SyncSettings {progress} {isLoaded} bind:account />
 
   <!--
     The sentence saying nothing leaves the browser is the reason this page
@@ -157,8 +183,15 @@
           {:else}
             <AlertDialog.Header>
               <AlertDialog.Title>{m.settings_delete_title()}</AlertDialog.Title>
-              <AlertDialog.Description>{m.settings_delete_description()}</AlertDialog.Description>
+              <AlertDialog.Description>
+                {account === null
+                  ? m.settings_delete_description()
+                  : m.settings_delete_description_synced()}
+              </AlertDialog.Description>
             </AlertDialog.Header>
+            {#if hasClearFailed}
+              <p class="text-sm text-destructive" role="alert">{m.settings_delete_error_sync()}</p>
+            {/if}
             <AlertDialog.Footer>
               <AlertDialog.Cancel>{m.common_button_cancel()}</AlertDialog.Cancel>
               <!--
@@ -167,6 +200,7 @@
               -->
               <Button
                 variant="destructive"
+                disabled={isClearing}
                 onclick={() => {
                   void clearData();
                 }}

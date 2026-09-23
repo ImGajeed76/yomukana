@@ -28,8 +28,10 @@ reading, is its own FSRS item, graded on latency and errors.
 Sentences hold a few things you are shaky on among things you are not. Kanji are
 written as kana until your kana holds, and katakana waits behind hiragana.
 
-Everything stays in your browser. No account, no server. You can export your
-history or delete it, and there is no copy anywhere else.
+Everything stays in your browser unless you sign in to sync between devices.
+Sync is opt-in, needs only an email and a password, and keeps a copy on a
+server in Frankfurt. You can export your history or delete it, and deleting
+deletes the synced copy too.
 
 ## Running it
 

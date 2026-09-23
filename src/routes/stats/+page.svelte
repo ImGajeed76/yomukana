@@ -19,6 +19,7 @@
   } from "$lib/japanese/chart";
   import { page } from "$app/state";
   import { Progress, type AttemptRecord } from "$lib/db";
+  import { sync } from "$lib/sync/sync";
   import { m } from "$lib/paraglide/messages";
   import { allowsKanji, hiraganaMastery, katakanaMastery } from "$lib/selection";
   import { EMPTY_STORE, kanaItem, primaryInput, type Item, type ItemStore } from "$lib/srs";
@@ -83,6 +84,15 @@
       totals = totalsOf(attempts);
       score = scoreOf(store, new Date());
       isLoaded = true;
+
+      // Shown first, synced second: the page draws from what this device has,
+      // then redraws if another device added to it.
+      if (!isDemo && (await sync(progress)) === "synced") {
+        store = progress.store;
+        attempts = await progress.recentAttempts(ATTEMPT_WINDOW);
+        totals = totalsOf(attempts);
+        score = scoreOf(store, new Date());
+      }
     })();
   });
 

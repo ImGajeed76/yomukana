@@ -4,15 +4,57 @@
 // keystroke-timed trainer is that nothing expensive shares a frame with a
 // keystroke. See CLAUDE.md 1.8.
 
-import { EMPTY_STORE, readerFrom, type ItemId, type ItemState, type ItemStore } from "../srs";
+import {
+  EMPTY_STORE,
+  readerFrom,
+  type ItemId,
+  type ItemState,
+  type ItemStore,
+  type ReaderModel,
+} from "../srs";
 import {
   READER_KEY,
   SESSION_KEY,
+  SYNC_KEY,
   openProgressDb,
   type AttemptRecord,
   type ProgressDb,
   type SessionRecord,
+  type SyncRecord,
 } from "./schema";
+
+/** Progress that arrived from another device, to be folded into this one. */
+export interface Incoming {
+  readonly items: readonly ItemState[];
+  readonly attempts: readonly AttemptRecord[];
+  readonly reader: ReaderModel | null;
+  readonly session: SessionRecord | null;
+}
+
+/**
+ * How two copies of the same thing become one.
+ *
+ * Handed in rather than known here, so the storage layer stays about storage
+ * and the rules live in one place, next to their tests. See sync/merge.ts.
+ */
+export interface MergeRules {
+  readonly item: (local: ItemState | undefined, remote: ItemState) => ItemState;
+  readonly reader: (local: ReaderModel, remote: ReaderModel) => ReaderModel;
+  readonly session: (
+    local: SessionRecord | null,
+    remote: SessionRecord | null,
+  ) => SessionRecord | null;
+  /** Names an attempt the same way on every device, to spot one already here. */
+  readonly attemptId: (record: AttemptRecord) => string;
+}
+
+/** A sync that has never run: nothing pulled, nothing pushed. */
+export const NEVER_SYNCED: SyncRecord = {
+  account: null,
+  syncedAt: null,
+  pulledUpTo: {},
+  pushedUpTo: 0,
+};
 
 /**
  * Reads an item as it was stored, whatever version wrote it.
@@ -141,6 +183,77 @@ export class Progress {
     };
   }
 
+  /** Where syncing left off on this device. */
+  async syncState(): Promise<SyncRecord> {
+    if (this.#db === null) return NEVER_SYNCED;
+    return (await this.#db.get("meta", SYNC_KEY)) ?? NEVER_SYNCED;
+  }
+
+  async saveSyncState(record: SyncRecord): Promise<void> {
+    if (this.#db === null) return;
+    await this.#db.put("meta", record, SYNC_KEY);
+  }
+
+  /** Everything reviewed on this device after `after`, in epoch milliseconds. */
+  async itemsReviewedAfter(after: number): Promise<ItemState[]> {
+    if (this.#db === null) return [];
+    const items = await this.#db.getAll("items");
+    return items.map(itemFrom).filter((item) => (item.card.last_review?.getTime() ?? 0) > after);
+  }
+
+  /** Attempts finished after `after`, in epoch milliseconds. */
+  async attemptsFinishedAfter(after: number): Promise<AttemptRecord[]> {
+    if (this.#db === null) return [];
+    return this.#db.getAllFromIndex("attempts", "by-finished", IDBKeyRange.lowerBound(after, true));
+  }
+
+  /**
+   * Folds another device's progress into this one, and returns the result.
+   *
+   * One transaction: read what is here, decide, write, so a sentence the reader
+   * finishes while this is running cannot be overwritten by an older copy that
+   * was decided against before it landed.
+   */
+  async merge(incoming: Incoming, rules: MergeRules): Promise<ItemStore> {
+    if (this.#db === null) return this.#store;
+
+    const transaction = this.#db.transaction(
+      ["items", "reader", "attempts", "session"],
+      "readwrite",
+    );
+    const items = transaction.objectStore("items");
+    for (const remote of incoming.items) {
+      const stored = await items.get(remote.id);
+      const local = stored === undefined ? undefined : itemFrom(stored);
+      const kept = rules.item(local, remote);
+      if (kept !== local) await items.put(kept);
+    }
+
+    const attempts = transaction.objectStore("attempts");
+    const byFinished = attempts.index("by-finished");
+    for (const remote of incoming.attempts) {
+      const sameMoment = await byFinished.getAll(remote.finishedAt);
+      const id = rules.attemptId(remote);
+      if (!sameMoment.some((record) => rules.attemptId(record) === id)) await attempts.add(remote);
+    }
+
+    const readers = transaction.objectStore("reader");
+    if (incoming.reader !== null) {
+      const local = readerFrom(await readers.get(READER_KEY));
+      await readers.put(rules.reader(local, incoming.reader), READER_KEY);
+    }
+
+    const sessions = transaction.objectStore("session");
+    if (incoming.session !== null) {
+      const local = (await sessions.get(SESSION_KEY)) ?? null;
+      const merged = rules.session(local, incoming.session);
+      if (merged !== null) await sessions.put(merged, SESSION_KEY);
+    }
+
+    await transaction.done;
+    return this.load();
+  }
+
   /**
    * Deletes everything. There is no server copy, so this cannot be undone and
    * the caller must confirm it first. See CLAUDE.md 12.4.
@@ -150,13 +263,16 @@ export class Progress {
     if (this.#db === null) return;
 
     const transaction = this.#db.transaction(
-      ["items", "reader", "attempts", "session"],
+      ["items", "reader", "attempts", "session", "meta"],
       "readwrite",
     );
     void transaction.objectStore("items").clear();
     void transaction.objectStore("reader").clear();
     void transaction.objectStore("attempts").clear();
     void transaction.objectStore("session").clear();
+    // Forgetting where sync left off too, so a later sign-in uploads from
+    // scratch rather than assuming the server already has what was deleted.
+    void transaction.objectStore("meta").clear();
     await transaction.done;
   }
 }

@@ -33,6 +33,7 @@ import {
   type WordSpan,
 } from "../srs";
 import { scoreOf } from "../stats/score";
+import { sync } from "../sync/sync";
 import {
   measuredLatency,
   summarise,
@@ -134,6 +135,9 @@ export class Practice {
   #band = 0;
   #isCorpusReady = false;
 
+  /** The sync in flight, so a second one queues behind it rather than racing it. */
+  #syncing: Promise<void> = Promise.resolve();
+
   /**
    * Whether the corpus could not be loaded at all.
    *
@@ -164,6 +168,7 @@ export class Practice {
     this.isPersistent = this.#progress.isPersistent;
     this.isLoaded = true;
     this.#choose();
+    this.#sync();
 
     try {
       await this.#corpus.open();
@@ -178,6 +183,25 @@ export class Practice {
 
     this.#isCorpusReady = true;
     this.#choose();
+  }
+
+  /**
+   * Brings in what the reader did on their other devices, and sends this one's.
+   *
+   * Never awaited on the way to the next sentence: a slow network must not be
+   * something the reader can feel. It does nothing, and loads nothing, for a
+   * reader who has not turned sync on.
+   *
+   * A sentence finished while a merge is running can overwrite an item the
+   * merge just brought in. That item was reviewed here, just now, so it is the
+   * newer copy either way, and the newer copy is the one the rules keep.
+   */
+  #sync(): void {
+    this.#syncing = this.#syncing.then(async () => {
+      if ((await sync(this.#progress)) !== "synced") return;
+      // Where the reader is may have moved on another device.
+      this.#restore(await this.#progress.session());
+    });
   }
 
   /** Puts the reader back where they left off. */
@@ -338,6 +362,7 @@ export class Practice {
       hardStreak: this.#progression.hardStreak,
       seenAt: [...this.#seenAt].slice(-COOLDOWN_MEMORY),
     });
+    this.#sync();
 
     if (this.#isCorpusReady) {
       await this.#corpus.ensure(bandsAround(this.#band, this.#corpus.highestBand));
