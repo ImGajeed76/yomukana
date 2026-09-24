@@ -5,6 +5,13 @@
 // `dev` branch for `bun run dev`, and Vercel's settings name `production` for
 // the live site. So testing never touches a real reader's progress.
 //
+// Auth is reached through this site's own address, `/api/auth`, which Vercel
+// (vercel.json) and the dev server (vite.config.ts) forward to Neon Auth. The
+// session is a cookie, and Safari throws away cookies from any site other
+// than the one the reader is on, so a cookie from Neon's own address was gone
+// the moment after signing in. Through `/api/auth` it is this site's cookie.
+// The Data API does not need this: it is sent a token, not a cookie.
+//
 // Both URLs are public on purpose. They name where to knock, not a way in: the
 // Data API only answers with a token from signing in, and Postgres row-level
 // security decides from that token which rows it may touch. The database
@@ -12,11 +19,14 @@
 // drizzle/schema.ts.
 
 import type { createClient as CreateClient } from "@neondatabase/neon-js";
-import { PUBLIC_NEON_AUTH_URL, PUBLIC_NEON_DATA_API_URL } from "$env/static/public";
+import { PUBLIC_NEON_DATA_API_URL } from "$env/static/public";
 import type { AttemptRecord, SessionRecord } from "../db";
 import type { ItemState, ReaderModel } from "../srs";
 
-export const AUTH_URL = PUBLIC_NEON_AUTH_URL;
+/** Where auth is reached from the browser: this site, forwarded to Neon Auth. */
+export function authUrl(): string {
+  return `${location.origin}/api/auth`;
+}
 const DATA_API_URL = PUBLIC_NEON_DATA_API_URL;
 
 /** A table as the Data API sees it. `user_id` is never sent: the server fills it in. */
@@ -68,7 +78,7 @@ interface Database {
 // the one it returns is chosen by an overload on the arguments.
 // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
 function build(createClient: typeof CreateClient) {
-  return createClient<Database>({ auth: { url: AUTH_URL }, dataApi: { url: DATA_API_URL } });
+  return createClient<Database>({ auth: { url: authUrl() }, dataApi: { url: DATA_API_URL } });
 }
 
 export type SyncClient = ReturnType<typeof build>;

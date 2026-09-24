@@ -4,7 +4,7 @@
 // is an email and a password and nothing else: no name, no profile.
 
 import { NEVER_SYNCED, type Progress } from "../db";
-import { AUTH_URL, connect } from "./client";
+import { authUrl, connect } from "./client";
 import { signedInRecord } from "./sync";
 
 /** What Better Auth is given as the account's name, which nothing shows. */
@@ -71,7 +71,7 @@ function statusOf(error: unknown): number {
  */
 async function postCodeStep(path: string, body: object): Promise<AccountProblem | null> {
   // A fetch that never reached the server rejects rather than resolving.
-  const response = await fetch(`${AUTH_URL}/${path}`, {
+  const response = await fetch(`${authUrl()}/${path}`, {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify(body),

@@ -25,7 +25,7 @@
     "icons": "bun scripts/icons.ts",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "bun scripts/db/migrate.ts && neon data-api refresh-schema --branch dev",
-    "db:migrate:production": "bun --env-file=.env.production.local scripts/db/migrate.ts && neon data-api refresh-schema --branch production"
+    "db:migrate:production": "bun --env-file=.env.prod.local scripts/db/migrate.ts && neon data-api refresh-schema --branch production"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

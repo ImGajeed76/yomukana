@@ -1,7 +1,9 @@
 // Applies the migrations in drizzle/migrations to one Neon branch.
 //
 // `bun run db:migrate` migrates `dev`, from `.env.local`. Production is
-// `bun run db:migrate:production`, from `.env.production.local`, and is run
+// `bun run db:migrate:production`, from `.env.prod.local` (not
+// `.env.production.local`, which Vite would load into every local production
+// build and point it at the live database), and is run
 // only after the same migration has worked on `dev`.
 // Uses Neon's own driver rather than
 // `drizzle-kit migrate`, whose `pg` driver fails on the SSL settings in a Neon
