@@ -2,7 +2,7 @@
   import { Button } from "$lib/components/ui/button";
   import type { Progress } from "$lib/db";
   import { m } from "$lib/paraglide/messages";
-  import { getLocale } from "$lib/paraglide/runtime";
+  import { timeAgo } from "$lib/stats";
   import { signOut } from "$lib/sync/account";
   import { sync, type SyncOutcome } from "$lib/sync/sync";
 
@@ -49,21 +49,12 @@
     syncedAt = null;
   }
 
-  /** "3 minutes ago", in the reader's language, from the largest unit that fits. */
-  function ago(at: number): string {
-    const seconds = Math.round((at - Date.now()) / 1000);
-    const format = new Intl.RelativeTimeFormat(getLocale(), { numeric: "auto" });
-    if (seconds > -3600) return format.format(Math.round(seconds / 60), "minute");
-    if (seconds > -86_400) return format.format(Math.round(seconds / 3600), "hour");
-    return format.format(Math.round(seconds / 86_400), "day");
-  }
-
   let status = $derived.by(() => {
     if (isSyncing) return m.settings_sync_status_syncing();
     if (outcome === "failed") return m.settings_sync_error_failed();
     if (syncedAt === null) return m.settings_sync_status_never();
     if (Date.now() - syncedAt < 60_000) return m.settings_sync_status_just_now();
-    return m.settings_sync_status_synced({ when: ago(syncedAt) });
+    return m.settings_sync_status_synced({ when: timeAgo(syncedAt) });
   });
 </script>
 

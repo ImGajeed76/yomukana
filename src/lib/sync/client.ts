@@ -48,9 +48,19 @@ interface Database {
       >;
       readers: Table<{ model: unknown }, { model: ReaderModel }>;
       sessions: Table<{ record: SessionRecord }, { record: SessionRecord }>;
+      profiles: Table<
+        { username: string; score: number; scored_at: string | null },
+        { username: string; score?: number; scored_at?: string }
+      >;
+      friends: Table<{ follower_id: string; followee_id: string }, { followee_id: string }>;
     };
     Views: Record<string, never>;
-    Functions: Record<string, never>;
+    Functions: {
+      find_profile: {
+        Args: { name: string };
+        Returns: { user_id: string; username: string }[];
+      };
+    };
   };
 }
 

@@ -16,7 +16,18 @@
 
 import { sql } from "drizzle-orm";
 import { authenticatedRole, authUid, crudPolicy } from "drizzle-orm/neon";
-import { index, jsonb, pgTable, primaryKey, text, timestamp } from "drizzle-orm/pg-core";
+import {
+  check,
+  doublePrecision,
+  index,
+  jsonb,
+  pgPolicy,
+  pgTable,
+  primaryKey,
+  text,
+  timestamp,
+  uniqueIndex,
+} from "drizzle-orm/pg-core";
 
 /** The signed-in reader, taken from their token, never from the request body. */
 function owner() {
@@ -107,4 +118,84 @@ export const sessions = pgTable(
     updatedAt: changedAt(),
   },
   (table) => [ownRowsOnly(table.userId)],
+);
+
+/**
+ * A signed-in reader as their friends see them: a name and a score.
+ *
+ * Made automatically on the first sync, with a random name the reader can
+ * change. The score is the one the app already works out on the device, sent
+ * with each sync, so it is the score as of the last sync and `scored_at` says
+ * when that was.
+ *
+ * Readable by its owner and by anyone who added them, and by no one else.
+ * There is no list of every reader: someone is found only by typing their
+ * exact name, through `find_profile`. See drizzle/migrations for that.
+ */
+export const profiles = pgTable(
+  "profiles",
+  {
+    userId: owner().primaryKey(),
+    // Stored lowercase and kept to a small alphabet, so a name read aloud or
+    // copied from a chat is the name that finds them.
+    username: text("username").notNull(),
+    score: doublePrecision("score").notNull().default(0),
+    scoredAt: timestamp("scored_at", { withTimezone: true }),
+    updatedAt: changedAt(),
+  },
+  (table) => [
+    uniqueIndex("profiles_username").on(table.username),
+    check("profiles_username_format", sql`${table.username} ~ '^[a-z0-9_-]{3,20}$'`),
+    pgPolicy("profiles_read_own_and_added", {
+      for: "select",
+      to: authenticatedRole,
+      using: sql`${table.userId} = (select auth.user_id()) or exists (
+        select 1 from friends
+        where friends.follower_id = (select auth.user_id())
+          and friends.followee_id = ${table.userId}
+      )`,
+    }),
+    pgPolicy("profiles_insert_own", {
+      for: "insert",
+      to: authenticatedRole,
+      withCheck: authUid(table.userId),
+    }),
+    pgPolicy("profiles_update_own", {
+      for: "update",
+      to: authenticatedRole,
+      using: authUid(table.userId),
+      withCheck: authUid(table.userId),
+    }),
+    pgPolicy("profiles_delete_own", {
+      for: "delete",
+      to: authenticatedRole,
+      using: authUid(table.userId),
+    }),
+  ],
+);
+
+/**
+ * Who a reader has added to their board. One-way, like following: the person
+ * added is not asked and does not need to add them back.
+ *
+ * Each row belongs to the reader who added someone, and only they can see,
+ * add or remove it. When either profile goes, the row goes with it.
+ */
+export const friends = pgTable(
+  "friends",
+  {
+    followerId: text("follower_id")
+      .notNull()
+      .default(sql`(auth.user_id())`)
+      .references(() => profiles.userId, { onDelete: "cascade" }),
+    followeeId: text("followee_id")
+      .notNull()
+      .references(() => profiles.userId, { onDelete: "cascade" }),
+    addedAt: timestamp("added_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.followerId, table.followeeId] }),
+    check("friends_not_self", sql`${table.followerId} <> ${table.followeeId}`),
+    ownRowsOnly(table.followerId),
+  ],
 );

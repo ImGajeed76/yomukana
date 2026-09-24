@@ -13,7 +13,9 @@ import {
   type SyncRecord,
 } from "../db";
 import { readerFrom, type ItemState } from "../srs";
+import { scoreOf } from "../stats/score";
 import { connect, type SyncClient } from "./client";
+import { publishScore } from "./friends";
 import {
   attemptIdOf,
   lastReviewOf,
@@ -219,6 +221,8 @@ export async function sync(progress: Progress): Promise<SyncOutcome> {
     );
 
     await push(client, progress, state.pushedUpTo);
+    // Last, so the score friends see is worked out from everything just merged.
+    await publishScore(client, scoreOf(progress.store, new Date()));
 
     // The reader may have signed out or deleted everything while this ran.
     // Writing the old record back would sign them in again.

@@ -10,6 +10,7 @@
 // point. Every score, card and latency here came out of the same code a real
 // sentence goes through, so what the charts draw is what they would draw.
 
+import type { BoardEntry } from "../sync/board";
 import type { AttemptRecord } from "../db";
 import { segmentKana } from "../romaji";
 import { CORE_HIRAGANA } from "../selection";
@@ -59,6 +60,57 @@ function randomFrom(seed: number): () => number {
     state >>>= 0;
     return state / 0x100000000;
   };
+}
+
+/**
+ * A made-up friends board for `?demo`, for looking at the board with people on
+ * it. Spread around the demo reader's own score, so every standing shows up.
+ */
+export function demoBoard(ownScore: number, now: Date): BoardEntry[] {
+  const hour = 3_600_000;
+  const at = (hoursAgo: number): number => now.getTime() - hoursAgo * hour;
+  return [
+    {
+      userId: "d1",
+      username: "swift-kitsune-71",
+      score: ownScore * 1.6,
+      scoredAt: at(2),
+      isYou: false,
+    },
+    {
+      userId: "d2",
+      username: "calm-fukurou-18",
+      score: ownScore + 23,
+      scoredAt: at(30),
+      isYou: false,
+    },
+    { userId: "you", username: "quiet-tanuki-42", score: ownScore, scoredAt: at(0), isYou: true },
+    {
+      userId: "d3",
+      username: "sleepy-neko-55",
+      score: ownScore * 0.7,
+      scoredAt: at(24 * 9),
+      isYou: false,
+    },
+    { userId: "d4", username: "oliver", score: ownScore * 0.3, scoredAt: null, isYou: false },
+    // Enough more that the board is longer than the card it sits in, so the
+    // scrolling and the jump to the reader's own line show up too.
+    ...[
+      "brave-kuma-12",
+      "shy-usagi-64",
+      "lucky-koi-29",
+      "tidy-risu-88",
+      "warm-saru-40",
+      "witty-tako-17",
+      "bright-tsuru-53",
+    ].map((username, index) => ({
+      userId: `extra-${String(index)}`,
+      username,
+      score: ownScore * (0.2 + index * 0.25),
+      scoredAt: at(3 + index * 20),
+      isYou: false,
+    })),
+  ];
 }
 
 export interface DemoProgress {

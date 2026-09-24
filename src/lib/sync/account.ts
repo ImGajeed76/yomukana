@@ -7,6 +7,9 @@ import { NEVER_SYNCED, type Progress } from "../db";
 import { AUTH_URL, connect } from "./client";
 import { signedInRecord } from "./sync";
 
+/** What Better Auth is given as the account's name, which nothing shows. */
+const ACCOUNT_NAME = "reader";
+
 /** Why an account step did not work, in the terms the reader can act on. */
 export type AccountProblem =
   | "wrong-credentials"
@@ -152,9 +155,12 @@ export async function createAccount(
   password: string,
 ): Promise<AccountResult> {
   const client = await connect();
-  // Better Auth wants a name. Nothing here shows one, so it gets the email
-  // rather than something the reader has to invent.
-  const result = await attempt(() => client.auth.signUp.email({ email, password, name: email }));
+  // Better Auth wants a name. Nothing here shows one, and the email would be
+  // one more copy of it riding in every token, so it gets a placeholder. The
+  // name friends see is the username on the profile, never this.
+  const result = await attempt(() =>
+    client.auth.signUp.email({ email, password, name: ACCOUNT_NAME }),
+  );
   if ("response" in result) return landed(progress, email, result.response);
   // Better Auth says the email is taken with a 422 and a code the SDK has no
   // name for, so it arrives as a bare validation failure with that status.
@@ -232,6 +238,8 @@ export async function deleteSyncedCopy(): Promise<boolean> {
       client.from("attempts").delete().neq("attempt_id", ""),
       client.from("readers").delete().neq("user_id", ""),
       client.from("sessions").delete().neq("user_id", ""),
+      // Takes the reader off every friend's board too: those rows go with it.
+      client.from("profiles").delete().neq("user_id", ""),
     ]);
     return results.every((result) => result.error === null);
   } catch (error) {
