@@ -55,6 +55,20 @@ describe("readFieldChange", () => {
 
   test("leaves typed kana alone when the keyboard converts them to kanji", () => {
     const reading = readFieldChange([0, 2, 2], fieldChange(" ねこ", " 猫"), spell);
-    expect(reading).toEqual({ backspaces: 0, keys: [], keyCounts: [0, 0] });
+    // The kanji keeps the four keys of ねこ, so deleting it takes them back.
+    expect(reading).toEqual({ backspaces: 0, keys: [], keyCounts: [0, 4] });
+  });
+
+  test("still reads the kana typed in the same step as a live conversion", () => {
+    // iOS converts as you type: ねこ becomes 猫 in the same change that adds が.
+    const reading = readFieldChange([0, 2, 2], fieldChange(" ねこ", " 猫が"), spell);
+    expect(reading).toEqual({ backspaces: 0, keys: ["g", "a"], keyCounts: [0, 4, 2] });
+  });
+
+  test("takes back every key of a converted kanji when it is deleted", () => {
+    const reading = readFieldChange([0, 4, 2], fieldChange(" 猫が", " 猫"), spell);
+    expect(reading.backspaces).toBe(2);
+    const whole = readFieldChange([0, 4], fieldChange(" 猫", " "), spell);
+    expect(whole.backspaces).toBe(4);
   });
 });

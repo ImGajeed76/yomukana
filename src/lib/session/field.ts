@@ -58,9 +58,11 @@ export interface FieldReading {
  * keys, and a flick keypad cycling な, に, ぬ replaces the last character each
  * time, which here takes back the keys of the one before and types the new one.
  *
- * A change that brings in something no keys spell, most often the keyboard
- * turning ねこ into 猫, is not read at all: the reader already typed the kana,
- * and converting them is the keyboard's business, not a correction.
+ * A change that brings in something no keys spell is a conversion: the
+ * keyboard turning ねこ into 猫, on its own or, with live conversion, in the
+ * same step as the next kana, ねこ becoming 猫が. The kanji stand for the kana
+ * they replaced, so they take over those keys, and deleting 猫 later takes
+ * back ね and こ. Only what comes after the last kanji is new typing.
  */
 export function readFieldChange(
   keyCounts: readonly number[],
@@ -69,16 +71,21 @@ export function readFieldChange(
 ): FieldReading {
   const kept = keyCounts.slice(0, Math.max(0, keyCounts.length - change.deleted));
   const removed = keyCounts.slice(kept.length);
+  const removedKeys = removed.reduce((total, count) => total + count, 0);
 
   const spelled = change.inserted.map(spell);
-  if (spelled.some((keys) => keys === null)) {
-    return { backspaces: 0, keys: [], keyCounts: [...kept, ...change.inserted.map(() => 0)] };
-  }
+  const lastConverted = spelled.findLastIndex((keys) => keys === null);
 
-  const inserted = spelled.map((keys) => keys ?? "");
+  // What the keyboard converted: it replaces the deleted characters and keeps
+  // their keys, all counted on its first character.
+  const converted = lastConverted === -1 ? [] : spelled.slice(0, lastConverted + 1);
+  const convertedCounts = converted.map((_, index) => (index === 0 ? removedKeys : 0));
+  // What was typed after it, or the whole change when nothing was converted.
+  const typed = spelled.slice(lastConverted + 1).map((keys) => keys ?? "");
+
   return {
-    backspaces: removed.reduce((total, count) => total + count, 0),
-    keys: inserted.flatMap((keys) => toCodePoints(keys)),
-    keyCounts: [...kept, ...inserted.map((keys) => keys.length)],
+    backspaces: lastConverted === -1 ? removedKeys : 0,
+    keys: typed.flatMap((keys) => toCodePoints(keys)),
+    keyCounts: [...kept, ...convertedCounts, ...typed.map((keys) => keys.length)],
   };
 }

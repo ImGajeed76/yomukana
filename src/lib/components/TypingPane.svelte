@@ -87,6 +87,20 @@
    * back whole. A plain letter is one, as it always was.
    */
   let pressGroups: number[] = [];
+  /**
+   * Whether a Japanese keyboard is composing in the field. While it is, the
+   * field and its keys belong to the keyboard: changing the value under it, or
+   * cancelling one of its keys, breaks or doubles what it is writing.
+   */
+  let isComposing = false;
+
+  /**
+   * The last events a keyboard sent, shown with `?debug` in the address. For
+   * working out what a phone keyboard actually does, which no documentation
+   * says reliably. Kept in the page, never sent anywhere.
+   */
+  let debugLog = $state.raw<readonly string[]>([]);
+  let isDebugging = $state(false);
 
   let method = $derived<InputMethod>(isTouch ? "touch" : "keyboard");
 
@@ -118,7 +132,11 @@
     hasStarted = false;
     pressGroups = [];
     revealed.clear();
-    resetField();
+    // A sentence can end on a kana the keyboard is still composing. The field
+    // is left to it, and what is in there stops counting towards this sentence.
+    // It is reset when the keyboard finishes. See finishComposing.
+    if (isComposing) fieldKeyCounts = fieldKeyCounts.map(() => 0);
+    else resetField();
   });
 
   let typed = $derived(typedInCurrentSegment(attempt.typing));
@@ -170,6 +188,11 @@
     // Timestamp first, before any other work in this handler. See CLAUDE.md 1.9.
     const at = performance.now();
     if (attempt.finishedAt !== null || isPaused) return;
+    // A key a Japanese keyboard is composing with belongs to it. It reaches the
+    // exercise through the field. Safari marks some of these only with the
+    // old key code 229, and says isComposing is false for them.
+    // eslint-disable-next-line @typescript-eslint/no-deprecated -- the only signal Safari gives
+    if (event.isComposing || event.keyCode === 229) return;
 
     // Up, because the reading appears above the word. It is not a character, so
     // it cannot collide with typing, and it leaves Tab alone for navigation.
@@ -223,8 +246,8 @@
     }
 
     // Emptied, or backspaced past the resting value: put it back, or the next
-    // backspace has nothing to delete and is lost.
-    if (!element.value.startsWith(RESTING)) resetField();
+    // backspace has nothing to delete and is lost. Not while composing.
+    if (!element.value.startsWith(RESTING) && !isComposing) resetField();
   }
 
   /**
@@ -239,6 +262,65 @@
     fieldKeyCounts = [0];
     if (field !== null) field.value = RESTING;
   }
+
+  function startComposing() {
+    isComposing = true;
+  }
+
+  /**
+   * The keyboard finished a word. The field is reset after it has let go, on
+   * the next turn, not inside its own event: Safari is still finishing the
+   * word when this fires, and a value changed now can come back doubled.
+   */
+  function finishComposing() {
+    isComposing = false;
+    setTimeout(() => {
+      if (!isComposing) resetField();
+    }, 0);
+  }
+
+  // Only with `?debug`: every keyboard event, newest first. Listeners of its
+  // own, so the key and input handlers above carry no debugging code at all.
+  $effect(() => {
+    isDebugging = new URLSearchParams(location.search).has("debug");
+    const element = field;
+    if (!isDebugging || element === null) return;
+
+    const log = (line: string): void => {
+      debugLog = [line, ...debugLog].slice(0, 16);
+    };
+    const onKey = (event: KeyboardEvent): void => {
+      // eslint-disable-next-line @typescript-eslint/no-deprecated -- logged because Safari relies on it
+      const code = event.keyCode;
+      log(
+        `keydown ${JSON.stringify(event.key)} code=${String(code)} composing=${String(event.isComposing)}`,
+      );
+    };
+    const onBefore = (event: Event): void => {
+      const input = event as InputEvent;
+      log(`beforeinput ${input.inputType} ${JSON.stringify(input.data)}`);
+    };
+    const onComposition = (event: CompositionEvent): void => {
+      log(`${event.type} ${JSON.stringify(event.data)}`);
+    };
+    const onInput = (): void => {
+      log(`input value=${JSON.stringify(element.value)}`);
+    };
+    window.addEventListener("keydown", onKey, true);
+    element.addEventListener("beforeinput", onBefore);
+    element.addEventListener("compositionstart", onComposition);
+    element.addEventListener("compositionupdate", onComposition);
+    element.addEventListener("compositionend", onComposition);
+    element.addEventListener("input", onInput);
+    return () => {
+      window.removeEventListener("keydown", onKey, true);
+      element.removeEventListener("beforeinput", onBefore);
+      element.removeEventListener("compositionstart", onComposition);
+      element.removeEventListener("compositionupdate", onComposition);
+      element.removeEventListener("compositionend", onComposition);
+      element.removeEventListener("input", onInput);
+    };
+  });
 
   function focusField() {
     field?.focus();
@@ -276,7 +358,8 @@
       enterkeyhint="next"
       aria-label={m.session_typing_field_label()}
       oninput={handleInput}
-      oncompositionend={resetField}
+      oncompositionstart={startComposing}
+      oncompositionend={finishComposing}
       onfocus={() => {
         isFieldFocused = true;
       }}
@@ -348,6 +431,14 @@
       <span class="ml-auto text-xs text-muted-foreground">{m.session_typing_hint_skip()}</span>
     {/if}
   </div>
+
+  <!-- Only with ?debug: what the keyboard sent, newest first. Not translated,
+       because it is for working out a bug, not for reading. -->
+  {#if isDebugging}
+    <pre class="max-h-64 overflow-auto rounded-md border border-border p-2 text-xs">{debugLog.join(
+        "\n",
+      )}</pre>
+  {/if}
 </div>
 
 <style>
