@@ -4,11 +4,18 @@
   import { DitherBackdrop } from "$lib/charts";
   import SiteFooter from "$lib/components/SiteFooter.svelte";
   import SiteNav from "$lib/components/SiteNav.svelte";
+  import { install } from "$lib/install.svelte";
   import { m } from "$lib/paraglide/messages";
   import { getLocale } from "$lib/paraglide/runtime";
   import "./layout.css";
 
   let { children }: { children: Snippet } = $props();
+
+  // The browser says whether the app can be installed as soon as the page has
+  // loaded, so this has to be listening from the start. See install.svelte.ts.
+  $effect(() => {
+    install.listen();
+  });
 
   // app.html is prerendered with lang="en" because there is no server to
   // substitute the reader's locale. Correct it once the runtime knows.

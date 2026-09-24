@@ -22,6 +22,7 @@
     "format:check": "prettier --check .",
     "lint": "eslint .",
     "lint:fix": "eslint --fix .",
+    "icons": "bun scripts/icons.ts",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "bun scripts/db/migrate.ts && neon data-api refresh-schema --branch dev",
     "db:migrate:production": "bun --env-file=.env.production.local scripts/db/migrate.ts && neon data-api refresh-schema --branch production"

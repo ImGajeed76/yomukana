@@ -13,6 +13,13 @@
     <!-- In the document itself rather than a component head, so it is there before
          any JavaScript runs and the browser never falls back to /favicon.ico. -->
     <link rel="icon" href="%sveltekit.assets%/favicon.svg" />
+    <!--
+      What makes it installable: the manifest names it and points at its icons,
+      and iOS, which ignores the manifest's icons, takes its own.
+    -->
+    <link rel="manifest" href="%sveltekit.assets%/manifest.webmanifest" />
+    <link rel="apple-touch-icon" href="%sveltekit.assets%/icons/apple-touch-icon.png" />
+    <meta name="apple-mobile-web-app-title" content="yomukana" />
     <meta name="text-scale" content="scale" />
     <meta name="theme-color" content="#0c0a09" />
     <!--

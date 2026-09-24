@@ -1,6 +1,7 @@
 <script lang="ts">
   import { setMode, userPrefersMode } from "mode-watcher";
   import ChoiceRow, { type Choice } from "$lib/components/ChoiceRow.svelte";
+  import InstallSettings from "$lib/components/InstallSettings.svelte";
   import SyncSettings from "$lib/components/SyncSettings.svelte";
   import * as AlertDialog from "$lib/components/ui/alert-dialog";
   import { Button } from "$lib/components/ui/button";
@@ -128,6 +129,8 @@
   </section>
 
   <SyncSettings {progress} {isLoaded} bind:account />
+
+  <InstallSettings />
 
   <!--
     The sentence saying nothing leaves the browser is the reason this page
