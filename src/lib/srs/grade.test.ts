@@ -4,6 +4,7 @@ import {
   INITIAL_READER,
   gradeReview,
   isPlausibleLatency,
+  readerFrom,
   trimReading,
   updateReader,
   type ReaderModel,
@@ -18,6 +19,21 @@ function readerAt(baselineMs: number, reviews = 200): ReaderModel {
 }
 
 const steady = readerAt(400);
+
+describe("readerFrom", () => {
+  test("reads a model from before Japanese keyboards with a fresh kana input", () => {
+    // Stored by an earlier version: keyboard and touch only. Both carry on, and
+    // the kana input starts where any new input starts.
+    const stored = {
+      keyboard: { baselineMs: 420, floorMs: 230, reviews: 900 },
+      touch: { baselineMs: 610, floorMs: 340, reviews: 120 },
+    };
+    const reader = readerFrom(stored);
+    expect(reader.keyboard.reviews).toBe(900);
+    expect(reader.touch.reviews).toBe(120);
+    expect(reader.kana).toEqual(INITIAL_READER.kana);
+  });
+});
 
 describe("gradeReview", () => {
   test("grades any wrong key as Again, however fast the reader was", () => {

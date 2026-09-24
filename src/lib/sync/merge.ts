@@ -51,7 +51,7 @@ export function newerItem(local: ItemState | undefined, remote: ItemState): Item
 export function mergeReaders(local: ReaderModel, remote: ReaderModel): ReaderModel {
   const pick = (method: InputMethod): InputModel =>
     remote[method].reviews > local[method].reviews ? remote[method] : local[method];
-  return { keyboard: pick("keyboard"), touch: pick("touch") };
+  return { keyboard: pick("keyboard"), touch: pick("touch"), kana: pick("kana") };
 }
 
 /**

@@ -49,6 +49,12 @@ describe("mergeReaders", () => {
     expect(merged.keyboard.reviews).toBe(500);
     expect(merged.touch.reviews).toBe(80);
   });
+
+  test("keeps a Japanese keyboard's input from the device that used one", () => {
+    const flicked = { ...INITIAL_READER, kana: { ...INITIAL_READER.kana, reviews: 40 } };
+    expect(mergeReaders(INITIAL_READER, flicked).kana.reviews).toBe(40);
+    expect(mergeReaders(flicked, INITIAL_READER).kana.reviews).toBe(40);
+  });
 });
 
 describe("mergeSessions", () => {

@@ -6,7 +6,8 @@
   import { m } from "$lib/paraglide/messages";
   import { typedInCurrentSegment, type Segment } from "$lib/romaji";
   import { activity, startAttempt, type Attempt } from "$lib/session";
-  import { fieldChange } from "$lib/session/field";
+  import { isSpellableKana, keysForCharacter } from "$lib/romaji/kana-keys";
+  import { fieldChange, readFieldChange } from "$lib/session/field";
   import {
     applyKey,
     classifyKey,
@@ -74,6 +75,18 @@
   let isFieldFocused = $state(false);
   /** What the field held after the last change that was read. */
   let fieldWas = RESTING;
+  /**
+   * How many keys each character in the field stands for. One per letter from
+   * a romaji keyboard, more for kana from a Japanese one, so deleting ね takes
+   * back both of its keys. The resting space stands for none.
+   */
+  let fieldKeyCounts: readonly number[] = [0];
+  /**
+   * The same for the desktop path: how many keys each key press stood for, so
+   * a backspace after a kana typed in a Japanese keyboard's kana mode takes it
+   * back whole. A plain letter is one, as it always was.
+   */
+  let pressGroups: number[] = [];
 
   let method = $derived<InputMethod>(isTouch ? "touch" : "keyboard");
 
@@ -103,6 +116,7 @@
     round;
     attempt = startAttempt(segments, performance.now());
     hasStarted = false;
+    pressGroups = [];
     revealed.clear();
     resetField();
   });
@@ -133,10 +147,15 @@
   }
 
   /** One key, from either keyboard, into the attempt. */
-  function apply(action: KeyAction, at: number) {
+  /**
+   * Applies one key. `from` is the input it came through, which the first key
+   * of a sentence decides for the whole sentence: the device's own method, or
+   * `kana` when the key arrived as kana from a Japanese keyboard.
+   */
+  function apply(action: KeyAction, at: number, from: InputMethod = method) {
     if (action.kind === "type") hasStarted = true;
 
-    const outcome = applyKey(attempt, action, at, method);
+    const outcome = applyKey(attempt, action, at, from);
     attempt = outcome.attempt;
 
     // After the timestamp, after the key is matched and after the state the
@@ -160,6 +179,16 @@
       return;
     }
 
+    // A Japanese keyboard in kana mode sends the kana itself as the key. It is
+    // read as the keys that spell it. See kana-keys.ts.
+    if (isSpellableKana(event.key) && !event.ctrlKey && !event.metaKey && !event.altKey) {
+      event.preventDefault();
+      const keys = keysForCharacter(event.key) ?? "";
+      for (const key of keys) apply({ kind: "type", key }, at, "kana");
+      pressGroups.push(keys.length);
+      return;
+    }
+
     // A key this can read is taken here and kept out of the field, so the field
     // only ever sees what a composing phone keyboard sends as "Unidentified".
     // That keeps the two paths from counting one key twice.
@@ -167,6 +196,12 @@
     if (!shouldPreventDefault(action)) return;
     event.preventDefault();
 
+    if (action.kind === "backspace") {
+      const group = pressGroups.pop() ?? 1;
+      for (let count = 0; count < group; count++) apply(action, at);
+      return;
+    }
+    if (action.kind === "type") pressGroups.push(1);
     apply(action, at);
   }
 
@@ -177,14 +212,14 @@
     if (element === null) return;
 
     const change = fieldChange(fieldWas, element.value);
+    const reading = readFieldChange(fieldKeyCounts, change, keysForCharacter);
+    const from: InputMethod = change.inserted.some(isSpellableKana) ? "kana" : method;
     fieldWas = element.value;
+    fieldKeyCounts = reading.keyCounts;
 
     if (attempt.finishedAt === null) {
-      for (let count = 0; count < change.deleted; count++) apply({ kind: "backspace" }, at);
-      for (const key of change.inserted) {
-        const action = classifyKey({ key, ctrlKey: false, metaKey: false, altKey: false });
-        if (action.kind === "type") apply(action, at);
-      }
+      for (let count = 0; count < reading.backspaces; count++) apply({ kind: "backspace" }, at);
+      for (const key of reading.keys) apply({ kind: "type", key }, at, from);
     }
 
     // Emptied, or backspaced past the resting value: put it back, or the next
@@ -201,6 +236,7 @@
    */
   function resetField() {
     fieldWas = RESTING;
+    fieldKeyCounts = [0];
     if (field !== null) field.value = RESTING;
   }
 

@@ -42,7 +42,17 @@ export const DEFAULT_THRESHOLDS: GradingThresholds = {
  * tablet with a keyboard attached types through the keyboard path and is a
  * keyboard reader.
  */
-export type InputMethod = "keyboard" | "touch";
+export type InputMethod = "keyboard" | "touch" | "kana";
+
+/**
+ * Every input, in one list, for anything that goes through them all.
+ *
+ * `kana` is a Japanese keyboard, on a phone or a desk: it sends kana, one
+ * press or flick per character, where the other two send romaji, a key per
+ * letter. Different enough to get its own motor floor, so a reader who flicks
+ * on the train and types romaji at home is measured fairly on both.
+ */
+export const INPUT_METHODS: readonly InputMethod[] = ["keyboard", "touch", "kana"];
 
 /** What the reader's typing looks like on one kind of input. */
 export interface InputModel {
@@ -67,6 +77,7 @@ export interface InputModel {
 export interface ReaderModel {
   readonly keyboard: InputModel;
   readonly touch: InputModel;
+  readonly kana: InputModel;
 }
 
 /**
@@ -82,7 +93,13 @@ export const INITIAL_BASELINE_MS = 800;
  * A phone is slower to hit than a keyboard: the key is smaller, the thumb
  * travels further, and there is no home row to rest on.
  */
-const INITIAL_FLOOR_MS: Readonly<Record<InputMethod, number>> = { keyboard: 250, touch: 350 };
+const INITIAL_FLOOR_MS: Readonly<Record<InputMethod, number>> = {
+  keyboard: 250,
+  touch: 350,
+  // One press per character rather than two, but a flick is a small aimed
+  // gesture, so it starts where a phone does and learns from there.
+  kana: 350,
+};
 
 function initialInput(method: InputMethod): InputModel {
   return { baselineMs: INITIAL_BASELINE_MS, floorMs: INITIAL_FLOOR_MS[method], reviews: 0 };
@@ -91,6 +108,7 @@ function initialInput(method: InputMethod): InputModel {
 export const INITIAL_READER: ReaderModel = {
   keyboard: initialInput("keyboard"),
   touch: initialInput("touch"),
+  kana: initialInput("kana"),
 };
 
 /**
@@ -103,13 +121,23 @@ export const INITIAL_READER: ReaderModel = {
 export function readerFrom(stored: unknown): ReaderModel {
   if (typeof stored !== "object" || stored === null) return INITIAL_READER;
 
-  if ("keyboard" in stored && "touch" in stored) return stored as ReaderModel;
+  // Written before Japanese keyboards were read: no kana input yet, so it
+  // starts fresh and the other two carry on as they were.
+  if ("keyboard" in stored && "touch" in stored) {
+    const model = stored as Omit<ReaderModel, "kana"> & { kana?: InputModel | null };
+    return {
+      keyboard: model.keyboard,
+      touch: model.touch,
+      kana: model.kana ?? initialInput("kana"),
+    };
+  }
 
   if ("baselineLatencyMs" in stored && typeof stored.baselineLatencyMs === "number") {
     const reviews = "reviews" in stored && typeof stored.reviews === "number" ? stored.reviews : 0;
     return {
       keyboard: { ...initialInput("keyboard"), baselineMs: stored.baselineLatencyMs, reviews },
       touch: initialInput("touch"),
+      kana: initialInput("kana"),
     };
   }
   return INITIAL_READER;
@@ -117,7 +145,9 @@ export function readerFrom(stored: unknown): ReaderModel {
 
 /** The input the reader mostly reads on, for anything that needs one yardstick. */
 export function primaryInput(reader: ReaderModel): InputModel {
-  return reader.touch.reviews > reader.keyboard.reviews ? reader.touch : reader.keyboard;
+  return INPUT_METHODS.map((method) => reader[method]).reduce((most, input) =>
+    input.reviews > most.reviews ? input : most,
+  );
 }
 
 // How fast the baseline follows the reader. Low enough that one slow sentence,

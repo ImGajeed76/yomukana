@@ -36,3 +36,49 @@ export function fieldChange(before: string, after: string): FieldChange {
 
   return { deleted: was.length - shared, inserted: now.slice(shared) };
 }
+
+/** What one change to the field means for the exercise. */
+export interface FieldReading {
+  /** Backspaces to apply, enough to take back every key the deleted characters were. */
+  readonly backspaces: number;
+  /** Keys to apply after that, one character each. */
+  readonly keys: readonly string[];
+  /**
+   * How many keys each character now in the field stands for, in order. Kept
+   * between changes, because deleting ね has to take back two keys, not one.
+   */
+  readonly keyCounts: readonly number[];
+}
+
+/**
+ * Reads a change to the field as backspaces and keys.
+ *
+ * A romaji keyboard puts one letter in per key, and nothing changes from how it
+ * always worked. A Japanese keyboard puts in kana, one character for several
+ * keys, and a flick keypad cycling な, に, ぬ replaces the last character each
+ * time, which here takes back the keys of the one before and types the new one.
+ *
+ * A change that brings in something no keys spell, most often the keyboard
+ * turning ねこ into 猫, is not read at all: the reader already typed the kana,
+ * and converting them is the keyboard's business, not a correction.
+ */
+export function readFieldChange(
+  keyCounts: readonly number[],
+  change: FieldChange,
+  spell: (character: string) => string | null,
+): FieldReading {
+  const kept = keyCounts.slice(0, Math.max(0, keyCounts.length - change.deleted));
+  const removed = keyCounts.slice(kept.length);
+
+  const spelled = change.inserted.map(spell);
+  if (spelled.some((keys) => keys === null)) {
+    return { backspaces: 0, keys: [], keyCounts: [...kept, ...change.inserted.map(() => 0)] };
+  }
+
+  const inserted = spelled.map((keys) => keys ?? "");
+  return {
+    backspaces: removed.reduce((total, count) => total + count, 0),
+    keys: inserted.flatMap((keys) => toCodePoints(keys)),
+    keyCounts: [...kept, ...inserted.map((keys) => keys.length)],
+  };
+}
