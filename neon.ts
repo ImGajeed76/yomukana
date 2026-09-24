@@ -10,7 +10,7 @@ export default defineConfig({
   auth: true,
   dataApi: true,
 
-  // `production` is what yomukana.oseifert.ch uses. `dev` is where the app is
+  // `production` is what yomukana.app uses. `dev` is where the app is
   // developed and tested, with its own readers and its own auth, so testing
   // never touches a real reader's progress. Both are kept.
   branch: (branch) => {
