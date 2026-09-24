@@ -6,7 +6,7 @@
 // the live site. So testing never touches a real reader's progress.
 //
 // Auth is reached through this site's own address, `/api/auth`, which Vercel
-// (vercel.json) and the dev server (vite.config.ts) forward to Neon Auth. The
+// (middleware.ts) and the dev server (vite.config.ts) forward to Neon Auth. The
 // session is a cookie, and Safari throws away cookies from any site other
 // than the one the reader is on, so a cookie from Neon's own address was gone
 // the moment after signing in. Through `/api/auth` it is this site's cookie.

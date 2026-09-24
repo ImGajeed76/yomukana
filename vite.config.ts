@@ -7,7 +7,7 @@ import { defineConfig, loadEnv } from "vite";
 /**
  * `/api/auth`, forwarded to Neon Auth, so the session cookie belongs to this
  * site rather than to Neon's. Safari discards the other kind. The live site
- * does the same through vercel.json; this is for `bun run dev` and
+ * does the same through middleware.ts; this is for `bun run dev` and
  * `bun run preview`, which reach the branch `.env.local` names.
  */
 const AUTH_PATH = "/api/auth";
