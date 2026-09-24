@@ -97,6 +97,17 @@ describe("accepted spellings", () => {
     expect(accepts("コーヒー", "ko-hi-")).toBe(true);
   });
 
+  test("types the long vowel mark as the vowel it holds", () => {
+    // The hyphen is a reach off the home row. The held vowel is what is read.
+    expect(accepts("コーヒー", "koohii")).toBe(true);
+    expect(accepts("コーヒー", "ko-hii")).toBe(true);
+    expect(accepts("ジュース", "juusu")).toBe(true);
+    expect(accepts("スーパー", "suupaa")).toBe(true);
+    // Only the vowel it holds: ー after コ is not `a`.
+    expect(accepts("コーヒー", "kaahii")).toBe(false);
+    expect(accepts("コーヒー", "koahii")).toBe(false);
+  });
+
   test("steps over punctuation instead of asking for it", () => {
     expect(accepts("はい、そうです。", "haisoudesu")).toBe(true);
     // Reaching for the comma key should not be treated as a mistake in itself,

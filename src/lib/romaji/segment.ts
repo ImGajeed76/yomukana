@@ -51,6 +51,17 @@ function lookUp(kana: string): readonly string[] | undefined {
   return MORA_SPELLINGS.get(kana);
 }
 
+/**
+ * The vowel a mora ends on, which is the one a following ー holds.
+ *
+ * Undefined after anything that does not end on a vowel: ん, a sokuon, a
+ * punctuation mark, or nothing at all. There ー can only be typed as `-`.
+ */
+function heldVowel(previous: RawSegment | undefined): string | undefined {
+  const last = previous?.spellings[0]?.at(-1);
+  return last !== undefined && VOWELS.has(last) ? last : undefined;
+}
+
 function split(text: string): RawSegment[] {
   const characters = toCodePoints(text);
   const normalised = toCodePoints(katakanaToHiragana(text));
@@ -64,9 +75,13 @@ function split(text: string): RawSegment[] {
 
     // The long vowel mark belongs to no script, but it is read: it holds the
     // vowel before it, and a reader who misses it misreads the word. So it is a
-    // mora, typed as a hyphen the way every IME expects.
+    // mora. It takes a hyphen, the way every IME expects, and the held vowel
+    // itself, because that is what is read, `koohii` is what people type when
+    // they type fast, and the hyphen key is a reach off the home row.
     if (display === LONG_VOWEL) {
-      segments.push({ display, kana: display, kind: "mora", spellings: ["-"] });
+      const held = heldVowel(segments.at(-1));
+      const spellings = held === undefined ? ["-"] : ["-", held];
+      segments.push({ display, kana: display, kind: "mora", spellings });
       index += 1;
       continue;
     }
