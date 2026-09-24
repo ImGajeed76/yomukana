@@ -51,7 +51,8 @@ export const ATTRIBUTION = {
   sourceUrl: "https://tatoeba.org",
   licence: "CC BY 2.0 FR",
   licenceUrl: "https://creativecommons.org/licenses/by/2.0/fr/",
-  readings: "kuromoji and IPADic",
+  /** Named separately, so the footer can join them in the reader's language. */
+  readings: ["kuromoji", "IPADic"],
 } as const;
 
 /** The text the reader types, which is the sentence read out in kana. */

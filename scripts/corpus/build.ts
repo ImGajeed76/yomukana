@@ -34,7 +34,7 @@ const MAX_SENTENCES = 30_000;
 
 const ATTRIBUTION_TEXT =
   `Sentences from ${ATTRIBUTION.source} (${ATTRIBUTION.sourceUrl}), used under ` +
-  `${ATTRIBUTION.licence}. Readings generated with ${ATTRIBUTION.readings}.`;
+  `${ATTRIBUTION.licence}. Readings generated with ${ATTRIBUTION.readings.join(" and ")}.`;
 
 function parseTsv(text: string): Map<string, string> {
   const rows = new Map<string, string>();

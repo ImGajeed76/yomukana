@@ -24,7 +24,11 @@
 
   // Shown in their own language, the way a language menu always is: someone who
   // only reads German should not have to find "German" written in English.
-  const LANGUAGE_NAMES: Record<string, string> = { en: "English", de: "Deutsch" };
+  const LANGUAGE_NAMES: Record<string, string> = {
+    en: "English",
+    de: "Deutsch",
+    ja: "日本語",
+  };
 
   let languages = $derived<Choice[]>(
     locales.map((locale) => ({ value: locale, label: LANGUAGE_NAMES[locale] ?? locale })),

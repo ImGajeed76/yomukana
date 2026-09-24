@@ -1,9 +1,16 @@
 <script lang="ts">
   import { ATTRIBUTION } from "$lib/corpus/types";
   import { m } from "$lib/paraglide/messages";
+  import { getLocale } from "$lib/paraglide/runtime";
 
   /** Where feedback goes. An alias, so it can be retired if it draws spam. */
   const FEEDBACK_EMAIL = "yomukana@alias.oseifert.ch";
+
+  // "kuromoji and IPADic", "kuromoji und IPADic", "kuromoji、IPADic": the
+  // browser knows how each language joins a list.
+  const readings = new Intl.ListFormat(getLocale(), { type: "conjunction" }).format(
+    ATTRIBUTION.readings,
+  );
 </script>
 
 <!--
@@ -16,14 +23,21 @@
   <div
     class="mx-auto flex w-full max-w-[1152px] flex-wrap items-baseline justify-between gap-x-8 gap-y-2 px-6 py-6 text-xs text-muted-foreground"
   >
+    <!--
+      Built from pieces around the links, because the order changes with the
+      language: Japanese puts the source first and the maker last. The pieces
+      carry their own spaces, since Japanese has none between words.
+    -->
     <p>
-      Sentences from
-      <a class="underline underline-offset-2" href={ATTRIBUTION.sourceUrl} rel="noreferrer">
-        {ATTRIBUTION.source}
-      </a>, used under
-      <a class="underline underline-offset-2" href={ATTRIBUTION.licenceUrl} rel="noreferrer">
-        {ATTRIBUTION.licence}
-      </a>. Readings from {ATTRIBUTION.readings}.
+      {m.footer_credit_before_source()}<a
+        class="underline underline-offset-2"
+        href={ATTRIBUTION.sourceUrl}
+        rel="noreferrer">{ATTRIBUTION.source}</a
+      >{m.footer_credit_before_licence()}<a
+        class="underline underline-offset-2"
+        href={ATTRIBUTION.licenceUrl}
+        rel="noreferrer">{ATTRIBUTION.licence}</a
+      >{m.footer_credit_before_readings()}{readings}{m.footer_credit_after_readings()}
     </p>
 
     <!--
@@ -35,15 +49,13 @@
         {m.footer_feedback()}
       </a>
       <p>
-        {m.footer_made_by()}
-        <span aria-hidden="true">&#x2764;&#xfe0f;</span>
-        by
-        <a
+        {m.footer_made_before_heart()}<span aria-hidden="true">&#x2764;&#xfe0f;</span
+        >{m.footer_made_before_name()}<a
           class="underline underline-offset-2"
           href="https://oseifert.ch"
           rel="noreferrer"
           target="_blank">Oliver</a
-        >
+        >{m.footer_made_after_name()}
       </p>
     </div>
   </div>

@@ -10,6 +10,11 @@
    vietnamese ones would never be hit by this app's content. */
 @import "@fontsource/noto-sans-jp/latin-400.css";
 @import "@fontsource/noto-sans-jp/japanese-400.css";
+/* The weights the interface uses for labels and headings, for the Japanese
+   interface. Without them the browser smears the regular weight into a fake
+   bold. Like the rest, sliced, so only a reader who needs them downloads them. */
+@import "@fontsource/noto-sans-jp/japanese-500.css";
+@import "@fontsource/noto-sans-jp/japanese-600.css";
 
 @custom-variant dark (&:is(.dark *));
 @plugin "@tailwindcss/forms";
@@ -85,7 +90,9 @@
 }
 
 @theme inline {
-  --font-sans: "Geist Variable", sans-serif;
+  /* Geist has no Japanese, so Japanese interface text falls through to Noto
+     Sans JP rather than to whatever the system has. */
+  --font-sans: "Geist Variable", "Noto Sans JP", sans-serif;
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -177,4 +184,20 @@
   ::-webkit-scrollbar-thumb:hover {
     background-color: var(--muted-foreground);
   }
+}
+
+/* Never letter-space Japanese: tracking a kana string makes it harder to read,
+   not easier. Headings are set tight for Latin, so undo it for Japanese. See
+   CLAUDE.md 7.2. */
+.tracking-tight:lang(ja) {
+  letter-spacing: normal;
+}
+
+/* Japanese has no spaces, so a browser left alone breaks a line between any two
+   characters, splitting words in half and stranding a single character on the
+   last line. Break at phrase boundaries instead, and keep the last line from
+   being a lone character. */
+:lang(ja) {
+  word-break: auto-phrase;
+  text-wrap: pretty;
 }
