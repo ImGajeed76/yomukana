@@ -131,7 +131,7 @@
   "stats_friends_error_self": "Das bist du.",
   "stats_friends_error_unknown": "Etwas ist schiefgegangen. Versuch es gleich noch einmal.",
   "stats_friends_label_active": "aktiv {when}",
-  "stats_friends_label_add": "Benutzername",
+  "stats_friends_label_add": "Benutzername eines Freundes",
   "stats_friends_label_never": "noch nicht synchronisiert",
   "stats_friends_label_username": "Benutzername",
   "stats_friends_label_your_name": "Dein Benutzername",
