@@ -124,6 +124,8 @@ export class Practice {
   isLoaded = $state(false);
   /** Whether what the reader does here will still be there tomorrow. */
   isPersistent = $state(false);
+  /** Whether this browser has no history at all: a first visit, as far as it can tell. */
+  isNewReader = $state(false);
 
   /**
    * The difficulty band sentences are drawn from, and whether the real corpus
@@ -166,6 +168,7 @@ export class Practice {
     await this.#progress.load();
     this.#restore(await this.#progress.session());
     this.isPersistent = this.#progress.isPersistent;
+    this.isNewReader = this.#progress.store.items.size === 0;
     this.isLoaded = true;
     this.#choose();
     this.#sync();

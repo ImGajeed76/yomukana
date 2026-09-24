@@ -893,7 +893,7 @@ Empty states should guide users toward action, not just state "nothing here."
 3. Short description with next step
 4. Primary action button when applicable
 
-A new reader with no history is the most important empty state in the app. It should start them typing, not explain the SRS.
+A new reader with no history is the most important empty state in the app. It should start them typing, not explain the SRS. The one exception is a single short welcome on the very first visit, saying what the page is and what to type: three lines, one button that starts the typing, shown once and never again. Keys go to it, not to the exercise, while it is open.
 
 ### 12.4 User Control \[4/5]
 

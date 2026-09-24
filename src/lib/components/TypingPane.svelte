@@ -29,9 +29,15 @@
     onFinished?: (attempt: Attempt, revealed: ReadonlySet<number>) => void;
     /** Leaves the sentence without scoring it. */
     onSkip?: () => void;
+    /**
+     * Whether something is open over the sentence. Keys then belong to that,
+     * not to the exercise. The clock starts on the first key the exercise
+     * takes, so time spent on whatever was open is never counted as reading.
+     */
+    isPaused?: boolean;
   }
 
-  let { segments, tokens, round, onFinished, onSkip }: Props = $props();
+  let { segments, tokens, round, onFinished, onSkip, isPaused = false }: Props = $props();
 
   // Wrong keys against the current segment before the accepted spellings appear.
   // Two is enough to tell a slip from not knowing how to spell the mora.
@@ -144,7 +150,7 @@
   function handleKeydown(event: KeyboardEvent) {
     // Timestamp first, before any other work in this handler. See CLAUDE.md 1.9.
     const at = performance.now();
-    if (attempt.finishedAt !== null) return;
+    if (attempt.finishedAt !== null || isPaused) return;
 
     // Up, because the reading appears above the word. It is not a character, so
     // it cannot collide with typing, and it leaves Tab alone for navigation.

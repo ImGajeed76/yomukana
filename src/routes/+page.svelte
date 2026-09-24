@@ -1,5 +1,6 @@
 <script lang="ts">
   import TypingPane from "$lib/components/TypingPane.svelte";
+  import WelcomeDialog from "$lib/components/WelcomeDialog.svelte";
   import { Button } from "$lib/components/ui/button";
   import { m } from "$lib/paraglide/messages";
   import { Practice } from "$lib/session/practice.svelte";
@@ -13,11 +14,59 @@
     void practice.load();
   });
 
+  /** Where the first-visit welcome remembers it was closed. */
+  const WELCOMED_KEY = "yomukana:welcomed";
+
+  let isWelcoming = $state(false);
+
+  /**
+   * Whether the welcome has been closed in this browser before.
+   *
+   * localStorage, not IndexedDB: this is a convenience for one browser, not
+   * progress, and losing it only means seeing three lines once more. It
+   * throws in some private windows and with blocked site data, which cannot
+   * be prevented, and then the answer is simply "no".
+   */
+  function hasBeenWelcomed(): boolean {
+    try {
+      return localStorage.getItem(WELCOMED_KEY) !== null;
+    } catch {
+      return false;
+    }
+  }
+
+  function rememberWelcome(): void {
+    try {
+      localStorage.setItem(WELCOMED_KEY, "1");
+    } catch {
+      // Same failure as above. The welcome may show again, which is harmless.
+    }
+  }
+
+  // A reader with no history in this browser, who has not closed it before.
+  // Someone signing in on a new device already knows the page, and brings
+  // their history with them on the first sync.
+  // Remembered as soon as it shows, not when it closes: it has been seen, and
+  // a reload with it still open should not show it again.
+  $effect(() => {
+    if (!practice.isLoaded || !practice.isNewReader || hasBeenWelcomed()) return;
+    rememberWelcome();
+    isWelcoming = true;
+  });
+
+  function isFromDialog(event: KeyboardEvent): boolean {
+    return event.target instanceof Element && event.target.closest('[role="dialog"]') !== null;
+  }
+
   function finish(attempt: Attempt, revealed: ReadonlySet<number>) {
     void practice.finish(attempt, revealed);
   }
 
   function handleKeydown(event: KeyboardEvent) {
+    // A key pressed inside a dialog belongs to it. Checked by where the key
+    // came from, not by whether the dialog is still open: the dialog closes on
+    // this same Escape before it reaches here, and would read as a skip.
+    if (isWelcoming || isFromDialog(event)) return;
     if (practice.summary !== null) {
       if (event.key === "Enter") practice.next();
       return;
@@ -33,6 +82,8 @@
 </script>
 
 <svelte:window onkeydown={handleKeydown} />
+
+<WelcomeDialog bind:open={isWelcoming} />
 
 <!--
   This screen has one job and one thing on it. The sentence sits on the optical
@@ -58,6 +109,7 @@
         segments={practice.current.segments}
         tokens={practice.current.tokens}
         round={practice.round}
+        isPaused={isWelcoming}
         onFinished={finish}
         onSkip={() => {
           practice.skip();
