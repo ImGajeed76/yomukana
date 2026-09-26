@@ -3,7 +3,6 @@
   import InfoIcon from "@lucide/svelte/icons/info";
   import { DitherArea } from "$lib/charts";
   import CharacterDetail from "$lib/components/CharacterDetail.svelte";
-  import FriendsBoard from "$lib/components/FriendsBoard.svelte";
   import KanaGrid from "$lib/components/KanaGrid.svelte";
   import WordGrid from "$lib/components/WordGrid.svelte";
   import SpanPicker from "$lib/components/SpanPicker.svelte";
@@ -32,7 +31,6 @@
     characterStats,
     dailyScores,
     dayLabel,
-    demoBoard,
     demoProgress,
     scoreOf,
     totalsOf,
@@ -67,10 +65,6 @@
   /** The character the reader is looking at up close, if any. */
   let selected = $state.raw<Item | null>(null);
   let isLoaded = $state(false);
-  /** The email this device syncs as, or null, which decides what the friends board shows. */
-  let account = $state<string | null>(null);
-  /** Whether this page's sync has finished, so the board reads the score it just sent. */
-  let isSynced = $state(false);
 
   /**
    * Whether to draw an invented reader instead of this one.
@@ -80,7 +74,6 @@
    * own progress is untouched either way. See stats/demo.ts.
    */
   let isDemo = $derived(import.meta.env.DEV && page.url.searchParams.has("demo"));
-  let demoFriends = $derived(isDemo ? demoBoard(score, new Date()) : null);
 
   $effect(() => {
     void (async () => {
@@ -100,14 +93,12 @@
       // Shown first, synced second: the page draws from what this device has,
       // then redraws if another device added to it.
       if (isDemo) return;
-      account = (await progress.syncState()).account;
       if ((await sync(progress)) === "synced") {
         store = progress.store;
         attempts = await progress.recentAttempts(ATTEMPT_WINDOW);
         totals = totalsOf(attempts);
         score = scoreOf(store, new Date());
       }
-      isSynced = true;
     })();
   });
 
@@ -198,12 +189,6 @@
       </div>
       <Button href="/">{m.stats_empty_button()}</Button>
     </div>
-
-    <!--
-      Here too: someone may make an account to join friends before reading a
-      single sentence, and they should be able to add those friends now.
-    -->
-    <FriendsBoard {account} {isSynced} ownScore={score} />
   {:else}
     <!--
       One block answers "how am I doing", in the order the question is asked:
@@ -211,71 +196,55 @@
       I in each script. The level is the largest thing on the page because it is
       the one number the reader can hold in their head and say out loud.
     -->
-    <!--
-      The score and the board it is ranked on, side by side where there is
-      room: the same number, next to what it is being measured against.
-    -->
-    <div class="grid gap-6 lg:grid-cols-3">
-      <section class="overflow-hidden rounded-lg border border-border lg:col-span-2">
-        <div class="flex flex-wrap items-start justify-between gap-6 p-6">
-          <div class="flex flex-col gap-1">
-            <span class="text-xs text-muted-foreground">{m.stats_score_label()}</span>
-            <span class="text-5xl leading-none font-semibold tabular-nums">{score}</span>
-          </div>
-
-          <SpanPicker
-            value={span}
-            onChange={(days: number) => {
-              span = days;
-            }}
-          />
+    <section class="overflow-hidden rounded-lg border border-border">
+      <div class="flex flex-wrap items-start justify-between gap-6 p-6">
+        <div class="flex flex-col gap-1">
+          <span class="text-xs text-muted-foreground">{m.stats_score_label()}</span>
+          <span class="text-5xl leading-none font-semibold tabular-nums">{score}</span>
         </div>
 
-        <!--
+        <SpanPicker
+          value={span}
+          onChange={(days: number) => {
+            span = days;
+          }}
+        />
+      </div>
+
+      <!--
         The score line runs the full width of the card with no padding of its
         own. It is the shape of the reader getting better, so it is drawn as a
         surface rather than as a line on axes: the number is already above it,
         and what is worth reading here is the slope.
       -->
-        <DitherArea
-          points={chart}
-          label={m.stats_score_chart_label()}
-          seriesLabel={m.stats_score_label()}
-          height={140}
-        />
+      <DitherArea
+        points={chart}
+        label={m.stats_score_chart_label()}
+        seriesLabel={m.stats_score_label()}
+        height={140}
+      />
 
-        <dl class="grid grid-cols-2 gap-px border-t border-border bg-border sm:grid-cols-4">
-          {#each figures as figure (figure.label)}
-            <div class="flex flex-col gap-1 bg-card p-6">
-              <dt class="text-xs text-muted-foreground">{figure.label}</dt>
-              <dd class="text-2xl font-semibold tabular-nums">{figure.value}</dd>
-            </div>
-          {/each}
-        </dl>
+      <dl class="grid grid-cols-2 gap-px border-t border-border bg-border sm:grid-cols-4">
+        {#each figures as figure (figure.label)}
+          <div class="flex flex-col gap-1 bg-card p-6">
+            <dt class="text-xs text-muted-foreground">{figure.label}</dt>
+            <dd class="text-2xl font-semibold tabular-nums">{figure.value}</dd>
+          </div>
+        {/each}
+      </dl>
 
-        <div class="flex flex-col gap-3 border-t border-border bg-card p-6">
-          {#each scripts as script (script.label)}
-            <div class="flex items-center gap-4">
-              <span class="w-20 text-sm font-medium">{script.label}</span>
-              <ProgressBar value={script.mastery * 100} class="flex-1" />
-              <span class="w-10 text-right text-sm text-muted-foreground tabular-nums">
-                {percent(script.mastery)}
-              </span>
-            </div>
-          {/each}
-        </div>
-      </section>
-
-      <!--
-        Out of the flow on a wide screen, so the score card alone decides how
-        tall this row is and the board fills that height and scrolls.
-      -->
-      <div class="lg:relative">
-        <div class="lg:absolute lg:inset-0">
-          <FriendsBoard {account} {isSynced} ownScore={score} demo={demoFriends} />
-        </div>
+      <div class="flex flex-col gap-3 border-t border-border bg-card p-6">
+        {#each scripts as script (script.label)}
+          <div class="flex items-center gap-4">
+            <span class="w-20 text-sm font-medium">{script.label}</span>
+            <ProgressBar value={script.mastery * 100} class="flex-1" />
+            <span class="w-10 text-right text-sm text-muted-foreground tabular-nums">
+              {percent(script.mastery)}
+            </span>
+          </div>
+        {/each}
       </div>
-    </div>
+    </section>
 
     <!--
       The tab labels are the heading. A "Characters" heading above a strip that

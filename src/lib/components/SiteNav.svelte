@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { ChartColumn, Keyboard, Settings, Trophy } from "@lucide/svelte";
   import { page } from "$app/state";
   import { m } from "$lib/paraglide/messages";
 
@@ -6,13 +7,21 @@
   // callbacks. One less layer to walk when something goes wrong, and the message
   // call sites stay greppable.
   const links = [
-    { href: "/", key: "practice" },
-    { href: "/stats", key: "stats" },
-    { href: "/settings", key: "settings" },
+    { href: "/", key: "practice", icon: Keyboard },
+    { href: "/stats", key: "stats", icon: ChartColumn },
+    { href: "/leaderboards", key: "leaderboards", icon: Trophy },
+    { href: "/settings", key: "settings", icon: Settings },
   ] as const;
+
+  /** Whether a link is the section the reader is in, including its subpages. */
+  function isCurrent(href: string): boolean {
+    const path = page.url.pathname;
+    return href === "/" ? path === "/" : path === href || path.startsWith(`${href}/`);
+  }
 
   function labelFor(key: (typeof links)[number]["key"]): string {
     if (key === "stats") return m.nav_link_stats();
+    if (key === "leaderboards") return m.nav_link_leaderboards();
     if (key === "settings") return m.nav_link_settings();
     return m.nav_link_practice();
   }
@@ -33,16 +42,23 @@
     aria-label={m.nav_label_main()}
   >
     <a href="/" class="text-sm font-medium tracking-tight">{m.common_app_name()}</a>
-    <ul class="ml-auto flex items-center gap-6 text-sm font-medium">
+    <!--
+      Four words do not fit beside the name on a phone, so there each link is
+      its icon, with the word kept for screen readers and shown on hover. The
+      tap target stays 44 pixels square. See CLAUDE.md 11.2.
+    -->
+    <ul class="ml-auto flex items-center gap-1 text-sm font-medium sm:gap-6">
       {#each links as link (link.href)}
         <li>
           <a
             href={link.href}
-            class="transition-colors hover:text-foreground"
-            class:text-muted-foreground={page.url.pathname !== link.href}
-            aria-current={page.url.pathname === link.href ? "page" : undefined}
+            title={labelFor(link.key)}
+            class="flex size-11 items-center justify-center transition-colors hover:text-foreground sm:size-auto"
+            class:text-muted-foreground={!isCurrent(link.href)}
+            aria-current={isCurrent(link.href) ? "page" : undefined}
           >
-            {labelFor(link.key)}
+            <link.icon class="size-5 sm:hidden" aria-hidden="true" />
+            <span class="max-sm:sr-only">{labelFor(link.key)}</span>
           </a>
         </li>
       {/each}

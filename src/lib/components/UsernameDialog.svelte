@@ -28,10 +28,10 @@
   let problem = $state<RenameProblem | null>(null);
 
   const PROBLEM_MESSAGES: Record<RenameProblem, () => string> = {
-    taken: m.stats_friends_rename_error_taken,
-    invalid: m.stats_friends_rename_error_invalid,
-    offline: m.stats_friends_error_offline,
-    unknown: m.stats_friends_error_unknown,
+    taken: m.leaderboards_following_rename_error_taken,
+    invalid: m.leaderboards_following_rename_error_invalid,
+    offline: m.leaderboards_following_error_offline,
+    unknown: m.leaderboards_following_error_unknown,
   };
 
   // Each time it opens it starts from the name the reader has now, with no
@@ -63,12 +63,12 @@
       }}
     >
       <Dialog.Header>
-        <Dialog.Title>{m.stats_friends_rename_title()}</Dialog.Title>
-        <Dialog.Description>{m.stats_friends_rename_description()}</Dialog.Description>
+        <Dialog.Title>{m.leaderboards_following_rename_title()}</Dialog.Title>
+        <Dialog.Description>{m.leaderboards_following_rename_description()}</Dialog.Description>
       </Dialog.Header>
 
       <div class="flex flex-col gap-2">
-        <Label for="username">{m.stats_friends_label_username()}</Label>
+        <Label for="username">{m.leaderboards_following_label_username()}</Label>
         <Input
           id="username"
           aria-describedby="username-hint"
@@ -90,7 +90,7 @@
           class={["text-xs", problem === null ? "text-muted-foreground" : "text-destructive"]}
           role={problem === null ? undefined : "alert"}
         >
-          {problem === null ? m.stats_friends_rename_hint() : PROBLEM_MESSAGES[problem]()}
+          {problem === null ? m.leaderboards_following_rename_hint() : PROBLEM_MESSAGES[problem]()}
         </p>
       </div>
 
