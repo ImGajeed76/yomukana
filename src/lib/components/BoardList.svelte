@@ -112,12 +112,24 @@
       >
         <span class="w-5 shrink-0 text-sm text-muted-foreground tabular-nums">{entry.rank}</span>
         <div class="flex min-w-0 flex-1 flex-col">
-          <!-- The name opens their profile. The row stays a row, so the remove button is not inside a link. -->
+          <!--
+            The name opens their profile. The row stays a row, so the remove
+            button is not inside a link. A display name is free text, so
+            anyone can call themselves anything: the username beside it is
+            the one nobody else can have, and shows who this really is. It
+            gives way first when the row is narrow.
+          -->
           <a
             href="/@{entry.username}"
-            class={["truncate text-sm hover:underline", entry.isYou && "font-medium"]}
-            >{nameOf(entry)}</a
+            class="flex min-w-0 items-baseline gap-2 text-sm hover:underline"
           >
+            <span class={["max-w-full shrink-0 truncate", entry.isYou && "font-medium"]}
+              >{nameOf(entry)}</span
+            >
+            {#if entry.displayName !== null}
+              <span class="min-w-0 truncate text-xs text-muted-foreground">@{entry.username}</span>
+            {/if}
+          </a>
           <span class="truncate text-xs text-muted-foreground">{describe(entry)}</span>
         </div>
         <!-- A fixed column, read down the left edge like a list of numbers. -->

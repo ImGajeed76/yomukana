@@ -137,7 +137,13 @@
             ]}
             aria-hidden="true"
           ></span>
-          <span class="min-w-0 flex-1 truncate">{nameOf(entry)}</span>
+          <!-- The username beside a display name, as on every board. See BoardList. -->
+          <span class="flex min-w-0 flex-1 items-baseline gap-3">
+            <span class="max-w-full shrink-0 truncate">{nameOf(entry)}</span>
+            {#if entry.displayName !== null}
+              <span class="min-w-0 truncate text-lg text-muted-foreground">@{entry.username}</span>
+            {/if}
+          </span>
           <span class="shrink-0 font-semibold tabular-nums">{Math.round(entry.score)}</span>
         </li>
       {/each}
