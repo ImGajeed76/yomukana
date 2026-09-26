@@ -27,6 +27,7 @@ import {
   text,
   timestamp,
   uniqueIndex,
+  uuid,
 } from "drizzle-orm/pg-core";
 
 /** The signed-in reader, taken from their token, never from the request body. */
@@ -209,3 +210,60 @@ export const friends = pgTable(
     ownRowsOnly(table.followerId),
   ],
 );
+
+/**
+ * A group of readers who all see each other: a class, a school, a group of
+ * friends. Unlike following, it is shared, so everyone in it sees the same
+ * board.
+ *
+ * Only the API function reads or writes groups and their members, never the
+ * Data API: who may join, see and remove whom are rules, and they live in one
+ * place. Row-level security is on with no policy, so the Data API sees nothing
+ * here even if a grant is ever added by mistake. See functions/api/groups.ts.
+ */
+export const groups = pgTable(
+  "groups",
+  {
+    groupId: uuid("group_id").primaryKey().defaultRandom(),
+    name: text("name").notNull(),
+    // Joins the group while it lasts. Null when the admin has turned it off.
+    inviteCode: text("invite_code"),
+    inviteExpiresAt: timestamp("invite_expires_at", { withTimezone: true }),
+    // Shows the board, read-only and without signing in, on a screen in a
+    // classroom. Null until the admin makes one.
+    displayCode: text("display_code"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("groups_invite_code").on(table.inviteCode),
+    uniqueIndex("groups_display_code").on(table.displayCode),
+    check("groups_name_length", sql`char_length(${table.name}) between 1 and 40`),
+  ],
+).enableRLS();
+
+/**
+ * Who is in a group. The reader who made it is its admin, who can rename it,
+ * invite, remove members and delete it. Everyone else is a member.
+ *
+ * When a reader deletes their account the rows go with their profile, and a
+ * trigger makes sure a group left without an admin gets one, or goes if it
+ * is empty. See drizzle/migrations for that.
+ */
+export const groupMembers = pgTable(
+  "group_members",
+  {
+    groupId: uuid("group_id")
+      .notNull()
+      .references(() => groups.groupId, { onDelete: "cascade" }),
+    userId: text("user_id")
+      .notNull()
+      .references(() => profiles.userId, { onDelete: "cascade" }),
+    role: text("role").notNull().default("member"),
+    joinedAt: timestamp("joined_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.groupId, table.userId] }),
+    index("group_members_by_reader").on(table.userId),
+    check("group_members_role", sql`${table.role} in ('admin', 'member')`),
+  ],
+).enableRLS();

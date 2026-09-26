@@ -1,0 +1,159 @@
+// Profiles: the name, display name and card colour other readers see.
+
+import { Hono } from "hono";
+import { toCodePoints } from "../../src/lib/japanese/text";
+import { DISPLAY_NAME_MAX, isCardColor, type CardColor } from "../../src/lib/sync/profile-rules";
+import { isValidUsername, normaliseUsername, randomUsername } from "../../src/lib/sync/username";
+import { readerOf } from "./auth";
+import { isUniqueViolation, pool } from "./db";
+import { isOffensiveName } from "./names";
+import { refuse } from "./problems";
+
+/** Random names collide rarely. A few tries is plenty, and a loop that cannot end is not. */
+const NAME_ATTEMPTS = 5;
+
+export interface ProfileRow {
+  user_id: string;
+  username: string;
+  display_name: string | null;
+  card_color: CardColor;
+  score: number;
+  scored_at: Date | null;
+}
+
+/** A profile as the app sees it. */
+export function profileOf(row: ProfileRow): Record<string, unknown> {
+  return {
+    username: row.username,
+    displayName: row.display_name,
+    cardColor: row.card_color,
+    score: row.score,
+    scoredAt: row.scored_at === null ? null : row.scored_at.getTime(),
+  };
+}
+
+export const profiles = new Hono();
+
+/**
+ * Makes the caller's profile if they have none, with a random name, and
+ * returns it. Called on a reader's first sync.
+ */
+profiles.post("/profile/ensure", async (c) => {
+  const userId = await readerOf(c.req.raw);
+  if (userId === null) return refuse(c, "unauthorized");
+
+  const existing = await pool.query<ProfileRow>("select * from profiles where user_id = $1", [
+    userId,
+  ]);
+  const found = existing.rows[0];
+  if (found !== undefined) return c.json(profileOf(found));
+
+  for (let attempt = 0; attempt < NAME_ATTEMPTS; attempt++) {
+    // Only the name clashing is expected and retried. Anything else propagates.
+    try {
+      // A page and a sync can both ask on a first sign-in, at the same moment.
+      // The one that loses finds the profile the other just made, rather than
+      // mistaking the clash on the reader for a clash on the name.
+      const created = await pool.query<ProfileRow>(
+        `insert into profiles (user_id, username) values ($1, $2)
+         on conflict (user_id) do nothing returning *`,
+        [userId, randomUsername()],
+      );
+      const row = created.rows[0];
+      if (row !== undefined) return c.json(profileOf(row), 201);
+      const made = await pool.query<ProfileRow>("select * from profiles where user_id = $1", [
+        userId,
+      ]);
+      const other = made.rows[0];
+      if (other !== undefined) return c.json(profileOf(other));
+    } catch (error) {
+      if (!isUniqueViolation(error)) throw error;
+    }
+  }
+  return refuse(c, "taken");
+});
+
+/** Changes any of the caller's name, display name and card colour. */
+profiles.patch("/profile", async (c) => {
+  const userId = await readerOf(c.req.raw);
+  if (userId === null) return refuse(c, "unauthorized");
+
+  const body: unknown = await c.req.json().catch(() => null);
+  if (typeof body !== "object" || body === null) return refuse(c, "invalid");
+  const changes = body as Record<string, unknown>;
+
+  const set: string[] = [];
+  const values: unknown[] = [];
+  const add = (column: string, value: unknown): void => {
+    values.push(value);
+    set.push(`${column} = $${String(values.length)}`);
+  };
+
+  if ("username" in changes) {
+    if (typeof changes.username !== "string" || !isValidUsername(changes.username)) {
+      return refuse(c, "invalid");
+    }
+    const username = normaliseUsername(changes.username);
+    if (isOffensiveName(username)) return refuse(c, "offensive");
+    add("username", username);
+  }
+  if ("displayName" in changes) {
+    const name = changes.displayName;
+    if (name === null || name === "") {
+      add("display_name", null);
+    } else {
+      if (typeof name !== "string") return refuse(c, "invalid");
+      const trimmed = name.trim();
+      // Counted the way the database's check counts, in code points.
+      const length = toCodePoints(trimmed).length;
+      if (length === 0 || length > DISPLAY_NAME_MAX) {
+        return refuse(c, "invalid");
+      }
+      if (isOffensiveName(trimmed)) return refuse(c, "offensive");
+      add("display_name", trimmed);
+    }
+  }
+  if ("cardColor" in changes) {
+    if (!isCardColor(changes.cardColor)) return refuse(c, "invalid");
+    add("card_color", changes.cardColor);
+  }
+  if (set.length === 0) return refuse(c, "invalid");
+
+  values.push(userId);
+  // A name someone else holds is the one refusal that only the database can
+  // see, and it says so with a unique violation.
+  try {
+    const updated = await pool.query<ProfileRow>(
+      `update profiles set ${set.join(", ")} where user_id = $${String(values.length)} returning *`,
+      values,
+    );
+    const row = updated.rows[0];
+    return row === undefined ? refuse(c, "not-found") : c.json(profileOf(row));
+  } catch (error) {
+    if (isUniqueViolation(error)) return refuse(c, "taken");
+    throw error;
+  }
+});
+
+/**
+ * A profile, for /@username. Anyone may see it, signed in or not.
+ *
+ * There is no private setting on purpose. Following needs nobody's approval,
+ * so anyone who knows a name could follow and see the card anyway, and a
+ * switch that hid it from everyone else would promise a privacy it cannot
+ * keep. What keeps a reader out of view is that nobody can look up a name
+ * they were not given.
+ */
+profiles.get("/u/:username", async (c) => {
+  const viewer = await readerOf(c.req.raw);
+  const result = await pool.query<ProfileRow & { is_followed: boolean }>(
+    `select p.*, exists (
+       select 1 from friends f where f.follower_id = $2 and f.followee_id = p.user_id
+     ) as is_followed
+     from profiles p where p.username = $1`,
+    [normaliseUsername(c.req.param("username")), viewer ?? ""],
+  );
+  const row = result.rows[0];
+  if (row === undefined) return refuse(c, "not-found");
+  return c.json({ ...profileOf(row), isYou: viewer === row.user_id, isFollowed: row.is_followed });
+});
