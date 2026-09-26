@@ -1,5 +1,7 @@
 <script lang="ts">
-  import { Check, Copy } from "@lucide/svelte";
+  import { Check, Copy, QrCode as QrCodeIcon } from "@lucide/svelte";
+  import QrCode from "$lib/components/profile/QrCode.svelte";
+  import * as Dialog from "$lib/components/ui/dialog";
   import BoardList from "$lib/components/BoardList.svelte";
   import StatusLine from "$lib/components/StatusLine.svelte";
   import { Button } from "$lib/components/ui/button";
@@ -51,6 +53,7 @@
   let isAdding = $state(false);
   let problem = $state<FriendProblem | null>(null);
   let isCopied = $state(false);
+  let isShowingCode = $state(false);
 
   const PROBLEM_MESSAGES: Record<FriendProblem, () => string> = {
     "not-found": m.leaderboards_following_error_not_found,
@@ -144,8 +147,9 @@
   <div class="flex flex-wrap items-center justify-between gap-2">
     <h2 class="text-lg leading-snug font-medium">{m.leaderboards_following_title()}</h2>
     <!--
-      The reader's own name, one click from the clipboard. Telling a friend
-      what to type is the first thing anyone does with this board.
+      The reader's own name, one click from the clipboard, and their code one
+      click from the screen. Telling a friend what to type, or holding a phone
+      up to them, is the first thing anyone does with this board.
     -->
     {#if you !== null}
       <div class="-mr-2 flex items-center">
@@ -166,7 +170,33 @@
             <Copy class="size-4" />
           {/if}
         </Button>
+        <Button
+          variant="ghost"
+          size="icon"
+          class="text-muted-foreground"
+          aria-label={m.leaderboards_following_button_qr()}
+          title={m.leaderboards_following_button_qr()}
+          onclick={() => {
+            isShowingCode = true;
+          }}
+        >
+          <QrCodeIcon class="size-4" />
+        </Button>
       </div>
+      <Dialog.Root bind:open={isShowingCode}>
+        <Dialog.Content class="gap-5 text-center sm:max-w-[384px]">
+          <Dialog.Header class="items-center text-center">
+            <Dialog.Title>{m.leaderboards_following_qr_title()}</Dialog.Title>
+            <Dialog.Description>{m.leaderboards_following_qr_description()}</Dialog.Description>
+          </Dialog.Header>
+          <QrCode
+            value={`${location.origin}/@${you.username}`}
+            label={m.settings_profile_label_qr()}
+            class="w-full"
+          />
+          <p class="text-sm text-muted-foreground">@{you.username}</p>
+        </Dialog.Content>
+      </Dialog.Root>
     {/if}
   </div>
 

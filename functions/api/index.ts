@@ -11,6 +11,7 @@
 // sends: a profile and a score, never a sentence or a keystroke.
 
 import { Hono } from "hono";
+import { boards } from "./boards";
 import { groups } from "./groups";
 import { profiles } from "./profiles";
 import { scores } from "./scores";
@@ -21,5 +22,6 @@ app.get("/", (c) => c.json({ ok: true }));
 app.route("/", profiles);
 app.route("/", groups);
 app.route("/", scores);
+app.route("/", boards);
 
 export default app;

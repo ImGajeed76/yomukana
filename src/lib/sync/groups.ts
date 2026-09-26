@@ -10,14 +10,6 @@ import type { CardColor } from "./profile-rules";
 
 export type GroupRole = "admin" | "member";
 
-/** A group in the list of boards. */
-export interface GroupSummary {
-  readonly id: string;
-  readonly name: string;
-  readonly role: GroupRole;
-  readonly memberCount: number;
-}
-
 export interface GroupMember {
   readonly username: string;
   readonly displayName: string | null;
@@ -91,10 +83,6 @@ async function resultOf<T>(response: Response | null): Promise<Result<T>> {
 
 function send(body: unknown): RequestInit {
   return { body: JSON.stringify(body) };
-}
-
-export async function listGroups(): Promise<Result<GroupSummary[]>> {
-  return resultOf(await callApi("/groups"));
 }
 
 export async function createGroup(name: string): Promise<Result<{ id: string }>> {
@@ -178,34 +166,6 @@ export function boardOf(members: readonly GroupMember[]): BoardEntry[] {
     scoredAt: member.scoredAt,
     isYou: member.isYou,
   }));
-}
-
-/** Where the list of groups is remembered between visits. See SyncRecord.shown. */
-const SHOWN_GROUPS = "groups";
-
-function isGroupList(value: unknown): value is GroupSummary[] {
-  return (
-    Array.isArray(value) &&
-    value.every(
-      (group: unknown) =>
-        typeof group === "object" &&
-        group !== null &&
-        "id" in group &&
-        typeof group.id === "string" &&
-        "name" in group &&
-        typeof group.name === "string",
-    )
-  );
-}
-
-/** The groups as they were last loaded on this device, to draw at once. */
-export async function lastShownGroups(progress: Progress): Promise<GroupSummary[] | null> {
-  const value = await progress.lastShown(SHOWN_GROUPS);
-  return isGroupList(value) ? value : null;
-}
-
-export function rememberGroups(progress: Progress, list: readonly GroupSummary[]): Promise<void> {
-  return progress.saveShown(SHOWN_GROUPS, list);
 }
 
 function isGroup(value: unknown): value is Group {
