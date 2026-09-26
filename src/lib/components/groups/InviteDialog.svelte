@@ -42,15 +42,12 @@
   let pending = $state<"end" | "replace" | "on" | "off" | null>(null);
   let isBusy = $derived(pending !== null);
   let problem = $state<GroupProblem | null>(null);
-  /** Whether the link was just replaced, which is worth saying: the old one is dead now. */
-  let isReplaced = $state(false);
   let isCopied = $state(false);
   let isChoosingEnd = $state(false);
 
   $effect(() => {
     if (!open) return;
     problem = null;
-    isReplaced = false;
   });
 
   let link = $derived(invite === null ? "" : `${location.origin}/join/${invite.code}`);
@@ -98,21 +95,18 @@
 
   async function moveEnd(days: InviteDays): Promise<void> {
     isChoosingEnd = false;
-    isReplaced = false;
     await change("end", () => extendInvite(groupId, days));
   }
 
   async function replace(): Promise<void> {
-    isReplaced = await change("replace", () => replaceInvite(groupId));
+    await change("replace", () => replaceInvite(groupId));
   }
 
   async function turnOn(): Promise<void> {
-    isReplaced = false;
     await change("on", () => makeInvite(groupId, DEFAULT_INVITE_DAYS));
   }
 
   async function turnOff(): Promise<void> {
-    isReplaced = false;
     await change("off", () => stopInvite(groupId));
   }
 
@@ -234,8 +228,6 @@
 
     {#if problem !== null}
       <StatusLine message={groupProblemMessage(problem)} isError={true} />
-    {:else if isReplaced}
-      <StatusLine message={m.leaderboards_groups_invite_status_replaced()} isError={false} />
     {/if}
 
     {#if invite !== null}

@@ -108,7 +108,6 @@
   "leaderboards_groups_invite_label_until": "Works until {when}",
   "leaderboards_groups_invite_off": "Invites are off, so nobody new can join.",
   "leaderboards_groups_invite_option_from_now": "{duration} from now",
-  "leaderboards_groups_invite_status_replaced": "New link made. The old one no longer works.",
   "leaderboards_groups_invite_title": "Invite to {name}",
   "leaderboards_groups_join_button_join": "Join group",
   "leaderboards_groups_join_button_open": "Open board",
