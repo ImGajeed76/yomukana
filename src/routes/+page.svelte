@@ -1,5 +1,6 @@
 <script lang="ts">
   import TypingPane from "$lib/components/TypingPane.svelte";
+  import ScoreChangeDialog from "$lib/components/ScoreChangeDialog.svelte";
   import WelcomeDialog from "$lib/components/WelcomeDialog.svelte";
   import { Button } from "$lib/components/ui/button";
   import { m } from "$lib/paraglide/messages";
@@ -18,6 +19,11 @@
   const WELCOMED_KEY = "yomukana:welcomed";
 
   let isWelcoming = $state(false);
+
+  /** Where the notice about the score changing remembers it was shown. */
+  const SCORE_CHANGE_KEY = "yomukana:score-change-2026-09";
+
+  let isExplainingScore = $state(false);
 
   /**
    * Whether the welcome has been closed in this browser before.
@@ -43,6 +49,23 @@
     }
   }
 
+  /** Whether the notice about the score has been shown in this browser. Same storage, same failures. */
+  function hasSeenScoreChange(): boolean {
+    try {
+      return localStorage.getItem(SCORE_CHANGE_KEY) !== null;
+    } catch {
+      return false;
+    }
+  }
+
+  function rememberScoreChange(): void {
+    try {
+      localStorage.setItem(SCORE_CHANGE_KEY, "1");
+    } catch {
+      // It may show again, which is harmless.
+    }
+  }
+
   // A reader with no history in this browser, who has not closed it before.
   // Someone signing in on a new device already knows the page, and brings
   // their history with them on the first sync.
@@ -52,6 +75,14 @@
     if (!practice.isLoaded || !practice.isNewReader || hasBeenWelcomed()) return;
     rememberWelcome();
     isWelcoming = true;
+  });
+
+  // Once, for a reader who had a score before it changed. A new reader never
+  // saw the old number, so there is nothing to explain to them.
+  $effect(() => {
+    if (!practice.isLoaded || !practice.hadOldScore || hasSeenScoreChange()) return;
+    rememberScoreChange();
+    isExplainingScore = true;
   });
 
   function isFromDialog(event: KeyboardEvent): boolean {
@@ -66,7 +97,7 @@
     // A key pressed inside a dialog belongs to it. Checked by where the key
     // came from, not by whether the dialog is still open: the dialog closes on
     // this same Escape before it reaches here, and would read as a skip.
-    if (isWelcoming || isFromDialog(event)) return;
+    if (isWelcoming || isExplainingScore || isFromDialog(event)) return;
     if (practice.summary !== null) {
       if (event.key === "Enter") practice.next();
       return;
@@ -84,6 +115,7 @@
 <svelte:window onkeydown={handleKeydown} />
 
 <WelcomeDialog bind:open={isWelcoming} />
+<ScoreChangeDialog bind:open={isExplainingScore} />
 
 <!--
   This screen has one job and one thing on it. The sentence sits on the optical
@@ -109,7 +141,7 @@
         segments={practice.current.segments}
         tokens={practice.current.tokens}
         round={practice.round}
-        isPaused={isWelcoming}
+        isPaused={isWelcoming || isExplainingScore}
         onFinished={finish}
         onSkip={() => {
           practice.skip();

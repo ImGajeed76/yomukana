@@ -46,6 +46,9 @@ import {
 /** Sentences held back from the running, so the reader is not shown the same few. */
 const RECENT_MEMORY = 8;
 
+/** How many recent attempts are looked through for a score from before the change. */
+const OLD_SCORE_LOOKBACK = 20;
+
 /**
  * Sentences the cooldown remembers.
  *
@@ -129,6 +132,12 @@ export class Practice {
   isPersistent = $state(false);
   /** Whether this browser has no history at all: a first visit, as far as it can tell. */
   isNewReader = $state(false);
+  /**
+   * Whether this browser has scores from before the score changed in
+   * September 2026, so the reader has seen a number that is now different.
+   * The practice page tells them once. See src/lib/stats/score.ts.
+   */
+  hadOldScore = $state(false);
 
   /**
    * The difficulty band sentences are drawn from, and whether the real corpus
@@ -172,6 +181,12 @@ export class Practice {
     this.#restore(await this.#progress.session());
     this.isPersistent = this.#progress.isPersistent;
     this.isNewReader = this.#progress.store.items.size === 0;
+    // Any attempt still carrying the old field means they saw the old number.
+    // A few recent ones are enough: the notice shows on the first visit after
+    // the change, when the latest attempts are all from before it.
+    this.hadOldScore = (await this.#progress.recentAttempts(OLD_SCORE_LOOKBACK)).some(
+      (record) => record.score !== undefined,
+    );
     this.isLoaded = true;
     this.#choose();
     this.#sync();
