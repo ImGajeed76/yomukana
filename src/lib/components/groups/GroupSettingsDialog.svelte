@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { Check, Copy, ExternalLink } from "@lucide/svelte";
   import StatusLine from "$lib/components/StatusLine.svelte";
   import { Button } from "$lib/components/ui/button";
   import { Spinner } from "$lib/components/ui/spinner";
@@ -8,13 +7,7 @@
   import { Label } from "$lib/components/ui/label";
   import { m } from "$lib/paraglide/messages";
   import { GROUP_NAME_MAX } from "$lib/sync/group-rules";
-  import {
-    deleteGroup,
-    makeDisplayLink,
-    renameGroup,
-    stopDisplayLink,
-    type GroupProblem,
-  } from "$lib/sync/groups";
+  import { deleteGroup, renameGroup, type GroupProblem } from "$lib/sync/groups";
   import { groupProblemMessage } from "./problems";
 
   interface Props {
@@ -22,10 +15,7 @@
     open: boolean;
     groupId: string;
     groupName: string;
-    /** The display link's code, or null when there is none. */
-    displayCode: string | null;
     onRenamed: (name: string) => void;
-    onDisplayChanged: (code: string | null) => void;
     onDeleted: () => void;
   }
 
@@ -36,20 +26,17 @@
     open = $bindable(),
     groupId,
     groupName,
-    displayCode,
     onRenamed,
-    onDisplayChanged,
     onDeleted,
   }: Props = $props();
 
   let name = $state("");
   /** The change on its way to the server, if any, so its own button shows the wait. */
-  let pending = $state<"rename" | "display" | "stop-display" | "delete" | null>(null);
+  let pending = $state<"rename" | "delete" | null>(null);
   let isBusy = $derived(pending !== null);
   let problem = $state<GroupProblem | null>(null);
   /** Whether the dialog is asking to confirm the delete, in place of the settings. */
   let isConfirmingDelete = $state(false);
-  let isCopied = $state(false);
 
   // Each time it opens it starts from the group as it is, with nothing left
   // over from last time.
@@ -59,10 +46,6 @@
     problem = null;
     isConfirmingDelete = false;
   });
-
-  let displayLink = $derived(
-    displayCode === null ? "" : `${location.origin}/display/${displayCode}`,
-  );
 
   /** Runs one change, showing the refusal if there is one. Returns its answer, if it worked. */
   async function attempt<T>(
@@ -81,29 +64,11 @@
     if (renamed !== undefined) onRenamed(renamed.name);
   }
 
-  async function makeDisplay(): Promise<void> {
-    const made = await attempt("display", () => makeDisplayLink(groupId));
-    if (made !== undefined) onDisplayChanged(made.code);
-  }
-
-  async function stopDisplay(): Promise<void> {
-    await attempt("stop-display", () => stopDisplayLink(groupId));
-    if (problem === null) onDisplayChanged(null);
-  }
-
   async function remove(): Promise<void> {
     await attempt("delete", () => deleteGroup(groupId));
     if (problem !== null) return;
     open = false;
     onDeleted();
-  }
-
-  async function copyDisplayLink(): Promise<void> {
-    await navigator.clipboard.writeText(displayLink);
-    isCopied = true;
-    setTimeout(() => {
-      isCopied = false;
-    }, 1500);
   }
 </script>
 
@@ -172,68 +137,19 @@
         </div>
       </form>
 
-      <!--
-        A board for a screen in a classroom, which shows it without anyone
-        signing in on that screen. Anyone with this link sees the names and
-        scores, so it is off until the admin makes one, and can be stopped.
-      -->
-      <div class="flex flex-col gap-2">
-        <span class="text-sm font-medium">{m.leaderboards_groups_display_title()}</span>
-        <p class="text-sm text-muted-foreground">{m.leaderboards_groups_display_description()}</p>
-        <div class="flex flex-wrap gap-2">
-          {#if displayCode === null}
-            <Button
-              variant="outline"
-              disabled={isBusy}
-              onclick={() => {
-                void makeDisplay();
-              }}
-            >
-              {#if pending === "display"}<Spinner aria-label={m.common_status_loading()} />{/if}
-              {m.leaderboards_groups_display_button_make()}
-            </Button>
-          {:else}
-            <Button variant="outline" href={displayLink} target="_blank">
-              <ExternalLink class="size-4" />
-              {m.leaderboards_groups_display_button_open()}
-            </Button>
-            <Button
-              variant="outline"
-              onclick={() => {
-                void copyDisplayLink();
-              }}
-            >
-              {#if isCopied}
-                <Check class="size-4" />
-                {m.leaderboards_following_status_copied()}
-              {:else}
-                <Copy class="size-4" />
-                {m.settings_profile_button_copy_link()}
-              {/if}
-            </Button>
-            <Button
-              variant="ghost"
-              disabled={isBusy}
-              onclick={() => {
-                void stopDisplay();
-              }}
-            >
-              {#if pending === "stop-display"}<Spinner
-                  aria-label={m.common_status_loading()}
-                />{/if}
-              {m.leaderboards_groups_display_button_stop()}
-            </Button>
-          {/if}
-        </div>
-      </div>
-
       {#if problem !== null}
         <StatusLine message={groupProblemMessage(problem)} isError={true} />
       {/if}
 
-      <Dialog.Footer class="sm:justify-start">
+      <!--
+        The rarest thing anyone does here, so the quietest: red text rather
+        than a red button, away from the name, and it still asks first.
+      -->
+      <div class="border-t border-border pt-4">
         <Button
-          variant="destructive"
+          variant="ghost"
+          size="sm"
+          class="-ml-3 text-destructive hover:text-destructive"
           disabled={isBusy}
           onclick={() => {
             problem = null;
@@ -242,7 +158,7 @@
         >
           {m.leaderboards_groups_delete_button()}
         </Button>
-      </Dialog.Footer>
+      </div>
     {/if}
   </Dialog.Content>
 </Dialog.Root>

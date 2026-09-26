@@ -13,7 +13,9 @@
     { href: "/settings", key: "settings", icon: Settings },
     // Last, where an account usually sits. Your card and the code that lets
     // someone follow you, one tap away when they are standing next to you.
-    { href: "/me", key: "profile", icon: UserRound },
+    // Phones only: that is where someone holds a code up to a friend, and on
+    // a desktop the same page is one click into settings.
+    { href: "/me", key: "profile", icon: UserRound, isPhoneOnly: true },
   ] as const;
 
   /** Whether a link is the section the reader is in, including its subpages. */
@@ -47,13 +49,13 @@
   >
     <a href="/" class="text-sm font-medium tracking-tight">{m.common_app_name()}</a>
     <!--
-      Five words do not fit beside the name on a phone, so there each link is
+      Four words do not fit beside the name on a phone, so there each link is
       its icon, with the word kept for screen readers and shown on hover. The
       tap target stays 44 pixels square. See CLAUDE.md 11.2.
     -->
     <ul class="ml-auto flex items-center gap-1 text-sm font-medium sm:gap-6">
       {#each links as link (link.href)}
-        <li>
+        <li class={"isPhoneOnly" in link ? "sm:hidden" : undefined}>
           <a
             href={link.href}
             title={labelFor(link.key)}

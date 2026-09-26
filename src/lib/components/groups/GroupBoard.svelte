@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Settings2, UserPlus } from "@lucide/svelte";
+  import { Presentation, Settings2, UserPlus } from "@lucide/svelte";
   import BoardList from "$lib/components/BoardList.svelte";
   import StatusLine from "$lib/components/StatusLine.svelte";
   import * as AlertDialog from "$lib/components/ui/alert-dialog";
@@ -21,6 +21,7 @@
     type Invite,
   } from "$lib/sync/groups";
   import GroupSettingsDialog from "./GroupSettingsDialog.svelte";
+  import ScreenDialog from "./ScreenDialog.svelte";
   import InviteDialog from "./InviteDialog.svelte";
   import { groupProblemMessage } from "./problems";
 
@@ -45,6 +46,7 @@
   let problem = $state<GroupProblem | null>(null);
   let isInviteOpen = $state(false);
   let isSettingsOpen = $state(false);
+  let isScreenOpen = $state(false);
   let isLeaving = $state(false);
   /** Whoever the admin asked to remove, while the dialog asks to confirm. */
   let removing = $state<RankedEntry | null>(null);
@@ -158,6 +160,21 @@
             <UserPlus class="size-4" />
             {m.leaderboards_groups_button_invite()}
           </Button>
+          <!--
+            A way to show the board somewhere else, not something done on the
+            board itself, so it is an icon beside settings rather than a word.
+          -->
+          <Button
+            variant="ghost"
+            size="icon"
+            aria-label={m.leaderboards_groups_screen_button()}
+            title={m.leaderboards_groups_screen_button()}
+            onclick={() => {
+              isScreenOpen = true;
+            }}
+          >
+            <Presentation class="size-4" />
+          </Button>
           <Button
             variant="ghost"
             size="icon"
@@ -187,10 +204,10 @@
 
   {#if group === null}
     {#if hasFailed}
-      <p class="text-sm text-destructive" role="alert">{m.leaderboards_following_error_load()}</p>
+      <p class="text-sm text-destructive" role="alert">{m.leaderboards_groups_error_load()}</p>
     {:else}
       <p class="text-sm text-muted-foreground" role="status">
-        {m.leaderboards_following_loading()}
+        {m.leaderboards_groups_loading()}
       </p>
     {/if}
   {:else}
@@ -224,17 +241,22 @@
       if (group !== null) group = { ...group, invite };
     }}
   />
+  <ScreenDialog
+    bind:open={isScreenOpen}
+    {groupId}
+    groupName={group.name}
+    displayCode={group.displayCode}
+    onChange={(displayCode: string | null) => {
+      if (group !== null) group = { ...group, displayCode };
+    }}
+  />
   <GroupSettingsDialog
     bind:open={isSettingsOpen}
     {groupId}
     groupName={group.name}
-    displayCode={group.displayCode}
     onRenamed={(name: string) => {
       if (group !== null) group = { ...group, name };
       onRenamed(name);
-    }}
-    onDisplayChanged={(displayCode: string | null) => {
-      if (group !== null) group = { ...group, displayCode };
     }}
     onDeleted={() => {
       void forgetGroup(progress, groupId).then(onGone);

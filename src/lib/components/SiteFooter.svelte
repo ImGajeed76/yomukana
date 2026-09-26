@@ -1,4 +1,5 @@
 <script lang="ts">
+  import MadeBy from "$lib/components/MadeBy.svelte";
   import { ATTRIBUTION } from "$lib/corpus/types";
   import { m } from "$lib/paraglide/messages";
   import { getLocale } from "$lib/paraglide/runtime";
@@ -48,15 +49,7 @@
       <a class="underline underline-offset-2" href="mailto:{FEEDBACK_EMAIL}?subject=yomukana">
         {m.footer_feedback()}
       </a>
-      <p>
-        {m.footer_made_before_heart()}<span aria-hidden="true">&#x2764;&#xfe0f;</span
-        >{m.footer_made_before_name()}<a
-          class="underline underline-offset-2"
-          href="https://oseifert.ch"
-          rel="noreferrer"
-          target="_blank">Oliver</a
-        >{m.footer_made_after_name()}
-      </p>
+      <MadeBy />
     </div>
   </div>
 </footer>

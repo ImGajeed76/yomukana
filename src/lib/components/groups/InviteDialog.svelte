@@ -236,7 +236,7 @@
         reached people it should not have, or the group is complete.
       -->
       <div class="flex flex-col gap-1 border-t border-border pt-4 text-sm">
-        <span class="text-muted-foreground">{m.leaderboards_groups_invite_label_leaked()}</span>
+        <span class="text-muted-foreground">{m.leaderboards_groups_label_leaked()}</span>
         <!-- Pulled left by their own padding, so the words line up with the question. -->
         <div class="-ml-3 flex flex-wrap gap-1">
           <Button
@@ -247,7 +247,7 @@
               void replace();
             }}
           >
-            {m.leaderboards_groups_invite_button_replace()}
+            {m.leaderboards_groups_button_replace()}
           </Button>
           <Button
             variant="ghost"

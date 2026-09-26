@@ -12,7 +12,7 @@
 
   let { children }: { children: Snippet } = $props();
 
-  let isDisplay = $derived(page.route.id === "/display/[code]");
+  let isDisplay = $derived(page.route.id === "/display/[[code]]");
 
   // The browser says whether the app can be installed as soon as the page has
   // loaded, so this has to be listening from the start. See install.svelte.ts.
@@ -43,7 +43,11 @@
   itself is a flex child that grows, which is what lets the practice stage centre
   itself in whatever is left between the two rules.
 -->
-<div class="relative flex min-h-svh flex-col">
+<!--
+  A classroom screen is exactly one screen tall: its list scrolls inside the
+  page, never the page itself.
+-->
+<div class={["relative flex flex-col", isDisplay ? "h-svh overflow-hidden" : "min-h-svh"]}>
   <!--
     Inside the frame, not beside it: an absolute box with no positioned ancestor
     is laid out against the initial containing block, which is one window tall,
@@ -53,11 +57,11 @@
 
   <!--
     A classroom screen showing a group's board has no use for the navigation
-    and needs every pixel of width. The credit stays: it is a licence
-    condition on every page.
+    or the site footer, and draws its own, smaller one. It shows no sentences,
+    so the Tatoeba credit, which goes with the sentences, is not needed there.
   -->
   {#if isDisplay}
-    <div class="flex flex-1 flex-col">
+    <div class="flex min-h-0 flex-1 flex-col">
       {@render children()}
     </div>
   {:else}
@@ -66,5 +70,7 @@
       {@render children()}
     </div>
   {/if}
-  <SiteFooter />
+  {#if !isDisplay}
+    <SiteFooter />
+  {/if}
 </div>
