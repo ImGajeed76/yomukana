@@ -1,5 +1,13 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
+  "outputDirectory": "build",
+  "cleanUrls": true,
+  "headers": [
+    {
+      "source": "/_app/immutable/(.*)",
+      "headers": [{ "key": "cache-control", "value": "public, immutable, max-age=31536000" }]
+    }
+  ],
   "rewrites": [
     {
       "source": "/@:username",

@@ -38,7 +38,9 @@ export default defineConfig(({ command, mode }) => {
             filename.split(/[/\\]/).includes("node_modules") ? undefined : true,
         },
         // The pages all prerender. /@username cannot, there is one per reader,
-        // so it is served this shell and draws itself in the browser.
+        // so it is served this shell and draws itself in the browser. Any
+        // option here turns off the adapter's Vercel zero-config mode, so
+        // vercel.json names the output folder and does what that mode did.
         adapter: adapter({ fallback: "200.html" }),
       }),
 
