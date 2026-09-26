@@ -36,6 +36,20 @@
       "when": 1790249760318,
       "tag": "0004_kana_input",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1790402726923,
+      "tag": "0005_rapid_talos",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1790402733533,
+      "tag": "0006_profile_writes_through_api",
+      "breakpoints": true
     }
   ]
 }

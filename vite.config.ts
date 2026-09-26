@@ -4,27 +4,28 @@ import adapter from "@sveltejs/adapter-static";
 import { sveltekit } from "@sveltejs/kit/vite";
 import { defineConfig, loadEnv } from "vite";
 
-/**
- * `/api/auth`, forwarded to Neon Auth, so the session cookie belongs to this
- * site rather than to Neon's. Safari discards the other kind. The live site
- * does the same through middleware.ts; this is for `bun run dev` and
- * `bun run preview`, which reach the branch `.env.local` names.
- */
-const AUTH_PATH = "/api/auth";
-
-function authProxy(target: string): Record<string, object> {
+/** A path on this site, forwarded to `target` with the path's own prefix taken off. */
+function forward(prefix: string, target: string): Record<string, object> {
   return {
-    [AUTH_PATH]: {
+    [prefix]: {
       target,
       changeOrigin: true,
-      rewrite: (path: string) => path.slice(AUTH_PATH.length),
+      rewrite: (path: string) => path.slice(prefix.length),
     },
   };
 }
 
 export default defineConfig(({ command, mode }) => {
-  const env = loadEnv(mode, process.cwd(), "PUBLIC_");
-  const proxy = authProxy(env.PUBLIC_NEON_AUTH_URL ?? "");
+  const env = loadEnv(mode, process.cwd(), ["PUBLIC_", "NEON_"]);
+  // Auth, and the API function (see functions/api), both from this site's own
+  // address, the way middleware.ts does it in production. For auth that is
+  // what keeps the session cookie: Safari discards one set by Neon's address.
+  // This covers `bun run dev` and `bun run preview`, which reach the branch
+  // `.env.local` names.
+  const proxy = {
+    ...forward("/api/auth", env.PUBLIC_NEON_AUTH_URL ?? ""),
+    ...forward("/api/v1", env.NEON_FUNCTION_API_BASE_URL ?? ""),
+  };
   return {
     server: { proxy },
     preview: { proxy },
@@ -36,7 +37,9 @@ export default defineConfig(({ command, mode }) => {
           runes: ({ filename }) =>
             filename.split(/[/\\]/).includes("node_modules") ? undefined : true,
         },
-        adapter: adapter(),
+        // The pages all prerender. /@username cannot, there is one per reader,
+        // so it is served this shell and draws itself in the browser.
+        adapter: adapter({ fallback: "200.html" }),
       }),
 
       paraglideVitePlugin({

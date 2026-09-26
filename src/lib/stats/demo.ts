@@ -73,6 +73,7 @@ export function demoBoard(ownScore: number, now: Date): BoardEntry[] {
     {
       userId: "d1",
       username: "swift-kitsune-71",
+      displayName: null,
       score: ownScore * 1.6,
       scoredAt: at(2),
       isYou: false,
@@ -80,19 +81,35 @@ export function demoBoard(ownScore: number, now: Date): BoardEntry[] {
     {
       userId: "d2",
       username: "calm-fukurou-18",
+      displayName: "Aiko",
       score: ownScore + 23,
       scoredAt: at(30),
       isYou: false,
     },
-    { userId: "you", username: "quiet-tanuki-42", score: ownScore, scoredAt: at(0), isYou: true },
+    {
+      userId: "you",
+      username: "quiet-tanuki-42",
+      displayName: null,
+      score: ownScore,
+      scoredAt: at(0),
+      isYou: true,
+    },
     {
       userId: "d3",
       username: "sleepy-neko-55",
+      displayName: null,
       score: ownScore * 0.7,
       scoredAt: at(24 * 9),
       isYou: false,
     },
-    { userId: "d4", username: "oliver", score: ownScore * 0.3, scoredAt: null, isYou: false },
+    {
+      userId: "d4",
+      username: "oliver",
+      displayName: null,
+      score: ownScore * 0.3,
+      scoredAt: null,
+      isYou: false,
+    },
     // Enough more that the board is longer than the card it sits in, so the
     // scrolling and the jump to the reader's own line show up too.
     ...[
@@ -106,6 +123,7 @@ export function demoBoard(ownScore: number, now: Date): BoardEntry[] {
     ].map((username, index) => ({
       userId: `extra-${String(index)}`,
       username,
+      displayName: null,
       score: ownScore * (0.2 + index * 0.25),
       scoredAt: at(3 + index * 20),
       isYou: false,

@@ -4,8 +4,8 @@
   import { Input } from "$lib/components/ui/input";
   import { Label } from "$lib/components/ui/label";
   import { m } from "$lib/paraglide/messages";
-  import { renameProfile, type RenameProblem } from "$lib/sync/friends";
-  import { normaliseUsername } from "$lib/sync/username";
+  import { updateProfile, type ProfileProblem } from "$lib/sync/profile";
+  import { isValidUsername, normaliseUsername } from "$lib/sync/username";
 
   interface Props {
     /** Whether the dialog is showing. */
@@ -25,11 +25,12 @@
 
   let draft = $state("");
   let isSaving = $state(false);
-  let problem = $state<RenameProblem | null>(null);
+  let problem = $state<ProfileProblem | null>(null);
 
-  const PROBLEM_MESSAGES: Record<RenameProblem, () => string> = {
+  const PROBLEM_MESSAGES: Record<ProfileProblem, () => string> = {
     taken: m.leaderboards_following_rename_error_taken,
     invalid: m.leaderboards_following_rename_error_invalid,
+    offensive: m.settings_profile_error_offensive,
     offline: m.leaderboards_following_error_offline,
     unknown: m.leaderboards_following_error_unknown,
   };
@@ -45,8 +46,11 @@
 
   async function save(): Promise<void> {
     isSaving = true;
-    problem = await renameProfile(draft);
+    const result = isValidUsername(draft)
+      ? await updateProfile({ username: draft })
+      : { problem: "invalid" as const };
     isSaving = false;
+    problem = "problem" in result ? result.problem : null;
     if (problem !== null) return;
     open = false;
     onSaved(normaliseUsername(draft));

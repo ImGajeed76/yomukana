@@ -7,17 +7,13 @@
 
 import type { BoardEntry } from "./board";
 import { connect, type SyncClient } from "./client";
-import { isValidUsername, normaliseUsername, randomUsername } from "./username";
+import { ensureProfile } from "./profile";
+import { normaliseUsername } from "./username";
 
 export type FriendProblem = "not-found" | "self" | "offline" | "unknown";
-export type RenameProblem = "taken" | "invalid" | "offline" | "unknown";
 
-/** Postgres' codes for the two ways a name is refused. */
+/** Postgres' code for a row that is already there. */
 const UNIQUE_VIOLATION = "23505";
-const CHECK_VIOLATION = "23514";
-
-/** Random names collide rarely. A few tries is plenty, and a loop that cannot end is not. */
-const NAME_ATTEMPTS = 5;
 
 async function currentUserId(client: SyncClient): Promise<string | null> {
   const session = await client.auth.getSession();
@@ -43,15 +39,11 @@ export async function publishScore(client: SyncClient, score: number): Promise<v
   if (updated.error !== null) throw new Error(updated.error.message);
   if (updated.data.length > 0) return;
 
-  // No profile yet: this reader just signed in for the first time. They get
-  // a random name, and can change it in settings.
-  for (let attempt = 0; attempt < NAME_ATTEMPTS; attempt++) {
-    const created = await client
-      .from("profiles")
-      .insert({ username: randomUsername(), score, scored_at: scoredAt });
-    if (created.error === null) return;
-    if (created.error.code !== UNIQUE_VIOLATION) throw new Error(created.error.message);
-  }
+  // No profile yet: this reader just signed in for the first time. The API
+  // function makes one with a random name, which they can change in settings,
+  // and the score goes onto it.
+  if ((await ensureProfile()) === null) return;
+  await client.from("profiles").update({ score, scored_at: scoredAt }).eq("user_id", userId);
 }
 
 /**
@@ -66,12 +58,15 @@ export async function loadBoard(): Promise<BoardEntry[] | null> {
   try {
     const client = await connect();
     const userId = await currentUserId(client);
-    const rows = await client.from("profiles").select("user_id, username, score, scored_at");
+    const rows = await client
+      .from("profiles")
+      .select("user_id, username, display_name, score, scored_at");
     if (rows.error !== null || userId === null) return null;
 
     return rows.data.map((row) => ({
       userId: row.user_id,
       username: row.username,
+      displayName: row.display_name,
       score: row.score,
       scoredAt: row.scored_at === null ? null : Date.parse(row.scored_at),
       isYou: row.user_id === userId,
@@ -116,37 +111,16 @@ export async function removeFriend(friendId: string): Promise<boolean> {
   }
 }
 
-/** The reader's own name, or null if they have no profile yet or the server is out of reach. */
-export async function ownUsername(): Promise<string | null> {
+/** Takes someone off the reader's board by their name, as their profile page knows them. */
+export async function removeFriendByName(name: string): Promise<boolean> {
   try {
     const client = await connect();
-    const userId = await currentUserId(client);
-    if (userId === null) return null;
-    const own = await client.from("profiles").select("username").eq("user_id", userId);
-    return own.error === null ? (own.data[0]?.username ?? null) : null;
+    const found = await client.rpc("find_profile", { name: normaliseUsername(name) });
+    const friend = found.data?.[0];
+    if (friend === undefined) return false;
+    return await removeFriend(friend.user_id);
   } catch (error) {
-    console.warn("could not read the username", error);
-    return null;
-  }
-}
-
-/** Changes the reader's name. Returns what went wrong, or null. */
-export async function renameProfile(name: string): Promise<RenameProblem | null> {
-  if (!isValidUsername(name)) return "invalid";
-  try {
-    const client = await connect();
-    const userId = await currentUserId(client);
-    if (userId === null) return "unknown";
-    const renamed = await client
-      .from("profiles")
-      .update({ username: normaliseUsername(name) })
-      .eq("user_id", userId);
-    if (renamed.error === null) return null;
-    if (renamed.error.code === UNIQUE_VIOLATION) return "taken";
-    if (renamed.error.code === CHECK_VIOLATION) return "invalid";
-    return "unknown";
-  } catch (error) {
-    console.warn("could not rename the profile", error);
-    return "offline";
+    console.warn("could not remove a friend", error);
+    return false;
   }
 }

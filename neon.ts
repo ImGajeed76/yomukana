@@ -10,6 +10,12 @@ export default defineConfig({
   auth: true,
   dataApi: true,
 
+  // The writes that need a rule checked: names, and later scores and groups.
+  // Everything else goes straight to the Data API. See functions/api/index.ts.
+  functions: {
+    api: { name: "yomukana api", source: "functions/api/index.ts" },
+  },
+
   // `production` is what yomukana.app uses. `dev` is where the app is
   // developed and tested, with its own readers and its own auth, so testing
   // never touches a real reader's progress. Both are kept.

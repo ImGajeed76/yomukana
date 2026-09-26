@@ -5,11 +5,18 @@
 export interface BoardEntry {
   readonly userId: string;
   readonly username: string;
+  /** The name they chose to be shown by, or null to be shown by their username. */
+  readonly displayName: string | null;
   readonly score: number;
   /** When the score was last sent, in epoch milliseconds. Null if it never was. */
   readonly scoredAt: number | null;
   /** Whether this line is the reader looking at the board. */
   readonly isYou: boolean;
+}
+
+/** What a line on the board is called: the display name if there is one. */
+export function nameOf(entry: BoardEntry): string {
+  return entry.displayName ?? entry.username;
 }
 
 export interface RankedEntry extends BoardEntry {
@@ -21,8 +28,8 @@ export interface RankedEntry extends BoardEntry {
 export type Standing =
   | { readonly kind: "alone" }
   | { readonly kind: "leading" }
-  | { readonly kind: "tied"; readonly username: string }
-  | { readonly kind: "behind"; readonly points: number; readonly username: string };
+  | { readonly kind: "tied"; readonly name: string }
+  | { readonly kind: "behind"; readonly points: number; readonly name: string };
 
 /**
  * The board in order, with the reader's own score as it is now rather than as
@@ -59,8 +66,8 @@ export function standingOf(ranked: readonly RankedEntry[]): Standing {
   // within reach.
   const next = ahead.at(-1);
   if (next !== undefined) {
-    return { kind: "behind", points: next.score - you.score, username: next.username };
+    return { kind: "behind", points: next.score - you.score, name: nameOf(next) };
   }
   const level = others.find((entry) => entry.score === you.score);
-  return level === undefined ? { kind: "leading" } : { kind: "tied", username: level.username };
+  return level === undefined ? { kind: "leading" } : { kind: "tied", name: nameOf(level) };
 }

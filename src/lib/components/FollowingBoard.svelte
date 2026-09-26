@@ -6,7 +6,7 @@
   import { Input } from "$lib/components/ui/input";
   import { m } from "$lib/paraglide/messages";
   import { timeAgo } from "$lib/stats";
-  import { rankBoard, standingOf, type BoardEntry, type Standing } from "$lib/sync/board";
+  import { nameOf, rankBoard, standingOf, type BoardEntry, type Standing } from "$lib/sync/board";
   import { addFriend, loadBoard, removeFriend, type FriendProblem } from "$lib/sync/friends";
 
   interface Props {
@@ -129,11 +129,11 @@
   function describe(state: Standing): string | null {
     if (state.kind === "leading") return m.leaderboards_following_standing_leading();
     if (state.kind === "tied")
-      return m.leaderboards_following_standing_tied({ username: state.username });
+      return m.leaderboards_following_standing_tied({ username: state.name });
     if (state.kind === "behind") {
       return m.leaderboards_following_standing_behind({
         points: String(state.points),
-        username: state.username,
+        username: state.name,
       });
     }
     return null;
@@ -239,8 +239,11 @@
             <span class="w-5 shrink-0 text-sm text-muted-foreground tabular-nums">{entry.rank}</span
             >
             <div class="flex min-w-0 flex-1 flex-col">
-              <span class={["truncate text-sm", entry.isYou && "font-medium"]}
-                >{entry.username}</span
+              <!-- The name opens their profile. The row stays a row, so the remove button is not inside a link. -->
+              <a
+                href="/@{entry.username}"
+                class={["truncate text-sm hover:underline", entry.isYou && "font-medium"]}
+                >{nameOf(entry)}</a
               >
               <span class="truncate text-xs text-muted-foreground">
                 {#if entry.isYou}
@@ -267,7 +270,7 @@
                   variant="ghost"
                   size="icon"
                   class="size-8 text-muted-foreground pointer-fine:opacity-0 pointer-fine:group-hover:opacity-100 pointer-fine:focus-visible:opacity-100"
-                  aria-label={m.leaderboards_following_button_remove({ username: entry.username })}
+                  aria-label={m.leaderboards_following_button_remove({ username: nameOf(entry) })}
                   onclick={() => {
                     void remove(entry);
                   }}

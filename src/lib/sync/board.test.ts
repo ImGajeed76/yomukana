@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { rankBoard, standingOf, type BoardEntry } from "./board";
 
 function entry(username: string, score: number, isYou = false): BoardEntry {
-  return { userId: username, username, score, scoredAt: null, isYou };
+  return { userId: username, username, displayName: null, score, scoredAt: null, isYou };
 }
 
 describe("rankBoard", () => {
@@ -36,7 +36,7 @@ describe("rankBoard", () => {
 describe("standingOf", () => {
   test("names the one just above, not the one at the top", () => {
     const ranked = rankBoard([entry("top", 500), entry("next", 120), entry("me", 0, true)], 100);
-    expect(standingOf(ranked)).toEqual({ kind: "behind", points: 20, username: "next" });
+    expect(standingOf(ranked)).toEqual({ kind: "behind", points: 20, name: "next" });
   });
 
   test("says leading, tied, or alone", () => {
@@ -45,7 +45,7 @@ describe("standingOf", () => {
     });
     expect(standingOf(rankBoard([entry("friend", 50), entry("me", 0, true)], 50))).toEqual({
       kind: "tied",
-      username: "friend",
+      name: "friend",
     });
     expect(standingOf(rankBoard([entry("me", 0, true)], 50))).toEqual({ kind: "alone" });
   });

@@ -1,4 +1,5 @@
-// Forwards /api/auth to Neon Auth, from this site's own address.
+// Forwards /api/auth to Neon Auth, and /api/v1 to the API function, from this
+// site's own address.
 //
 // Safari throws away cookies set by any site other than the one the reader is
 // on, and the session is a cookie. Set by Neon's address it was gone the
@@ -13,10 +14,22 @@
 //
 // Locally, the Vite dev and preview servers do the same. See vite.config.ts.
 
-/** Production Neon Auth. Public: it names where to knock, not a way in. */
-const AUTH_ORIGIN = "https://ep-bitter-sky-b2binkni.neonauth.c-6.eu-central-1.aws.neon.tech";
-const AUTH_BASE = "/neondb/auth";
-const LOCAL_PREFIX = "/api/auth";
+/**
+ * Where each path on this site is forwarded to, in production. Public: they
+ * name where to knock, not a way in. The API function needs no cookie of its
+ * own, it is sent the reader's token, but reaching it from this site's own
+ * address keeps the browser from needing permission to call another one.
+ */
+const ROUTES = [
+  {
+    prefix: "/api/auth",
+    target: "https://ep-bitter-sky-b2binkni.neonauth.c-6.eu-central-1.aws.neon.tech/neondb/auth",
+  },
+  {
+    prefix: "/api/v1",
+    target: "https://br-purple-dream-b2zjpmst-api.compute.c-6.eu-central-1.aws.neon.tech",
+  },
+] as const;
 
 /** The request headers Neon Auth needs. Everything else stays behind, including every forwarded-host header. */
 const FORWARDED_REQUEST_HEADERS = [
@@ -30,14 +43,15 @@ const FORWARDED_REQUEST_HEADERS = [
 ];
 
 export const config = {
-  matcher: "/api/auth/:path*",
+  matcher: ["/api/auth/:path*", "/api/v1/:path*"],
 };
 
 export default async function middleware(request: Request): Promise<Response> {
   const incoming = new URL(request.url);
+  const route = ROUTES.find((candidate) => incoming.pathname.startsWith(`${candidate.prefix}/`));
+  if (route === undefined) return new Response("Not found", { status: 404 });
   const target = new URL(
-    AUTH_BASE + incoming.pathname.slice(LOCAL_PREFIX.length) + incoming.search,
-    AUTH_ORIGIN,
+    route.target + incoming.pathname.slice(route.prefix.length) + incoming.search,
   );
 
   const headers = new Headers();

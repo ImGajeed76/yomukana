@@ -17,6 +17,7 @@
 import { sql } from "drizzle-orm";
 import { authenticatedRole, authUid, crudPolicy } from "drizzle-orm/neon";
 import {
+  boolean,
   check,
   doublePrecision,
   index,
@@ -139,6 +140,14 @@ export const profiles = pgTable(
     // Stored lowercase and kept to a small alphabet, so a name read aloud or
     // copied from a chat is the name that finds them.
     username: text("username").notNull(),
+    // Free text, any script, shown instead of the username where there is one.
+    displayName: text("display_name"),
+    // One of a fixed palette, named rather than a colour value, so each name
+    // can have its own shade in light and dark mode.
+    cardColor: text("card_color").notNull().default("green"),
+    // Whether anyone may see this profile at /@username, and later on the
+    // global board. Off until the reader turns it on. See CLAUDE.md 1.7.
+    isPublic: boolean("is_public").notNull().default(false),
     score: doublePrecision("score").notNull().default(0),
     scoredAt: timestamp("scored_at", { withTimezone: true }),
     updatedAt: changedAt(),
@@ -146,6 +155,11 @@ export const profiles = pgTable(
   (table) => [
     uniqueIndex("profiles_username").on(table.username),
     check("profiles_username_format", sql`${table.username} ~ '^[a-z0-9_-]{3,20}$'`),
+    check("profiles_display_name_length", sql`char_length(${table.displayName}) between 1 and 32`),
+    check(
+      "profiles_card_color",
+      sql`${table.cardColor} in ('green', 'blue', 'violet', 'rose', 'amber', 'slate')`,
+    ),
     pgPolicy("profiles_read_own_and_added", {
       for: "select",
       to: authenticatedRole,
