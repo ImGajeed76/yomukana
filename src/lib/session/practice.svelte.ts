@@ -33,6 +33,7 @@ import {
   type WordSpan,
 } from "../srs";
 import { scoreOf } from "../stats/score";
+import { loadTextShare, type TextShare } from "../stats/text-share";
 import { sync } from "../sync/sync";
 import {
   measuredLatency,
@@ -89,6 +90,8 @@ function easeRatio(timed: readonly TimedSegment[], baselineMs: number): number {
 export class Practice {
   readonly #progress = new Progress();
   readonly #corpus = new Corpus();
+  /** How much of real text each item is, for the score. Null until it has arrived. */
+  #textShare: TextShare | null = null;
 
   /** Kana-only sentences to start on while the first band downloads. */
   readonly #starter: readonly Candidate[] = STARTER_SENTENCES.map((sentence) => ({
@@ -186,6 +189,17 @@ export class Practice {
 
     this.#isCorpusReady = true;
     this.#choose();
+
+    // After the corpus, and never waited on: only the score needs it, and a
+    // sentence finished before it arrives simply records no score.
+    loadTextShare().then(
+      (share) => {
+        this.#textShare = share;
+      },
+      (error: unknown) => {
+        console.warn("could not load the text counts for the score", error);
+      },
+    );
   }
 
   /**
@@ -352,8 +366,9 @@ export class Practice {
       errors: summary.errors,
       segments: attempt.timings.length,
       // Written down now because it cannot be worked out later: an item state
-      // says what the reader knows today, not what they knew in March.
-      score: scoreOf(store, at),
+      // says what the reader knows today, not what they knew in March. Left out
+      // only in the moment before the text counts have arrived.
+      ...(this.#textShare === null ? {} : { readingScore: scoreOf(store, at, this.#textShare) }),
     };
 
     this.#seenAt.set(current.id, at.getTime());

@@ -1,100 +1,87 @@
-// One number for how well someone reads.
+// One number for how well someone reads, to compare with anyone else.
 //
-// The reader asked for something they can compare with someone else at a glance,
-// so it has no ceiling: it is a sum over everything they know, not a percentage
-// of a fixed syllabary. Learning one more kanji reading always adds to it, which
-// is the property that keeps it comparable between a beginner and someone three
-// years in.
+// It is how much of real Japanese text they can read, on a scale with no top.
+// Every item counts by how often it turns up in real text (text-share.ts), so
+// a word on every page is worth far more than one seen once a year, and by the
+// chance they still recall it, averaged over the next few days. The share of
+// text they read is then put on a scale where every point is equal work:
+// 1,000 points for each time they halve the words they would get stuck on.
+// Going from stuck on half the words to a quarter is 1,000 points, and so is
+// going from one in a hundred to one in two hundred, which takes far more.
+// So the score never stops growing, and every point is harder than the last.
 //
-// It measures what the reader can read today, not what they have ever learned.
-// Every item counts for the chance they would still recall it right now, so a
-// character they have not seen in a year counts for about as much as they would
-// get it right, and the score falls when they stop and climbs back when they
-// return. A number that only ever rose would say more about how long someone
-// had been using the app than about how well they read.
+// Why this and not something else was decided by simulation, not by taste:
+// scripts/simulate runs simulated people with their own hidden memory through
+// the app's real practice loop, and every candidate was scored against what
+// those people could really read. See scripts/simulate/README.md. In short:
 //
-// And it measures reading, not typing. Each item's pace is its reading time:
-// recognition latency with the reader's own reach for a key taken off. A fast
-// typist and a slow one with the same Japanese score the same, and so does one
-// reader on a phone and at a desk.
-//
-// What a point means, in one sentence: a tenth of a kana you would read right
-// now, at a normal reading pace.
+// - Recall averaged over the next three days, not now: a week of cramming
+//   looks like knowledge "now" and fades by Friday. Averaging further ahead
+//   resisted cramming more but put people in the wrong order more often;
+//   three days ordered them best in every simulated world.
+// - No reading-speed term. A keystroke is hand plus eye, and two people whose
+//   hands and eyes add up the same type the same, so speed across people
+//   cannot be measured fairly from typing. Every speed term tried made a slow
+//   typist or a phone reader look like a worse reader. Speed still counts
+//   where it is fair: a reader's own quick reads grade Easy and last longer.
+// - It falls when someone stops practising, as their reading does.
 
-import { parseItemId, recallProbability, type ItemState, type ItemStore } from "../srs";
+import { recallProbability, type ItemStore } from "../srs";
 import { dayKey } from "../time";
 import { carryForward, type DailyPoint } from "./series";
+import type { TextShare } from "./text-share";
 
-/** Points for one kana read at the reference pace and remembered. */
-const KANA_POINTS = 10;
-/**
- * Points for one kanji word. Worth more than a kana because a reading has to be
- * learned per word: 生 in 生きる is not 生 in 学生. See CLAUDE.md 2.
- */
-const WORD_POINTS = 25;
+/** Points for each halving of the words a reader would get stuck on. */
+const POINTS_PER_HALVING = 1000;
 
-/**
- * The reading time a point is defined against, in milliseconds.
- *
- * Reading time, not recognition latency: what is left after the reader's own
- * reach for a key is taken off. Fixed rather than taken from the reader, since
- * a score normalised against its own reader cannot be compared with anyone
- * else's, which is the whole point of having one.
- */
-const REFERENCE_READING_MS = 350;
+/** Recall is averaged over now and each of this many days ahead. */
+const HORIZON_DAYS = 3;
+
+const DAY_MS = 86_400_000;
+
+/** Short of all of the text by this much at most, so the logarithm stays finite. */
+const NEVER_ALL = 1e-9;
 
 /**
- * The shortest reading time the pace will believe.
- *
- * A reading time near zero means the character was read before the key was
- * reached for, which is what knowing it cold looks like, and dividing by it
- * would hand out unbounded credit for a rounding difference.
+ * The share of real text the reader reads, 0 to 1: every item they have
+ * studied, weighted by how much of the text it is and by the chance they
+ * recall it over the next few days.
  */
-const FASTEST_BELIEVABLE_MS = 40;
-const SLOWEST_CREDIT = 0.25;
-const FASTEST_CREDIT = 2.5;
-
-function clamp(value: number, low: number, high: number): number {
-  return value < low ? low : value > high ? high : value;
-}
-
-/** How fast the reader reads this item, as a multiple of the reference. */
-function paceOf(state: ItemState): number {
-  // No clean reading means no evidence of pace, which is not the same as
-  // evidence of average pace. It takes the slowest credit until there is one.
-  if (state.meanReadingMs === null) return SLOWEST_CREDIT;
-
-  const reading = Math.max(state.meanReadingMs, FASTEST_BELIEVABLE_MS);
-  return clamp(REFERENCE_READING_MS / reading, SLOWEST_CREDIT, FASTEST_CREDIT);
-}
-
-/** The reader's score: everything they could read right now, weighted by how fast. */
-export function scoreOf(store: ItemStore, now: Date): number {
-  let points = 0;
-
+export function readingShareOf(store: ItemStore, now: Date, share: TextShare): number {
+  let covered = 0;
   for (const state of store.items.values()) {
     if (state.reviews === 0) continue;
-
-    const item = parseItemId(state.id);
-    if (item === null) continue;
-
-    const weight = item.kind === "kana" ? KANA_POINTS : WORD_POINTS;
-    points += weight * recallProbability(state, now) * paceOf(state);
+    const uses = share.usesOf.get(state.id);
+    if (uses === undefined) continue;
+    let recall = 0;
+    for (let day = 0; day <= HORIZON_DAYS; day++) {
+      recall += recallProbability(state, new Date(now.getTime() + day * DAY_MS));
+    }
+    covered += (uses / share.totalUses) * (recall / (HORIZON_DAYS + 1));
   }
+  return Math.min(covered, 1 - NEVER_ALL);
+}
 
-  return Math.round(points);
+/** The reader's score: 1,000 points for each halving of the words they would stumble on. */
+export function scoreOf(store: ItemStore, now: Date, share: TextShare): number {
+  // log2(1) is 0, and minus 0 is -0, which prints and compares as a surprise.
+  const halvings = -Math.log2(1 - readingShareOf(store, now, share));
+  return Math.round(POINTS_PER_HALVING * halvings) || 0;
 }
 
 export interface ScoredAttempt {
   readonly finishedAt: number;
-  readonly score?: number;
+  /** The score, on today's scale, once that sentence was graded. Older attempts have none. */
+  readonly readingScore?: number;
 }
 
 /**
  * The score at the end of each of the last `days` days, oldest first.
  *
  * The last reading of a day wins, because a score is a running total: where it
- * stood when the reader stopped is where they finished the day.
+ * stood when the reader stopped is where they finished the day. Only scores on
+ * today's scale: attempts from before it have a number on another scale, and
+ * drawing both on one line would show a fall that never happened.
  */
 export function dailyScores(
   attempts: readonly ScoredAttempt[],
@@ -104,8 +91,8 @@ export function dailyScores(
   const endOfDay = new Map<string, number>();
 
   for (const attempt of [...attempts].sort((left, right) => left.finishedAt - right.finishedAt)) {
-    if (attempt.score === undefined) continue;
-    endOfDay.set(dayKey(new Date(attempt.finishedAt)), attempt.score);
+    if (attempt.readingScore === undefined) continue;
+    endOfDay.set(dayKey(new Date(attempt.finishedAt)), attempt.readingScore);
   }
 
   return carryForward(endOfDay, days, now);

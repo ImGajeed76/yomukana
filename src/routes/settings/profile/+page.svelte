@@ -12,7 +12,7 @@
   import { Switch } from "$lib/components/ui/switch";
   import { Progress } from "$lib/db";
   import { m } from "$lib/paraglide/messages";
-  import { scoreOf } from "$lib/stats";
+  import { loadTextShare, scoreOf } from "$lib/stats";
   import {
     rememberProfile,
     showOwnProfile,
@@ -60,7 +60,8 @@
 
   $effect(() => {
     void (async () => {
-      score = scoreOf(await progress.load(), new Date());
+      const share = await loadTextShare();
+      score = scoreOf(await progress.load(), new Date(), share);
       account = (await progress.syncState()).account;
       if (account === null) {
         isLoaded = true;
@@ -69,7 +70,7 @@
       // The server's copy and a sync, side by side: the card's score is
       // worked out on this device, so nothing here waits for the sync.
       void sync(progress).then(() => {
-        score = scoreOf(progress.store, new Date());
+        score = scoreOf(progress.store, new Date(), share);
       });
       isLoaded = true;
       hasFailed = !(await showOwnProfile(progress, show));

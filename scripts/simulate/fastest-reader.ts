@@ -9,15 +9,15 @@
 // src/lib/session/practice.svelte.ts, written out without Svelte or IndexedDB.
 //
 // The reader never makes a mistake, never skips, reads every character at the
-// speed the score treats as the fastest there is, and practises eight hours a
-// day in fifty-minute sittings for a month.
+// fastest pace the app believes, and practises eight hours a day in
+// fifty-minute sittings.
 //
-// Run with `bun scripts/simulate/fastest-reader.ts [days]`. Prints the largest
-// gain in any ten minutes, hour and day, and the highest score the corpus
-// allows at all.
+// Run with `bun scripts/simulate/fastest-reader.ts [days]`. Prints the path
+// the leaderboard limits are made from (src/lib/sync/score-limits.ts) and the
+// largest gain in any ten minutes, hour and day.
 
 import { planDisplay, tokenSpans } from "../../src/lib/corpus/display";
-import { Corpus, segmentsOf, type Fetcher } from "../../src/lib/corpus/load";
+import { Corpus, type Fetcher } from "../../src/lib/corpus/load";
 import type { CorpusChunk, CorpusIndex, CorpusSentence } from "../../src/lib/corpus/types";
 import { toCodePoints } from "../../src/lib/japanese/text";
 import type { Segment } from "../../src/lib/romaji";
@@ -44,7 +44,6 @@ import {
 import {
   EMPTY_STORE,
   applyReviews,
-  itemsForSegments,
   kanjiItem,
   reviewsFor,
   reviewsForWords,
@@ -53,6 +52,7 @@ import {
   type WordSpan,
 } from "../../src/lib/srs";
 import { scoreOf } from "../../src/lib/stats/score";
+import { countUses, textShareFrom } from "../../src/lib/stats/text-share";
 
 // The reader.
 
@@ -155,28 +155,6 @@ function largestGain(samples: readonly Sample[], window: number): number {
   return best;
 }
 
-/** Every item the corpus could ever teach, and the most any of them can score. */
-function ceilingOf(sentences: readonly CorpusSentence[]): {
-  kana: number;
-  words: number;
-  score: number;
-} {
-  const kana = new Set<string>();
-  const words = new Set<string>();
-  for (const sentence of sentences) {
-    for (const item of itemsForSegments(segmentsOf(sentence))) kana.add(item.id);
-    for (const token of sentence.tokens) {
-      if (token.surface !== token.reading) words.add(kanjiItem(token.surface, token.reading).id);
-    }
-  }
-  // Weight times full recall times the fastest pace: see src/lib/stats/score.ts.
-  return {
-    kana: kana.size,
-    words: words.size,
-    score: kana.size * 10 * 2.5 + words.size * 25 * 2.5,
-  };
-}
-
 async function main(): Promise<void> {
   const days = Number(process.argv[2] ?? "30");
   const startedAt = performance.now();
@@ -189,7 +167,8 @@ async function main(): Promise<void> {
     const chunk = (await Bun.file(`${CORPUS_ROOT}/corpus/${band.file}`).json()) as CorpusChunk;
     everything.push(...chunk.sentences);
   }
-  const ceiling = ceilingOf(everything);
+  // The same counts the app ships in static/corpus/text-share.json.
+  const share = textShareFrom(countUses(everything));
 
   let store: ItemStore = EMPTY_STORE;
   let progression: Progression = START;
@@ -208,14 +187,14 @@ async function main(): Promise<void> {
 
       while (at < sittingStart + SITTING_MS) {
         if (at >= nextSample) {
-          samples.push({ at, score: scoreOf(store, new Date(at)) });
+          samples.push({ at, score: scoreOf(store, new Date(at), share) });
           nextSample += SAMPLE_MS;
         }
         await corpus.ensure(bandsAround(progression.band, corpus.highestBand));
 
         // Choosing, as Practice.#choose does.
         const when = new Date(at);
-        const options = { ...DEFAULT_OPTIONS, recent, seenAt };
+        const options = { ...DEFAULT_OPTIONS, random, recent, seenAt };
         const candidates = corpus.candidates(bandsAround(progression.band, corpus.highestBand), {
           allowKatakana: allowsKatakana(store),
           allowKanji: allowsKanji(store),
@@ -275,11 +254,11 @@ async function main(): Promise<void> {
 
         at += BETWEEN_SENTENCES_MS;
       }
-      samples.push({ at, score: scoreOf(store, new Date(at)) });
+      samples.push({ at, score: scoreOf(store, new Date(at), share) });
     }
     // Overnight, so decay shows up in the day-long windows too.
     const nextMorning = origin + (day + 1) * DAY_MS;
-    samples.push({ at: nextMorning - 1, score: scoreOf(store, new Date(nextMorning - 1)) });
+    samples.push({ at: nextMorning - 1, score: scoreOf(store, new Date(nextMorning - 1), share) });
     const dayScore = samples.at(-1)?.score ?? 0;
     console.log(
       `day ${String(day + 1).padStart(2)}: score ${String(dayScore).padStart(7)}, band ${String(progression.band)}, items ${String(store.items.size)}, sentences ${String(sentencesRead)}`,
@@ -330,9 +309,7 @@ async function main(): Promise<void> {
     if (day <= days) console.log(`gain on day ${String(day)}: ${String(dayGain(day))}`);
   }
   console.log("");
-  console.log(
-    `ceiling: ${String(ceiling.kana)} kana items, ${String(ceiling.words)} word items, ${String(ceiling.score)} points`,
-  );
+  console.log();
   console.log(`ran in ${String(Math.round((performance.now() - startedAt) / 1000))} s`);
 }
 

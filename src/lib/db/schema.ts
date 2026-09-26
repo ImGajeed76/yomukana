@@ -29,13 +29,18 @@ export interface AttemptRecord {
   /** Segments settled, the unit reading speed is counted in. */
   readonly segments: number;
   /**
-   * The reader's score once this sentence was graded.
-   *
-   * Optional because attempts recorded before scores existed do not have one.
-   * Storing it per attempt is what makes a score chart possible at all: item
-   * states hold only what is true now, so the past cannot be recomputed.
+   * The reader's score once this sentence was graded, on the scale before
+   * September 2026. Kept as it was written, never shown: it measured
+   * something else, and no rule turns it into today's number.
    */
   readonly score?: number;
+  /**
+   * The reader's score once this sentence was graded, on today's scale (see
+   * src/lib/stats/score.ts). Storing it per attempt is what makes a score
+   * chart possible at all: item states hold only what is true now, so the
+   * past cannot be recomputed. Optional because older attempts do not have one.
+   */
+  readonly readingScore?: number;
 }
 
 /**

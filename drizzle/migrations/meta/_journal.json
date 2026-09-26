@@ -99,6 +99,13 @@
       "when": 1790414111907,
       "tag": "0013_peak_from_current",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1790424411989,
+      "tag": "0014_score_scale_changed",
+      "breakpoints": true
     }
   ]
 }

@@ -9,7 +9,7 @@
   import { Button } from "$lib/components/ui/button";
   import { Progress } from "$lib/db";
   import { m } from "$lib/paraglide/messages";
-  import { demoBoard, demoProgress, scoreOf } from "$lib/stats";
+  import { demoBoard, demoProgress, loadTextShare, scoreOf } from "$lib/stats";
   import { lastShownGroups, listGroups, rememberGroups, type GroupSummary } from "$lib/sync/groups";
   import { sync } from "$lib/sync/sync";
 
@@ -55,19 +55,20 @@
 
   $effect(() => {
     void (async () => {
+      const share = await loadTextShare();
       if (isDemo) {
-        score = scoreOf(demoProgress(new Date()).store, new Date());
+        score = scoreOf(demoProgress(new Date(), share).store, new Date(), share);
         return;
       }
       // Read here, in the browser: the page is prerendered, and there is no
       // address to read while it is.
       board = new URL(location.href).searchParams.get("board") ?? FOLLOWING;
-      score = scoreOf(await progress.load(), new Date());
+      score = scoreOf(await progress.load(), new Date(), share);
       account = (await progress.syncState()).account;
       if (account === null) return;
       groups = (await lastShownGroups(progress)) ?? [];
       void refreshGroups();
-      if ((await sync(progress)) === "synced") score = scoreOf(progress.store, new Date());
+      if ((await sync(progress)) === "synced") score = scoreOf(progress.store, new Date(), share);
       isSynced = true;
     })();
   });

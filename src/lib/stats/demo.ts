@@ -24,6 +24,7 @@ import {
   type TimedSegment,
 } from "../srs";
 import { scoreOf } from "./score";
+import type { TextShare } from "./text-share";
 
 const MS_PER_DAY = 86_400_000;
 
@@ -145,7 +146,7 @@ let built: DemoProgress | null = null;
  * once the kana is holding, so the script gates on the stats page have
  * something honest to show.
  */
-export function demoProgress(now: Date): DemoProgress {
+export function demoProgress(now: Date, share: TextShare): DemoProgress {
   // Four months of replayed reviews is not free, and the answer is the same
   // every time. Built once per session rather than on every visit.
   const cached = built;
@@ -208,7 +209,7 @@ export function demoProgress(now: Date): DemoProgress {
         keyCount,
         errors,
         segments: segments.length,
-        score: scoreOf(store, at),
+        readingScore: scoreOf(store, at, share),
       });
     }
   }

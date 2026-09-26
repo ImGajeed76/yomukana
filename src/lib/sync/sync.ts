@@ -14,6 +14,7 @@ import {
 } from "../db";
 import { readerFrom, type ItemState } from "../srs";
 import { scoreOf } from "../stats/score";
+import { loadTextShare } from "../stats/text-share";
 import { connect, type SyncClient } from "./client";
 import { publishScore } from "./friends";
 import {
@@ -234,7 +235,7 @@ export async function sync(progress: Progress): Promise<SyncOutcome> {
       pushAttempts(client, progress, state.pushedUpTo),
       pushReader(client, progress),
       pushSession(client, progress),
-      publishScore(scoreOf(progress.store, new Date())),
+      loadTextShare().then((share) => publishScore(scoreOf(progress.store, new Date(), share))),
     ]);
 
     // The reader may have signed out or deleted everything while this ran.

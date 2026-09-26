@@ -10,7 +10,6 @@ import {
   RELEARN_MAX_PER_10_MIN,
   RELEARN_MAX_PER_DAY,
   RELEARN_MAX_PER_HOUR,
-  SCORE_CEILING,
   leastTimeTo,
 } from "../../src/lib/sync/score-limits";
 import { readerOf } from "./auth";
@@ -27,7 +26,6 @@ const LIMITS: ScoreLimits = {
     { windowMs: 60 * MINUTE, maxGain: RELEARN_MAX_PER_HOUR },
     { windowMs: 24 * 60 * MINUTE, maxGain: RELEARN_MAX_PER_DAY },
   ],
-  ceiling: SCORE_CEILING,
   leastTimeTo,
 };
 

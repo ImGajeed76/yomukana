@@ -5,7 +5,7 @@
   import { Button } from "$lib/components/ui/button";
   import { Progress } from "$lib/db";
   import { m } from "$lib/paraglide/messages";
-  import { scoreOf } from "$lib/stats";
+  import { loadTextShare, scoreOf } from "$lib/stats";
   import { showOwnProfile, type Profile } from "$lib/sync/profile";
 
   const progress = new Progress();
@@ -19,7 +19,8 @@
 
   $effect(() => {
     void (async () => {
-      score = scoreOf(await progress.load(), new Date());
+      const store = await progress.load();
+      score = scoreOf(store, new Date(), await loadTextShare());
       account = (await progress.syncState()).account;
       isLoaded = true;
       if (account === null) return;

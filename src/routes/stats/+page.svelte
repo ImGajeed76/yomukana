@@ -30,6 +30,7 @@
     NO_TOTALS,
     characterStats,
     dailyScores,
+    loadTextShare,
     dayLabel,
     demoProgress,
     scoreOf,
@@ -77,8 +78,9 @@
 
   $effect(() => {
     void (async () => {
+      const share = await loadTextShare();
       if (isDemo) {
-        const demo = demoProgress(new Date());
+        const demo = demoProgress(new Date(), share);
         store = demo.store;
         attempts = demo.attempts;
       } else {
@@ -87,7 +89,7 @@
       }
 
       totals = totalsOf(attempts);
-      score = scoreOf(store, new Date());
+      score = scoreOf(store, new Date(), share);
       isLoaded = true;
 
       // Shown first, synced second: the page draws from what this device has,
@@ -97,7 +99,7 @@
         store = progress.store;
         attempts = await progress.recentAttempts(ATTEMPT_WINDOW);
         totals = totalsOf(attempts);
-        score = scoreOf(store, new Date());
+        score = scoreOf(store, new Date(), share);
       }
     })();
   });

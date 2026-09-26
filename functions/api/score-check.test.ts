@@ -21,7 +21,6 @@ const LIMITS: ScoreLimits = {
     { windowMs: HOUR, maxGain: 2000 },
     { windowMs: DAY, maxGain: 6000 },
   ],
-  ceiling: 100_000,
   leastTimeTo,
 };
 
@@ -92,15 +91,10 @@ describe("judgeScore", () => {
     expect(judgeScore(2000, SIGNED_UP + DAY + MINUTE, record, LIMITS)).toBe("accept");
   });
 
-  test("refuses anything above the ceiling, and anything that is not a score", () => {
-    const record: ScoreRecord = {
-      createdAt: SIGNED_UP,
-      peak: { score: 90_000, at: SIGNED_UP },
-      recent: [{ score: 90_000, at: SIGNED_UP }],
-    };
+  test("refuses anything that is not a score", () => {
     const later = SIGNED_UP + 1000 * DAY;
-    expect(judgeScore(100_001, later, record, LIMITS)).toBe("implausible");
-    expect(judgeScore(Number.NaN, later, record, LIMITS)).toBe("implausible");
-    expect(judgeScore(-1, later, record, LIMITS)).toBe("implausible");
+    expect(judgeScore(Number.NaN, later, fresh, LIMITS)).toBe("implausible");
+    expect(judgeScore(-1, later, fresh, LIMITS)).toBe("implausible");
+    expect(judgeScore(Number.POSITIVE_INFINITY, later, fresh, LIMITS)).toBe("implausible");
   });
 });

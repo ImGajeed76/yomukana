@@ -32,8 +32,6 @@ export interface GainLimit {
 export interface ScoreLimits {
   /** How fast a score may climb back to a best it has had before. */
   readonly relearning: readonly GainLimit[];
-  /** The highest score anyone can have: every item known perfectly, read as fast as is believable. */
-  readonly ceiling: number;
   /** The least time, in milliseconds, the fastest plausible reader needs to reach `score` from nothing. */
   readonly leastTimeTo: (score: number) => number;
 }
@@ -85,7 +83,7 @@ export function judgeScore(
   record: ScoreRecord,
   limits: ScoreLimits,
 ): ScoreVerdict {
-  if (!Number.isFinite(score) || score < 0 || score > limits.ceiling) return "implausible";
+  if (!Number.isFinite(score) || score < 0) return "implausible";
 
   const start: AcceptedScore = { score: 0, at: record.createdAt };
   const history = [start, ...record.recent];

@@ -5,6 +5,7 @@
 // See CLAUDE.md 3.5.
 
 import { mkdir, rm, writeFile } from "node:fs/promises";
+import { countUses } from "../../src/lib/stats/text-share";
 import { join } from "node:path";
 import { toCodePoints, isKanji, isKatakana } from "../../src/lib/japanese/text";
 import { segmentKana } from "../../src/lib/romaji";
@@ -244,6 +245,7 @@ async function build(): Promise<void> {
   await mkdir(OUTPUT_DIR, { recursive: true });
 
   const bands: { band: number; file: string; sentences: number }[] = [];
+  const written: CorpusSentence[] = [];
   for (let band = 0; band < BANDS; band++) {
     const slice = kept.slice(band * perBand, (band + 1) * perBand);
     if (slice.length === 0) continue;
@@ -255,6 +257,7 @@ async function build(): Promise<void> {
     };
     const file = `band-${String(band)}.json`;
     await writeFile(join(OUTPUT_DIR, file), JSON.stringify(chunk));
+    written.push(...chunk.sentences);
     bands.push({ band, file, sentences: slice.length });
     console.log(`  band ${String(band)}: ${String(slice.length)} sentences`);
   }
@@ -266,6 +269,10 @@ async function build(): Promise<void> {
     attribution: ATTRIBUTION_TEXT,
   };
   await writeFile(join(OUTPUT_DIR, "index.json"), `${JSON.stringify(index, null, 2)}\n`);
+
+  // How often each item turns up in the whole corpus, which the score weighs
+  // items by. See src/lib/stats/text-share.ts.
+  await writeFile(join(OUTPUT_DIR, "text-share.json"), JSON.stringify(countUses(written)));
 
   console.log(`done: ${String(kept.length)} sentences in ${String(bands.length)} bands`);
 }

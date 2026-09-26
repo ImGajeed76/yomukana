@@ -4,8 +4,10 @@ export type { CharacterStat, Totals } from "./summary";
 export { carryForward, dailyLatencies } from "./series";
 export type { DailyPoint } from "./series";
 
-export { dailyScores, scoreOf } from "./score";
+export { dailyScores, readingShareOf, scoreOf } from "./score";
 export type { ScoredAttempt } from "./score";
+export { loadTextShare } from "./text-share";
+export type { TextShare } from "./text-share";
 
 export { dayLabel, timeAgo, timeUntil } from "./format";
 
