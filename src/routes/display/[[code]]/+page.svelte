@@ -49,6 +49,8 @@
   let isOffline = $state(false);
   /** Places each reader climbed in the last refresh, to show beside their name until the next. */
   let climbs = $state.raw(new Map<string, number>());
+  /** Points each reader gained in the last refresh, beside their score until the next. */
+  let gains = $state.raw(new Map<string, number>());
   /** Readers whose score went up in the last refresh, lit up for a moment. */
   let raised = $state.raw(new Set<string>());
   /** The clock the offline note is worked out from, ticked rather than read on every render. */
@@ -85,15 +87,17 @@
     if (board !== null) {
       const before = ranksOf(board.members);
       const nextClimbs: [string, number][] = [];
-      const nextRaised: string[] = [];
+      const nextGains: [string, number][] = [];
       for (const [username, entry] of ranksOf(next.members)) {
         const old = before.get(username);
         if (old === undefined) continue;
         if (entry.rank < old.rank) nextClimbs.push([username, old.rank - entry.rank]);
-        if (entry.score > old.score) nextRaised.push(username);
+        const gain = Math.round(entry.score) - Math.round(old.score);
+        if (gain > 0) nextGains.push([username, gain]);
       }
       climbs = new Map(nextClimbs);
-      raised = new Set(nextRaised);
+      gains = new Map(nextGains);
+      raised = new Set(gains.keys());
       setTimeout(() => {
         raised = new Set();
       }, RAISED_MS);
@@ -282,12 +286,20 @@
                 >
               {/if}
               {#if climbs.has(entry.username)}
-                <span class="display-meta shrink-0 font-medium text-primary"
+                <span class="display-meta shrink-0 font-medium text-gain"
                   >▲{climbs.get(entry.username)}</span
                 >
               {/if}
             </span>
-            <span class="shrink-0 font-semibold tabular-nums">{Math.round(entry.score)}</span>
+            <!-- What the score gained since the last update, so a climb has a reason on screen. -->
+            <span class="flex shrink-0 items-baseline gap-[0.5em]">
+              {#if gains.has(entry.username)}
+                <span class="display-meta font-medium text-gain tabular-nums"
+                  >+{gains.get(entry.username)}</span
+                >
+              {/if}
+              <span class="font-semibold tabular-nums">{Math.round(entry.score)}</span>
+            </span>
           </li>
         {/each}
       </ol>
@@ -320,6 +332,7 @@
 
   /* Room on the right for the scroll track, so it never sits on a score. */
   .display-rows {
+    gap: calc(var(--line) * 0.15);
     padding: 0 calc(4vw + var(--line)) 4vh 4vw;
   }
 

@@ -43,6 +43,8 @@
   --qr-dark: oklch(0.15 0 0);
   --qr-light: oklch(0.99 0 0);
   --primary-foreground: oklch(0.979 0.021 166.113);
+  /* A gain, like "+12" or a climb: the primary green, which reads well on light. */
+  --gain: var(--primary);
   --secondary: oklch(0.967 0.001 286.375);
   --secondary-foreground: oklch(0.21 0.006 285.885);
   --muted: oklch(0.96 0.002 17.2);
@@ -84,6 +86,8 @@
   --profile-amber: oklch(0.5 0.11 65);
   --profile-slate: oklch(0.42 0.025 250);
   --primary-foreground: oklch(0.979 0.021 166.113);
+  /* A gain, like "+12" or a climb, read from across a room on a dark screen. */
+  --gain: oklch(0.8 0.14 164);
   --secondary: oklch(0.274 0.006 286.033);
   --secondary-foreground: oklch(0.985 0 0);
   --muted: oklch(0.268 0.011 36.5);
@@ -116,6 +120,7 @@
   --color-profile-rose: var(--profile-rose);
   --color-profile-amber: var(--profile-amber);
   --color-profile-slate: var(--profile-slate);
+  --color-gain: var(--gain);
   --color-profile-foreground: var(--profile-foreground);
   --color-qr-dark: var(--qr-dark);
   --color-qr-light: var(--qr-light);
