@@ -13,6 +13,8 @@
   import { scoreOf } from "$lib/stats";
   import {
     ensureProfile,
+    lastShownProfile,
+    rememberProfile,
     updateProfile,
     type Profile,
     type ProfileChanges,
@@ -24,6 +26,8 @@
   const progress = new Progress();
 
   let isLoaded = $state(false);
+  /** Whether the server could not be reached, which matters only when nothing was kept either. */
+  let hasFailed = $state(false);
   let account = $state<string | null>(null);
   let profile = $state.raw<Profile | null>(null);
   let score = $state(0);
@@ -57,16 +61,40 @@
     void (async () => {
       score = scoreOf(await progress.load(), new Date());
       account = (await progress.syncState()).account;
-      if (account !== null) {
-        // Synced first, so the card shows the score the server has just been sent.
-        await sync(progress);
-        score = scoreOf(progress.store, new Date());
-        profile = await ensureProfile();
-        displayName = profile?.displayName ?? "";
+      if (account === null) {
+        isLoaded = true;
+        return;
       }
+      // The profile as it was last time, at once. Then the server's copy and a
+      // sync, side by side: the card's score is worked out on this device, so
+      // nothing here has to wait for the sync to finish.
+      const kept = await lastShownProfile(progress);
+      if (kept !== null) show(kept);
       isLoaded = true;
+      void sync(progress).then(() => {
+        score = scoreOf(progress.store, new Date());
+      });
+      const fresh = await ensureProfile();
+      hasFailed = fresh === null;
+      if (fresh !== null) await keep(fresh);
     })();
   });
+
+  /**
+   * Shows a profile. The display name field follows it only while the reader
+   * has not started editing it, so an answer from the server arriving late
+   * does not wipe what they typed.
+   */
+  function show(next: Profile): void {
+    if (displayName === (profile?.displayName ?? "")) displayName = next.displayName ?? "";
+    profile = next;
+  }
+
+  /** Shows a profile the server just sent, and remembers it for next time. */
+  async function keep(next: Profile): Promise<void> {
+    show(next);
+    await rememberProfile(progress, next);
+  }
 
   /** Where the profile is, on whichever address the reader has open. */
   let link = $derived(profile === null ? "" : `${location.origin}/@${profile.username}`);
@@ -82,8 +110,8 @@
       return;
     }
     nameProblem = null;
-    profile = result.profile;
     displayName = result.profile.displayName ?? "";
+    await keep(result.profile);
   }
 
   /** Saves a colour the moment it is picked. Shown at once, put back if the server says no. */
@@ -98,7 +126,7 @@
       return;
     }
     choiceProblem = null;
-    profile = result.profile;
+    await keep(result.profile);
   }
 
   async function copyLink(): Promise<void> {
@@ -125,7 +153,11 @@
   </section>
 {:else if profile === null}
   <section class="rounded-lg border border-border bg-card p-6">
-    <p class="text-sm text-destructive" role="alert">{m.settings_profile_error_load()}</p>
+    {#if hasFailed}
+      <p class="text-sm text-destructive" role="alert">{m.settings_profile_error_load()}</p>
+    {:else}
+      <p class="text-sm text-muted-foreground" role="status">{m.settings_profile_loading()}</p>
+    {/if}
   </section>
 {:else}
   <div class="flex flex-col gap-6">
@@ -260,7 +292,7 @@
       bind:open={isRenaming}
       current={profile.username}
       onSaved={(renamed: string) => {
-        if (profile !== null) profile = { ...profile, username: renamed };
+        if (profile !== null) void keep({ ...profile, username: renamed });
       }}
     />
   </div>

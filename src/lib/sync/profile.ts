@@ -3,7 +3,8 @@
 // every name before it is stored. See functions/api/index.ts.
 
 import { callApi, callApiSignedOut } from "./api";
-import type { CardColor } from "./profile-rules";
+import type { Progress } from "../db";
+import { isCardColor, type CardColor } from "./profile-rules";
 
 export interface Profile {
   readonly username: string;
@@ -70,4 +71,31 @@ export function viewProfile(username: string): Promise<ProfileView | "missing" |
 /** A profile, asked for by someone who is not signed in. See viewProfile. */
 export function viewProfileSignedOut(username: string): Promise<ProfileView | "missing" | null> {
   return callApiSignedOut(`/u/${encodeURIComponent(username)}`).then(viewOf);
+}
+
+/** Where the reader's own profile is remembered between visits. See SyncRecord.shown. */
+const SHOWN_PROFILE = "profile";
+
+function isProfile(value: unknown): value is Profile {
+  if (typeof value !== "object" || value === null) return false;
+  const profile = value as Record<string, unknown>;
+  return (
+    typeof profile.username === "string" &&
+    typeof profile.score === "number" &&
+    isCardColor(profile.cardColor)
+  );
+}
+
+/**
+ * The reader's profile as it was last loaded on this device, to draw at once
+ * while the server is asked. Null the first time, or if what was kept is not
+ * a profile any more.
+ */
+export async function lastShownProfile(progress: Progress): Promise<Profile | null> {
+  const value = await progress.lastShown(SHOWN_PROFILE);
+  return isProfile(value) ? value : null;
+}
+
+export function rememberProfile(progress: Progress, profile: Profile): Promise<void> {
+  return progress.saveShown(SHOWN_PROFILE, profile);
 }

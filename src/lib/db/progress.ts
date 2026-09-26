@@ -194,6 +194,24 @@ export class Progress {
     await this.#db.put("meta", record, SYNC_KEY);
   }
 
+  /** What a page last showed from the server under `key`. See SyncRecord.shown. */
+  async lastShown(key: string): Promise<unknown> {
+    return (await this.syncState()).shown?.[key];
+  }
+
+  /** Remembers what a page showed from the server, for the signed-in account only. */
+  async saveShown(key: string, value: unknown): Promise<void> {
+    if (this.#db === null) return;
+    // Read and written in one transaction, so a sync finishing meanwhile does
+    // not have its progress marks overwritten with the ones from before it.
+    const transaction = this.#db.transaction("meta", "readwrite");
+    const state = (await transaction.store.get(SYNC_KEY)) ?? NEVER_SYNCED;
+    if (state.account !== null) {
+      await transaction.store.put({ ...state, shown: { ...state.shown, [key]: value } }, SYNC_KEY);
+    }
+    await transaction.done;
+  }
+
   /** Everything reviewed on this device after `after`, in epoch milliseconds. */
   async itemsReviewedAfter(after: number): Promise<ItemState[]> {
     if (this.#db === null) return [];

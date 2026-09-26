@@ -130,7 +130,7 @@ function* pages<T>(rows: readonly T[]): Generator<T[]> {
     yield rows.slice(from, from + PAGE_SIZE);
 }
 
-async function push(client: SyncClient, progress: Progress, after: number): Promise<void> {
+async function pushItems(client: SyncClient, progress: Progress, after: number): Promise<void> {
   const items = await progress.itemsReviewedAfter(after);
   for (const page of pages(items)) {
     const rows = page.map((state) => ({
@@ -145,7 +145,9 @@ async function push(client: SyncClient, progress: Progress, after: number): Prom
       await client.from("items").upsert(rows, { onConflict: "user_id,item_id" }).select("item_id"),
     );
   }
+}
 
+async function pushAttempts(client: SyncClient, progress: Progress, after: number): Promise<void> {
   const attempts = await progress.attemptsFinishedAfter(after);
   for (const page of pages(attempts)) {
     const rows = page.map((record) => ({
@@ -160,23 +162,26 @@ async function push(client: SyncClient, progress: Progress, after: number): Prom
         .select("attempt_id"),
     );
   }
+}
 
+async function pushReader(client: SyncClient, progress: Progress): Promise<void> {
   must(
     await client
       .from("readers")
       .upsert({ model: progress.store.reader }, { onConflict: "user_id" })
       .select("user_id"),
   );
+}
 
+async function pushSession(client: SyncClient, progress: Progress): Promise<void> {
   const session = await progress.session();
-  if (session !== null) {
-    must(
-      await client
-        .from("sessions")
-        .upsert({ record: session }, { onConflict: "user_id" })
-        .select("user_id"),
-    );
-  }
+  if (session === null) return;
+  must(
+    await client
+      .from("sessions")
+      .upsert({ record: session }, { onConflict: "user_id" })
+      .select("user_id"),
+  );
 }
 
 /**
@@ -220,9 +225,17 @@ export async function sync(progress: Progress): Promise<SyncOutcome> {
       RULES,
     );
 
-    await push(client, progress, state.pushedUpTo);
-    // Last, so the score friends see is worked out from everything just merged.
-    await publishScore(client, scoreOf(progress.store, new Date()));
+    // All at once: none of them depends on another, and each is a round trip
+    // to Frankfurt, so one after the other they added up to seconds. The
+    // score is worked out after the merge, so friends see everything just
+    // pulled in too.
+    await Promise.all([
+      pushItems(client, progress, state.pushedUpTo),
+      pushAttempts(client, progress, state.pushedUpTo),
+      pushReader(client, progress),
+      pushSession(client, progress),
+      publishScore(client, scoreOf(progress.store, new Date())),
+    ]);
 
     // The reader may have signed out or deleted everything while this ran.
     // Writing the old record back would sign them in again.

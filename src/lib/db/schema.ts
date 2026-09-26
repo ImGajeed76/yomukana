@@ -79,6 +79,17 @@ export interface SyncRecord {
   readonly pulledUpTo: Readonly<Record<string, string>>;
   /** The newest local review or attempt already pushed, in epoch milliseconds. */
   readonly pushedUpTo: number;
+  /**
+   * What pages last showed from the server, by page, so they can draw it at
+   * once next time and correct it when the server answers. The server is a
+   * round trip to Frankfurt away, and waiting for it on every visit is what
+   * made the boards feel slow.
+   *
+   * Kept in this record so it belongs to the account: signing out, or in as
+   * someone else, starts from NEVER_SYNCED and drops it. Its shape is the
+   * sync code's business, not storage's.
+   */
+  readonly shown?: Readonly<Record<string, unknown>>;
 }
 
 /** The single key the sync record is stored under. */

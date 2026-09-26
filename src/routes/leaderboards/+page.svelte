@@ -11,7 +11,7 @@
   let score = $state(0);
   /** The email this device syncs as, or null, which decides what the board shows. */
   let account = $state<string | null>(null);
-  /** Whether this page's sync has finished, so the board reads the score it just sent. */
+  /** Whether this page's sync has finished. The board loads without waiting for it. */
   let isSynced = $state(false);
 
   /** A made-up board in dev with `?demo`, for looking at it with people on it. */
@@ -26,8 +26,6 @@
       }
       score = scoreOf(await progress.load(), new Date());
       account = (await progress.syncState()).account;
-      // Synced before the board loads, so the reader's own line is the score
-      // they have now and the board reads the one just sent.
       if ((await sync(progress)) === "synced") score = scoreOf(progress.store, new Date());
       isSynced = true;
     })();
@@ -43,6 +41,6 @@
   </div>
 
   <div class="w-full max-w-[672px]">
-    <FollowingBoard {account} {isSynced} ownScore={score} {demo} />
+    <FollowingBoard {account} {progress} {isSynced} ownScore={score} {demo} />
   </div>
 </main>

@@ -86,12 +86,21 @@ app.post("/profile/ensure", async (c) => {
   for (let attempt = 0; attempt < NAME_ATTEMPTS; attempt++) {
     // Only the name clashing is expected and retried. Anything else propagates.
     try {
+      // A page and a sync can both ask on a first sign-in, at the same moment.
+      // The one that loses finds the profile the other just made, rather than
+      // mistaking the clash on the reader for a clash on the name.
       const created = await pool.query<ProfileRow>(
-        "insert into profiles (user_id, username) values ($1, $2) returning *",
+        `insert into profiles (user_id, username) values ($1, $2)
+         on conflict (user_id) do nothing returning *`,
         [userId, randomUsername()],
       );
       const row = created.rows[0];
       if (row !== undefined) return c.json(profileOf(row), 201);
+      const made = await pool.query<ProfileRow>("select * from profiles where user_id = $1", [
+        userId,
+      ]);
+      const other = made.rows[0];
+      if (other !== undefined) return c.json(profileOf(other));
     } catch (error) {
       if (!isUniqueViolation(error)) throw error;
     }

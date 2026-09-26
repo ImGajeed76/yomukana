@@ -5,6 +5,7 @@
 // found only by typing their exact name. There is no list of everyone. See
 // drizzle/schema.ts and drizzle/migrations/0003_friend_lookup.sql.
 
+import type { Progress } from "../db";
 import type { BoardEntry } from "./board";
 import { connect, type SyncClient } from "./client";
 import { ensureProfile } from "./profile";
@@ -123,4 +124,39 @@ export async function removeFriendByName(name: string): Promise<boolean> {
     console.warn("could not remove a friend", error);
     return false;
   }
+}
+
+/** Where the board is remembered between visits. See SyncRecord.shown. */
+const SHOWN_BOARD = "board";
+
+function isBoard(value: unknown): value is BoardEntry[] {
+  return (
+    Array.isArray(value) &&
+    value.every(
+      (entry: unknown) =>
+        typeof entry === "object" &&
+        entry !== null &&
+        "userId" in entry &&
+        typeof entry.userId === "string" &&
+        "username" in entry &&
+        typeof entry.username === "string" &&
+        "score" in entry &&
+        typeof entry.score === "number",
+    )
+  );
+}
+
+/**
+ * The board as it was last loaded on this device, to draw at once while the
+ * server is asked. Null the first time, or if what was kept is not a board.
+ */
+export async function lastShownBoard(progress: Progress): Promise<BoardEntry[] | null> {
+  const value = await progress.lastShown(SHOWN_BOARD);
+  if (!isBoard(value)) return null;
+  // A display name missing from what was kept reads as none.
+  return value.map((entry) => ({ ...entry, displayName: entry.displayName ?? null }));
+}
+
+export function rememberBoard(progress: Progress, board: readonly BoardEntry[]): Promise<void> {
+  return progress.saveShown(SHOWN_BOARD, board);
 }

@@ -144,8 +144,6 @@ export const profiles = pgTable(
     // One of a fixed palette, named rather than a colour value, so each name
     // can have its own shade in light and dark mode.
     cardColor: text("card_color").notNull().default("green"),
-    // Whether anyone may see this profile at /@username, and later on the
-    // global board. Off until the reader turns it on. See CLAUDE.md 1.7.
     score: doublePrecision("score").notNull().default(0),
     scoredAt: timestamp("scored_at", { withTimezone: true }),
     updatedAt: changedAt(),

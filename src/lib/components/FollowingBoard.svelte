@@ -7,12 +7,26 @@
   import { m } from "$lib/paraglide/messages";
   import { timeAgo } from "$lib/stats";
   import { nameOf, rankBoard, standingOf, type BoardEntry, type Standing } from "$lib/sync/board";
-  import { addFriend, loadBoard, removeFriend, type FriendProblem } from "$lib/sync/friends";
+  import type { Progress } from "$lib/db";
+  import {
+    addFriend,
+    lastShownBoard,
+    loadBoard,
+    rememberBoard,
+    removeFriend,
+    type FriendProblem,
+  } from "$lib/sync/friends";
 
   interface Props {
     /** The email this device syncs as, or null when signed out. */
     account: string | null;
-    /** Whether the page's own sync has finished, so the board shows the score just sent. */
+    /** The reader's progress, where the board is remembered between visits. */
+    progress: Progress;
+    /**
+     * Whether the page's own sync has finished. The board does not wait for
+     * it, but a reader signing in for the first time has no line on it until
+     * sync has made their profile.
+     */
     isSynced: boolean;
     /** The reader's score right now, which is newer than the one on the server. */
     ownScore: number;
@@ -20,7 +34,7 @@
     demo?: readonly BoardEntry[] | null;
   }
 
-  let { account, isSynced, ownScore, demo = null }: Props = $props();
+  let { account, progress, isSynced, ownScore, demo = null }: Props = $props();
 
   // Raw: replaced whole on every load, never edited in place. See CLAUDE.md 1.8.
   let loaded = $state.raw<readonly BoardEntry[] | null>(null);
@@ -112,11 +126,32 @@
   async function refresh(): Promise<void> {
     const board = await loadBoard();
     hasFailed = board === null;
-    if (board !== null) loaded = board;
+    if (board === null) return;
+    loaded = board;
+    await rememberBoard(progress, board);
   }
 
+  // The board as it was last time, drawn at once, then asked for again. The
+  // reader's own line uses their live score either way, so only the others
+  // can be a little behind, and only until the server answers.
   $effect(() => {
-    if (demo !== null || account === null || !isSynced) return;
+    if (demo !== null || account === null) return;
+    void (async () => {
+      const kept = await lastShownBoard(progress);
+      if (loaded === null && kept !== null) loaded = kept;
+      await refresh();
+    })();
+  });
+
+  /** Whether the board was asked for again once sync had made the reader's profile. */
+  let hasRefreshedAfterSync = false;
+
+  // Only on a first sign-in: the reader's own line is missing until sync has
+  // made their profile. Asked for once, so a failure cannot loop.
+  $effect(() => {
+    if (!isSynced || hasRefreshedAfterSync || loaded === null) return;
+    if (loaded.some((entry) => entry.isYou)) return;
+    hasRefreshedAfterSync = true;
     void refresh();
   });
 
