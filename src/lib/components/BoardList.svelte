@@ -37,8 +37,8 @@
   // The list takes the height the page has left in the window, so the page
   // itself never scrolls. Measured rather than worked out from the heights of
   // the nav, heading and footer, which change with the language and the
-  // screen. Runs on load, on resize and when the board changes, never while
-  // typing.
+  // screen. Runs on load, on resize, when the page changes height and when
+  // the board changes, never while typing.
   $effect(() => {
     const area = listArea;
     if (area === null) return;
@@ -49,10 +49,21 @@
       area.style.height = "";
       const overflow = document.documentElement.scrollHeight - window.innerHeight;
       listHeight = overflow > 0 ? Math.max(MIN_LIST_HEIGHT, area.offsetHeight - overflow) : null;
+      // Written here as well as through the style attribute: when the height
+      // comes out the same as last time, the state does not change, Svelte
+      // writes nothing, and the height cleared above would stay cleared,
+      // letting the list grow the page after all.
+      area.style.height = listHeight === null ? "" : `${String(listHeight)}px`;
     };
     fit();
+    // The page also changes height without the window changing: a message
+    // line appears, a font arrives. Measured again then too. Stable, because
+    // a second fit lands on the same height and changes nothing.
+    const observer = new ResizeObserver(fit);
+    observer.observe(document.body);
     window.addEventListener("resize", fit);
     return () => {
+      observer.disconnect();
       window.removeEventListener("resize", fit);
     };
   });
