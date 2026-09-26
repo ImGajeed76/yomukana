@@ -13,11 +13,13 @@
 import { Hono } from "hono";
 import { groups } from "./groups";
 import { profiles } from "./profiles";
+import { scores } from "./scores";
 
 const app = new Hono();
 
 app.get("/", (c) => c.json({ ok: true }));
 app.route("/", profiles);
 app.route("/", groups);
+app.route("/", scores);
 
 export default app;

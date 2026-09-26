@@ -25,6 +25,7 @@ import {
   pgTable,
   primaryKey,
   text,
+  boolean,
   timestamp,
   uniqueIndex,
   uuid,
@@ -145,6 +146,9 @@ export const profiles = pgTable(
     // One of a fixed palette, named rather than a colour value, so each name
     // can have its own shade in light and dark mode.
     cardColor: text("card_color").notNull().default("green"),
+    // Whether they are on the global leaderboard, where anyone can see them.
+    // Off until they turn it on: it is the one place a name becomes findable.
+    isListed: boolean("is_listed").notNull().default(false),
     score: doublePrecision("score").notNull().default(0),
     scoredAt: timestamp("scored_at", { withTimezone: true }),
     updatedAt: changedAt(),
@@ -192,6 +196,24 @@ export const profiles = pgTable(
  * Each row belongs to the reader who added someone, and only they can see,
  * add or remove it. When either profile goes, the row goes with it.
  */
+/**
+ * Scores the API function accepted, with its own clock's time, kept for about
+ * two days. Each new score is checked against where the reader stood ten
+ * minutes, an hour and a day before, and this is where those come from. See
+ * functions/api/scores.ts. Closed to the Data API like the group tables.
+ */
+export const scoreSubmissions = pgTable(
+  "score_submissions",
+  {
+    userId: text("user_id")
+      .notNull()
+      .references(() => profiles.userId, { onDelete: "cascade" }),
+    score: doublePrecision("score").notNull(),
+    acceptedAt: timestamp("accepted_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [index("score_submissions_by_reader").on(table.userId, table.acceptedAt)],
+).enableRLS();
+
 export const friends = pgTable(
   "friends",
   {

@@ -3,6 +3,7 @@
   import { replaceState } from "$app/navigation";
   import { page } from "$app/state";
   import FollowingBoard from "$lib/components/FollowingBoard.svelte";
+  import GlobalBoard from "$lib/components/GlobalBoard.svelte";
   import CreateGroupDialog from "$lib/components/groups/CreateGroupDialog.svelte";
   import GroupBoard from "$lib/components/groups/GroupBoard.svelte";
   import { Button } from "$lib/components/ui/button";
@@ -16,6 +17,8 @@
 
   /** What `board` holds when the board on show is the people the reader follows. */
   const FOLLOWING = "following";
+  /** What `board` holds when the board on show is the global one. */
+  const GLOBAL = "global";
 
   let score = $state(0);
   /** The email this device syncs as, or null, which decides what the board shows. */
@@ -24,7 +27,7 @@
   let isSynced = $state(false);
   // Raw: replaced whole on every load, never edited in place. See CLAUDE.md 1.8.
   let groups = $state.raw<readonly GroupSummary[]>([]);
-  /** The board on show: FOLLOWING, or a group's id. */
+  /** The board on show: FOLLOWING, GLOBAL, or a group's id. */
   let board = $state(FOLLOWING);
   let isCreating = $state(false);
   /** A group just made, whose invite opens as soon as it loads. */
@@ -84,13 +87,13 @@
       the order they joined. A row that wraps rather than a menu, so every
       board is one tap away. See CLAUDE.md 12.7.
     -->
-    {#if account !== null}
+    {#if !isDemo}
       <div
         class="flex flex-wrap items-center gap-1"
         role="group"
         aria-label={m.leaderboards_groups_label_boards()}
       >
-        {#each [{ id: FOLLOWING, name: m.leaderboards_following_title() }, ...groups] as option (option.id)}
+        {#each [{ id: FOLLOWING, name: m.leaderboards_following_title() }, { id: GLOBAL, name: m.leaderboards_global_title() }, ...groups] as option (option.id)}
           <Button
             variant="ghost"
             size="sm"
@@ -105,21 +108,25 @@
             {option.name}
           </Button>
         {/each}
-        <Button
-          variant="ghost"
-          size="sm"
-          class="text-muted-foreground"
-          onclick={() => {
-            isCreating = true;
-          }}
-        >
-          <Plus class="size-4" />
-          {m.leaderboards_groups_create_title()}
-        </Button>
+        {#if account !== null}
+          <Button
+            variant="ghost"
+            size="sm"
+            class="text-muted-foreground"
+            onclick={() => {
+              isCreating = true;
+            }}
+          >
+            <Plus class="size-4" />
+            {m.leaderboards_groups_create_title()}
+          </Button>
+        {/if}
       </div>
     {/if}
 
-    {#if board === FOLLOWING || account === null}
+    {#if board === GLOBAL}
+      <GlobalBoard {progress} {account} ownScore={score} />
+    {:else if board === FOLLOWING || account === null}
       <FollowingBoard {account} {progress} {isSynced} ownScore={score} {demo} />
     {:else}
       <GroupBoard

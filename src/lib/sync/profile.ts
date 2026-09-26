@@ -10,6 +10,8 @@ export interface Profile {
   readonly username: string;
   readonly displayName: string | null;
   readonly cardColor: CardColor;
+  /** Whether they are on the global leaderboard. */
+  readonly isListed: boolean;
   readonly score: number;
   /** When the score was last sent, in epoch milliseconds. */
   readonly scoredAt: number | null;
@@ -21,7 +23,9 @@ export type ProfileView = Profile & { readonly isYou: boolean; readonly isFollow
 /** Why a change to the profile was not saved, in terms the reader can act on. */
 export type ProfileProblem = "invalid" | "offensive" | "taken" | "offline" | "unknown";
 
-export type ProfileChanges = Partial<Pick<Profile, "username" | "displayName" | "cardColor">>;
+export type ProfileChanges = Partial<
+  Pick<Profile, "username" | "displayName" | "cardColor" | "isListed">
+>;
 
 async function problemOf(response: Response): Promise<ProfileProblem> {
   const body: unknown = await response.json().catch(() => null);

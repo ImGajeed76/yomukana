@@ -17,6 +17,7 @@ export interface ProfileRow {
   username: string;
   display_name: string | null;
   card_color: CardColor;
+  is_listed: boolean;
   score: number;
   scored_at: Date | null;
 }
@@ -27,6 +28,7 @@ export function profileOf(row: ProfileRow): Record<string, unknown> {
     username: row.username,
     displayName: row.display_name,
     cardColor: row.card_color,
+    isListed: row.is_listed,
     score: row.score,
     scoredAt: row.scored_at === null ? null : row.scored_at.getTime(),
   };
@@ -73,7 +75,7 @@ profiles.post("/profile/ensure", async (c) => {
   return refuse(c, "taken");
 });
 
-/** Changes any of the caller's name, display name and card colour. */
+/** Changes any of the caller's name, display name, card colour and place on the global board. */
 profiles.patch("/profile", async (c) => {
   const userId = await readerOf(c.req.raw);
   if (userId === null) return refuse(c, "unauthorized");
@@ -116,6 +118,10 @@ profiles.patch("/profile", async (c) => {
   if ("cardColor" in changes) {
     if (!isCardColor(changes.cardColor)) return refuse(c, "invalid");
     add("card_color", changes.cardColor);
+  }
+  if ("isListed" in changes) {
+    if (typeof changes.isListed !== "boolean") return refuse(c, "invalid");
+    add("is_listed", changes.isListed);
   }
   if (set.length === 0) return refuse(c, "invalid");
 

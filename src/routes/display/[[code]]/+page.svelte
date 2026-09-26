@@ -12,6 +12,7 @@
   import { m } from "$lib/paraglide/messages";
   import { timeAgo } from "$lib/stats";
   import { nameOf, rankBoard, type RankedEntry } from "$lib/sync/board";
+  import { loadGlobalDisplayBoard } from "$lib/sync/global";
   import {
     boardOf,
     loadDisplayBoard,
@@ -38,6 +39,11 @@
     (location.hostname === "localhost" || location.hostname === "127.0.0.1");
 
   let code = $derived(page.params.code ?? "");
+  /**
+   * The code for the global board. Everyone on it chose to be public, so its
+   * screen needs no secret link: /display/global is the same for everyone.
+   */
+  const GLOBAL = "global";
   // Raw: replaced whole on every refresh. See CLAUDE.md 1.8.
   let board = $state.raw<DisplayBoard | null>(null);
   /** Why the first load failed. Later failures keep the board and say so quietly. */
@@ -116,7 +122,9 @@
     void (async () => {
       const load: Load = isDebug
         ? (await import("$lib/sync/display-simulator")).createDisplaySimulator()
-        : () => loadDisplayBoard(invite);
+        : invite === GLOBAL
+          ? () => loadGlobalDisplayBoard(m.leaderboards_global_title())
+          : () => loadDisplayBoard(invite);
       if (stopped.signal.aborted) return;
       void refresh(load);
       timer = setInterval(() => {

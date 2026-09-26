@@ -234,7 +234,7 @@ export async function sync(progress: Progress): Promise<SyncOutcome> {
       pushAttempts(client, progress, state.pushedUpTo),
       pushReader(client, progress),
       pushSession(client, progress),
-      publishScore(client, scoreOf(progress.store, new Date())),
+      publishScore(scoreOf(progress.store, new Date())),
     ]);
 
     // The reader may have signed out or deleted everything while this ran.

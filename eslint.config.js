@@ -108,6 +108,9 @@ export default ts.config(
   },
   {
     ignores: [
+      // Claude Code's own folder: settings, and git worktrees of this repo
+      // that background work happens in, which get linted where they live.
+      ".claude/",
       ".svelte-kit/",
       "build/",
       "node_modules/",

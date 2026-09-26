@@ -7,6 +7,7 @@
 
 import type { Progress } from "../db";
 import type { BoardEntry } from "./board";
+import { callApi } from "./api";
 import { connect, type SyncClient } from "./client";
 import { ensureProfile } from "./profile";
 import { normaliseUsername } from "./username";
@@ -25,26 +26,20 @@ async function currentUserId(client: SyncClient): Promise<string | null> {
  * Sends the reader's score, and makes their profile the first time.
  *
  * Called from sync, after everything else has gone up, so it runs as often as
- * sync does and never on the way to the next sentence.
+ * sync does and never on the way to the next sentence. The API function keeps
+ * it only if a real reader could have reached it by now (see
+ * functions/api/score-check.ts). A score it turns down is simply not shown to
+ * anyone yet. Nothing on this device changes, and the next sync tries again,
+ * with more time behind it.
  */
-export async function publishScore(client: SyncClient, score: number): Promise<void> {
-  const userId = await currentUserId(client);
-  if (userId === null) return;
-
-  const scoredAt = new Date().toISOString();
-  const updated = await client
-    .from("profiles")
-    .update({ score, scored_at: scoredAt })
-    .eq("user_id", userId)
-    .select("user_id");
-  if (updated.error !== null) throw new Error(updated.error.message);
-  if (updated.data.length > 0) return;
-
+export async function publishScore(score: number): Promise<void> {
+  const send = (): Promise<Response | null> =>
+    callApi("/score", { method: "POST", body: JSON.stringify({ score }) });
+  const response = await send();
   // No profile yet: this reader just signed in for the first time. The API
   // function makes one with a random name, which they can change in settings,
   // and the score goes onto it.
-  if ((await ensureProfile()) === null) return;
-  await client.from("profiles").update({ score, scored_at: scoredAt }).eq("user_id", userId);
+  if (response?.status === 404 && (await ensureProfile()) !== null) await send();
 }
 
 /**

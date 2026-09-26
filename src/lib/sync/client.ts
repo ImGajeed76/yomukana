@@ -58,17 +58,18 @@ interface Database {
       >;
       readers: Table<{ model: unknown }, { model: ReaderModel }>;
       sessions: Table<{ record: SessionRecord }, { record: SessionRecord }>;
-      // Everything but the score is written through the API function, which
-      // checks names first. The Data API may only touch the score.
+      // Written only through the API function, which checks names and
+      // scores first. The Data API may read, and delete the reader's own.
       profiles: Table<
         {
           username: string;
           display_name: string | null;
           card_color: string;
+          is_listed: boolean;
           score: number;
           scored_at: string | null;
         },
-        { score?: number; scored_at?: string }
+        Record<string, never>
       >;
       friends: Table<{ follower_id: string; followee_id: string }, { followee_id: string }>;
     };

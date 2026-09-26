@@ -9,6 +9,7 @@
   import { Spinner } from "$lib/components/ui/spinner";
   import { Input } from "$lib/components/ui/input";
   import { Label } from "$lib/components/ui/label";
+  import { Switch } from "$lib/components/ui/switch";
   import { Progress } from "$lib/db";
   import { m } from "$lib/paraglide/messages";
   import { scoreOf } from "$lib/stats";
@@ -35,7 +36,7 @@
   let displayName = $state("");
   let isSavingName = $state(false);
   let nameProblem = $state<ProfileProblem | null>(null);
-  /** What went wrong saving the colour, which saves the moment it is picked. */
+  /** What went wrong saving the colour or the global board choice, which save the moment they change. */
   let choiceProblem = $state<ProfileProblem | null>(null);
   let isRenaming = $state(false);
   let isCopied = $state(false);
@@ -109,7 +110,7 @@
     await keep(result.profile);
   }
 
-  /** Saves a colour the moment it is picked. Shown at once, put back if the server says no. */
+  /** Saves a colour or the global board choice at once. Shown at once, put back if the server says no. */
   async function saveChoice(changes: ProfileChanges): Promise<void> {
     if (profile === null) return;
     const before = profile;
@@ -243,6 +244,27 @@
           {/each}
         </div>
       </fieldset>
+
+      <!--
+        The one real privacy choice on the profile: on the global board a name
+        can be found by anyone. Off until the reader turns it on.
+      -->
+      <div class="flex items-start justify-between gap-4">
+        <div class="flex flex-col gap-1">
+          <Label for="is-listed">{m.settings_profile_label_listed()}</Label>
+          <p id="is-listed-hint" class="text-sm text-muted-foreground">
+            {m.settings_profile_description_listed()}
+          </p>
+        </div>
+        <Switch
+          id="is-listed"
+          aria-describedby="is-listed-hint"
+          checked={profile.isListed}
+          onCheckedChange={(checked: boolean) => {
+            void saveChoice({ isListed: checked });
+          }}
+        />
+      </div>
 
       {#if choiceProblem !== null}
         <StatusLine message={PROBLEM_MESSAGES[choiceProblem]()} isError={true} />

@@ -10,6 +10,7 @@ export type Problem =
   | "taken"
   | "limit"
   | "expired"
+  | "implausible"
   | "not-found";
 
 const STATUS = {
@@ -20,6 +21,7 @@ const STATUS = {
   taken: 409,
   limit: 409,
   expired: 410,
+  implausible: 422,
   "not-found": 404,
 } as const;
 

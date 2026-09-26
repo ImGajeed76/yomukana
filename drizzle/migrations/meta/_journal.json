@@ -71,6 +71,20 @@
       "when": 1790406088740,
       "tag": "0009_group_rules",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1790412072975,
+      "tag": "0010_bitter_scarecrow",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1790412073293,
+      "tag": "0011_scores_through_api",
+      "breakpoints": true
     }
   ]
 }
