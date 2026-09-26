@@ -9,29 +9,18 @@ export interface Profile {
   readonly username: string;
   readonly displayName: string | null;
   readonly cardColor: CardColor;
-  /** Whether anyone may see this profile at /@username. */
-  readonly isPublic: boolean;
   readonly score: number;
   /** When the score was last sent, in epoch milliseconds. */
   readonly scoredAt: number | null;
 }
 
-/** What a visitor to /@username may see. */
-export type ProfileView =
-  | (Profile & { readonly isVisible: true; readonly isYou: boolean; readonly isFollowed: boolean })
-  | {
-      readonly isVisible: false;
-      readonly username: string;
-      readonly isYou: boolean;
-      readonly isFollowed: boolean;
-    };
+/** A profile at /@username, and how the visitor stands to it. */
+export type ProfileView = Profile & { readonly isYou: boolean; readonly isFollowed: boolean };
 
 /** Why a change to the profile was not saved, in terms the reader can act on. */
 export type ProfileProblem = "invalid" | "offensive" | "taken" | "offline" | "unknown";
 
-export type ProfileChanges = Partial<
-  Pick<Profile, "username" | "displayName" | "cardColor" | "isPublic">
->;
+export type ProfileChanges = Partial<Pick<Profile, "username" | "displayName" | "cardColor">>;
 
 async function problemOf(response: Response): Promise<ProfileProblem> {
   const body: unknown = await response.json().catch(() => null);
@@ -70,15 +59,15 @@ async function viewOf(response: Response | null): Promise<ProfileView | "missing
 }
 
 /**
- * A profile as the signed-in reader may see it, which includes the private
- * profiles of people they follow. "missing" when nobody has that name, null
+ * A profile, asked for as the signed-in reader so it says whether they follow
+ * it. "missing" when nobody has that name, null
  * when the function could not be reached.
  */
 export function viewProfile(username: string): Promise<ProfileView | "missing" | null> {
   return callApi(`/u/${encodeURIComponent(username)}`).then(viewOf);
 }
 
-/** A profile as someone who is not signed in may see it. See viewProfile. */
+/** A profile, asked for by someone who is not signed in. See viewProfile. */
 export function viewProfileSignedOut(username: string): Promise<ProfileView | "missing" | null> {
   return callApiSignedOut(`/u/${encodeURIComponent(username)}`).then(viewOf);
 }

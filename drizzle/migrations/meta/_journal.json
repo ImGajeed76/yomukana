@@ -50,6 +50,13 @@
       "when": 1790402733533,
       "tag": "0006_profile_writes_through_api",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1790404595742,
+      "tag": "0007_clear_krista_starr",
+      "breakpoints": true
     }
   ]
 }

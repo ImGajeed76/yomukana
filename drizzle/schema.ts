@@ -17,7 +17,6 @@
 import { sql } from "drizzle-orm";
 import { authenticatedRole, authUid, crudPolicy } from "drizzle-orm/neon";
 import {
-  boolean,
   check,
   doublePrecision,
   index,
@@ -147,7 +146,6 @@ export const profiles = pgTable(
     cardColor: text("card_color").notNull().default("green"),
     // Whether anyone may see this profile at /@username, and later on the
     // global board. Off until the reader turns it on. See CLAUDE.md 1.7.
-    isPublic: boolean("is_public").notNull().default(false),
     score: doublePrecision("score").notNull().default(0),
     scoredAt: timestamp("scored_at", { withTimezone: true }),
     updatedAt: changedAt(),

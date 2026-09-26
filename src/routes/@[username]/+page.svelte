@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Lock, UserRoundX } from "@lucide/svelte";
+  import { UserRoundX } from "@lucide/svelte";
   import { page } from "$app/state";
   import ProfileCard from "$lib/components/profile/ProfileCard.svelte";
   import StatusLine from "$lib/components/StatusLine.svelte";
@@ -45,7 +45,6 @@
     if (view === null || typeof view === "string") return;
     isBusy = true;
     problem = await addFriend(view.username);
-    // Following can reveal a private card, so it is asked for again.
     if (problem === null) await load(view.username);
     isBusy = false;
   }
@@ -78,26 +77,12 @@
         </p>
       </div>
     {:else}
-      {#if view.isVisible}
-        <ProfileCard
-          username={view.username}
-          displayName={view.displayName}
-          cardColor={view.cardColor}
-          score={view.score}
-        />
-      {:else}
-        <!--
-          Private, and not someone the visitor follows. Still a page, so a
-          scanned code leads somewhere and following is one tap away.
-        -->
-        <div
-          class="flex flex-col items-center gap-2 rounded-lg border border-border bg-background px-6 py-12 text-center"
-        >
-          <Lock class="size-6 text-muted-foreground" />
-          <h1 class="text-lg leading-snug font-medium">@{view.username}</h1>
-          <p class="text-sm text-muted-foreground">{m.profile_view_private_description()}</p>
-        </div>
-      {/if}
+      <ProfileCard
+        username={view.username}
+        displayName={view.displayName}
+        cardColor={view.cardColor}
+        score={view.score}
+      />
 
       <div class="flex flex-wrap gap-2">
         {#if view.isYou}

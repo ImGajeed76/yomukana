@@ -32,7 +32,6 @@ interface ProfileRow {
   username: string;
   display_name: string | null;
   card_color: CardColor;
-  is_public: boolean;
   score: number;
   scored_at: Date | null;
 }
@@ -43,7 +42,6 @@ function profileOf(row: ProfileRow): Record<string, unknown> {
     username: row.username,
     displayName: row.display_name,
     cardColor: row.card_color,
-    isPublic: row.is_public,
     score: row.score,
     scoredAt: row.scored_at === null ? null : row.scored_at.getTime(),
   };
@@ -101,7 +99,7 @@ app.post("/profile/ensure", async (c) => {
   return refuse(c, "taken");
 });
 
-/** Changes any of the caller's name, display name, card colour and visibility. */
+/** Changes any of the caller's name, display name and card colour. */
 app.patch("/profile", async (c) => {
   const userId = await readerOf(c.req.raw);
   if (userId === null) return refuse(c, "unauthorized");
@@ -145,10 +143,6 @@ app.patch("/profile", async (c) => {
     if (!isCardColor(changes.cardColor)) return refuse(c, "invalid");
     add("card_color", changes.cardColor);
   }
-  if ("isPublic" in changes) {
-    if (typeof changes.isPublic !== "boolean") return refuse(c, "invalid");
-    add("is_public", changes.isPublic);
-  }
   if (set.length === 0) return refuse(c, "invalid");
 
   values.push(userId);
@@ -168,12 +162,13 @@ app.patch("/profile", async (c) => {
 });
 
 /**
- * A profile as the caller may see it, for /@username.
+ * A profile, for /@username. Anyone may see it, signed in or not.
  *
- * The whole card when the profile is public, is the caller's own, or belongs
- * to someone the caller follows. Otherwise only that it exists and is private,
- * so a scanned QR code still leads somewhere and still offers to follow.
- * Nobody signed in is needed for a public profile.
+ * There is no private setting on purpose. Following needs nobody's approval,
+ * so anyone who knows a name could follow and see the card anyway, and a
+ * switch that hid it from everyone else would promise a privacy it cannot
+ * keep. What keeps a reader out of view is that nobody can look up a name
+ * they were not given.
  */
 app.get("/u/:username", async (c) => {
   const viewer = await readerOf(c.req.raw);
@@ -186,13 +181,7 @@ app.get("/u/:username", async (c) => {
   );
   const row = result.rows[0];
   if (row === undefined) return refuse(c, "not-found");
-
-  const isYou = viewer === row.user_id;
-  const relation = { isYou, isFollowed: row.is_followed };
-  if (row.is_public || isYou || row.is_followed) {
-    return c.json({ ...profileOf(row), ...relation, isVisible: true });
-  }
-  return c.json({ username: row.username, isPublic: false, ...relation, isVisible: false });
+  return c.json({ ...profileOf(row), isYou: viewer === row.user_id, isFollowed: row.is_followed });
 });
 
 export default app;

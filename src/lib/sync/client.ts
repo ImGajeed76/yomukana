@@ -65,7 +65,6 @@ interface Database {
           username: string;
           display_name: string | null;
           card_color: string;
-          is_public: boolean;
           score: number;
           scored_at: string | null;
         },
