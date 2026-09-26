@@ -149,7 +149,7 @@
   "settings_profile_error_invalid": "Das geht nicht. Nimm höchstens 32 Zeichen.",
   "settings_profile_error_load": "Profil konnte nicht geladen werden. Prüf deine Verbindung.",
   "settings_profile_error_offensive": "Dieser Name ist nicht erlaubt. Nimm einen anderen.",
-  "settings_profile_hint_display_name": "Wird statt deines Benutzernamens gezeigt. Bis zu 32 Zeichen, in jeder Schrift.",
+  "settings_profile_hint_display_name": "Wird statt deines Benutzernamens gezeigt. Bis zu 32 Zeichen.",
   "settings_profile_label_color": "Kartenfarbe",
   "settings_profile_label_display_name": "Anzeigename",
   "settings_profile_label_qr": "QR-Code mit dem Link zu deinem Profil",

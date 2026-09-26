@@ -1,8 +1,12 @@
 // Whether a name is one people should not have to see on a leaderboard.
 //
 // Usernames and display names are shown to other readers, and on the global
-// board to strangers. This refuses the obvious offensive ones, in every
-// language naughty-words lists, so there is little left to moderate by hand.
+// board to strangers. This refuses the obvious offensive ones, so there is
+// little left to moderate by hand. Two lists, because neither covers both:
+// obscenity knows English and the ways people disguise it (fack, fvck,
+// fuuuck, a word hidden inside a longer one), and naughty-words knows 28
+// languages but only as plain spellings.
+//
 // It will never be perfect and does not try: a determined reader can always
 // find a spelling no list has. It stops the casual and the accidental.
 //
@@ -10,6 +14,7 @@
 // every reader and nobody can skip the check by talking to the database.
 
 import naughtyWords from "naughty-words";
+import { englishDataset, englishRecommendedTransformers, RegExpMatcher } from "obscenity";
 
 /** Digits and symbols people use in place of letters to slip a word past a filter. */
 const LOOKALIKES: ReadonlyMap<string, string> = new Map([
@@ -89,10 +94,47 @@ function buildList(): BlockedWords {
 
 const BLOCKED = buildList();
 
-/** Whether a username or display name contains something on the list. */
-export function isOffensiveName(name: string): boolean {
+const englishTerms = englishDataset.build();
+
+// Strict on purpose. A name that is refused by mistake, "Fukuoka" or
+// "therapist", costs the reader one changed letter. A name that slips
+// through is on a board in front of everyone. So no list of exceptions
+// beyond the ones obscenity ships with.
+const english = new RegExpMatcher({ ...englishTerms, ...englishRecommendedTransformers });
+
+function isAsciiLetterOrDigit(character: string): boolean {
+  return (character >= "a" && character <= "z") || (character >= "0" && character <= "9");
+}
+
+/**
+ * A name spelled out one letter at a time, "f.u.c.k" or "A S S", put back
+ * together. Anything else comes back as it was: joining the words of an
+ * ordinary name would make new words across the gaps, "Hans Hit" into
+ * "hanshit".
+ */
+function spelledOut(name: string): string {
+  const letters: string[] = [];
+  let run = "";
+  for (const character of name.toLowerCase()) {
+    if (!isAsciiLetterOrDigit(character)) {
+      if (run !== "") letters.push(run);
+      run = "";
+    } else run += character;
+  }
+  if (run !== "") letters.push(run);
+  const isSpelledOut = letters.length >= 3 && letters.every((piece) => piece.length === 1);
+  return isSpelledOut ? letters.join("") : name;
+}
+
+function isOnList(name: string): boolean {
   const words = wordsOf(normalise(name));
   if (words.some((word) => BLOCKED.whole.has(word))) return true;
   const compact = words.join("");
   return BLOCKED.anywhere.some((entry) => compact.includes(entry));
+}
+
+/** Whether a username or display name contains something on either list. */
+export function isOffensiveName(name: string): boolean {
+  const folded = name.normalize("NFKC");
+  return isOnList(folded) || english.hasMatch(folded) || english.hasMatch(spelledOut(folded));
 }

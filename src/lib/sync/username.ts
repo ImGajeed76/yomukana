@@ -64,7 +64,9 @@ const ANIMALS = [
   "kuma",
   "saru",
   "shika",
-  "fukurou",
+  // An owl. Not fukurou, the everyday word, which the name filter refuses
+  // for starting with "fuk". See functions/api/names.ts.
+  "mimizuku",
   "koi",
   "tsuru",
   "kaeru",
@@ -80,7 +82,7 @@ const randomPick: Pick = (count) => Math.floor(Math.random() * count);
 
 /**
  * A fresh name like `quiet-tanuki-42`. Always valid: the longest one it can
- * make is `curious-fukurou-99`, which is within the limit.
+ * make is `curious-mimizuku-99`, which is within the limit.
  */
 export function randomUsername(pick: Pick = randomPick): string {
   const adjective = ADJECTIVES[pick(ADJECTIVES.length)] ?? ADJECTIVES[0];

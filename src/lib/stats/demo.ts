@@ -80,7 +80,7 @@ export function demoBoard(ownScore: number, now: Date): BoardEntry[] {
     },
     {
       userId: "d2",
-      username: "calm-fukurou-18",
+      username: "calm-mimizuku-18",
       displayName: "Aiko",
       score: ownScore + 23,
       scoredAt: at(30),
