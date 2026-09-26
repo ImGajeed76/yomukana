@@ -25,6 +25,28 @@ export function bucketFor(state: ItemState | undefined, now: Date): Bucket {
   return recallProbability(state, now) < WEAK_RECALL ? "weak" : "known";
 }
 
+/** An item's chance of recall right now, by id. */
+type RecallOf = (state: ItemState) => number;
+
+/**
+ * Recall worked out once per item for one pick, however many sentences share
+ * the item. A pick scores thousands of sentences that share a few thousand
+ * items between them, and working recall out again for each sentence was most
+ * of what a pick cost: on a phone, between sentences, that is time the reader
+ * waits for.
+ */
+function recallFor(now: Date): RecallOf {
+  const known = new Map<string, number>();
+  return (state) => {
+    let recall = known.get(state.id);
+    if (recall === undefined) {
+      recall = recallProbability(state, now);
+      known.set(state.id, recall);
+    }
+    return recall;
+  };
+}
+
 export interface SelectionOptions {
   /**
    * Source of randomness for choosing between equally good sentences.
@@ -115,6 +137,16 @@ export function scoreSentence(
   now: Date,
   options: SelectionOptions = DEFAULT_OPTIONS,
 ): SentenceScore {
+  return scoreWith(candidate, store, now, options, recallFor(now));
+}
+
+function scoreWith(
+  candidate: Candidate,
+  store: ItemStore,
+  now: Date,
+  options: SelectionOptions,
+  recallOf: RecallOf,
+): SentenceScore {
   let newCount = 0;
   let weakCount = 0;
   let knownCount = 0;
@@ -122,18 +154,16 @@ export function scoreSentence(
 
   for (const item of candidate.items) {
     const state = store.items.get(item.id);
-    const bucket = bucketFor(state, now);
-
-    if (bucket === "new") {
+    // The same buckets as bucketFor, with recall looked up once per pick.
+    if (state === undefined || state.reviews === 0) {
       newCount += 1;
       urgency += NEW_ITEM_WEIGHT;
       continue;
     }
-    if (state === undefined) continue;
-
-    if (bucket === "weak") {
+    const recall = recallOf(state);
+    if (recall < WEAK_RECALL) {
       weakCount += 1;
-      urgency += 1 - recallProbability(state, now);
+      urgency += 1 - recall;
     } else {
       knownCount += 1;
     }
@@ -175,9 +205,10 @@ export function pickSentence(
 ): Candidate | null {
   let best: Candidate[] = [];
   let bestScore = Number.NEGATIVE_INFINITY;
+  const recallOf = recallFor(now);
 
   for (const candidate of candidates) {
-    const { score } = scoreSentence(candidate, store, now, options);
+    const { score } = scoreWith(candidate, store, now, options, recallOf);
     if (score > bestScore + AS_GOOD_AS_BEST) {
       bestScore = score;
       best = [candidate];
