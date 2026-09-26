@@ -3,6 +3,7 @@
   import BoardList from "$lib/components/BoardList.svelte";
   import StatusLine from "$lib/components/StatusLine.svelte";
   import { Button } from "$lib/components/ui/button";
+  import { Spinner } from "$lib/components/ui/spinner";
   import { Input } from "$lib/components/ui/input";
   import { m } from "$lib/paraglide/messages";
   import { timeAgo } from "$lib/stats";
@@ -221,6 +222,7 @@
           disabled={isAdding || demo !== null}
         />
         <Button type="submit" variant="outline" disabled={isAdding || demo !== null}>
+          {#if isAdding}<Spinner aria-label={m.common_status_loading()} />{/if}
           {m.leaderboards_following_button_add()}
         </Button>
       </div>

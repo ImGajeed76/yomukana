@@ -3,6 +3,7 @@
   import QrCode from "$lib/components/profile/QrCode.svelte";
   import StatusLine from "$lib/components/StatusLine.svelte";
   import { Button } from "$lib/components/ui/button";
+  import { Spinner } from "$lib/components/ui/spinner";
   import * as Dialog from "$lib/components/ui/dialog";
   import * as Popover from "$lib/components/ui/popover";
   import { m } from "$lib/paraglide/messages";
@@ -34,7 +35,12 @@
   // eslint-disable-next-line @typescript-eslint/no-useless-default-assignment
   let { open = $bindable(), groupId, groupName, invite, onChange }: Props = $props();
 
-  let isBusy = $state(false);
+  /**
+   * The change on its way to the server, if any. Each shows its wait where it
+   * lands: a new or stopped link over the code, a new end date on the date.
+   */
+  let pending = $state<"end" | "replace" | "on" | "off" | null>(null);
+  let isBusy = $derived(pending !== null);
   let problem = $state<GroupProblem | null>(null);
   /** Whether the link was just replaced, which is worth saying: the old one is dead now. */
   let isReplaced = $state(false);
@@ -75,11 +81,12 @@
 
   /** Runs one change to the invite and passes on what it became. */
   async function change(
+    kind: NonNullable<typeof pending>,
     call: () => Promise<{ value: Invite | undefined } | { problem: GroupProblem }>,
   ): Promise<boolean> {
-    isBusy = true;
+    pending = kind;
     const result = await call();
-    isBusy = false;
+    pending = null;
     if ("problem" in result) {
       problem = result.problem;
       return false;
@@ -92,21 +99,21 @@
   async function moveEnd(days: InviteDays): Promise<void> {
     isChoosingEnd = false;
     isReplaced = false;
-    await change(() => extendInvite(groupId, days));
+    await change("end", () => extendInvite(groupId, days));
   }
 
   async function replace(): Promise<void> {
-    isReplaced = await change(() => replaceInvite(groupId));
+    isReplaced = await change("replace", () => replaceInvite(groupId));
   }
 
   async function turnOn(): Promise<void> {
     isReplaced = false;
-    await change(() => makeInvite(groupId, DEFAULT_INVITE_DAYS));
+    await change("on", () => makeInvite(groupId, DEFAULT_INVITE_DAYS));
   }
 
   async function turnOff(): Promise<void> {
     isReplaced = false;
-    await change(() => stopInvite(groupId));
+    await change("off", () => stopInvite(groupId));
   }
 
   async function copyLink(): Promise<void> {
@@ -142,11 +149,32 @@
             void turnOn();
           }}
         >
+          {#if pending === "on"}
+            <Spinner aria-label={m.common_status_loading()} />
+          {/if}
           {m.leaderboards_groups_invite_button_on()}
         </Button>
       </div>
     {:else}
-      <QrCode value={link} label={m.leaderboards_groups_invite_label_qr()} class="w-full" />
+      <!--
+        While the link is being replaced or stopped, the code on screen is about
+        to stop working, so it blurs under a spinner rather than stay scannable.
+      -->
+      <div class="relative" aria-busy={pending === "replace" || pending === "off"}>
+        <QrCode
+          value={link}
+          label={m.leaderboards_groups_invite_label_qr()}
+          class={[
+            "w-full transition-[filter,opacity] duration-150 motion-reduce:transition-none",
+            (pending === "replace" || pending === "off") && "opacity-40 blur-sm",
+          ]}
+        />
+        {#if pending === "replace" || pending === "off"}
+          <div class="absolute inset-0 flex items-center justify-center">
+            <Spinner class="size-8 text-qr-dark" aria-label={m.common_status_loading()} />
+          </div>
+        {/if}
+      </div>
 
       <div class="flex flex-col gap-3">
         <Button
@@ -165,8 +193,16 @@
         </Button>
 
         <div class="flex flex-wrap items-center justify-between gap-2 text-sm">
-          <span class="text-muted-foreground">
+          <span
+            class={[
+              "flex items-center gap-2 text-muted-foreground",
+              pending === "end" && "opacity-60",
+            ]}
+          >
             {m.leaderboards_groups_invite_label_until({ when: ends })}
+            {#if pending === "end"}
+              <Spinner aria-label={m.common_status_loading()} />
+            {/if}
           </span>
           <Popover.Root bind:open={isChoosingEnd}>
             <Popover.Trigger>

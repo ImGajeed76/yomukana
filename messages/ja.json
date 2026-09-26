@@ -39,6 +39,7 @@
   "common_app_tagline": "タイピングで、日本語を読めるように。",
   "common_button_cancel": "キャンセル",
   "common_button_save": "保存",
+  "common_status_loading": "読み込み中",
   "common_time_just_now": "たった今",
   "footer_credit_after_readings": "",
   "footer_credit_before_licence": "（",

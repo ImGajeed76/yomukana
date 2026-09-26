@@ -5,6 +5,7 @@
   import StatusLine from "$lib/components/StatusLine.svelte";
   import { groupProblemMessage } from "$lib/components/groups/problems";
   import { Button } from "$lib/components/ui/button";
+  import { Spinner } from "$lib/components/ui/spinner";
   import { Progress } from "$lib/db";
   import { m } from "$lib/paraglide/messages";
   import {
@@ -101,6 +102,7 @@
                   void join();
                 }}
               >
+                {#if isJoining}<Spinner aria-label={m.common_status_loading()} />{/if}
                 {m.leaderboards_groups_join_button_join()}
               </Button>
             {/if}

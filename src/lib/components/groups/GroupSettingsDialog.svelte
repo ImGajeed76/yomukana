@@ -2,6 +2,7 @@
   import { Check, Copy, ExternalLink } from "@lucide/svelte";
   import StatusLine from "$lib/components/StatusLine.svelte";
   import { Button } from "$lib/components/ui/button";
+  import { Spinner } from "$lib/components/ui/spinner";
   import * as Dialog from "$lib/components/ui/dialog";
   import { Input } from "$lib/components/ui/input";
   import { Label } from "$lib/components/ui/label";
@@ -42,7 +43,9 @@
   }: Props = $props();
 
   let name = $state("");
-  let isBusy = $state(false);
+  /** The change on its way to the server, if any, so its own button shows the wait. */
+  let pending = $state<"rename" | "display" | "stop-display" | "delete" | null>(null);
+  let isBusy = $derived(pending !== null);
   let problem = $state<GroupProblem | null>(null);
   /** Whether the dialog is asking to confirm the delete, in place of the settings. */
   let isConfirmingDelete = $state(false);
@@ -63,32 +66,33 @@
 
   /** Runs one change, showing the refusal if there is one. Returns its answer, if it worked. */
   async function attempt<T>(
+    kind: NonNullable<typeof pending>,
     call: () => Promise<{ value: T } | { problem: GroupProblem }>,
   ): Promise<T | undefined> {
-    isBusy = true;
+    pending = kind;
     const result = await call();
-    isBusy = false;
+    pending = null;
     problem = "problem" in result ? result.problem : null;
     return "value" in result ? result.value : undefined;
   }
 
   async function rename(): Promise<void> {
-    const renamed = await attempt(() => renameGroup(groupId, name));
+    const renamed = await attempt("rename", () => renameGroup(groupId, name));
     if (renamed !== undefined) onRenamed(renamed.name);
   }
 
   async function makeDisplay(): Promise<void> {
-    const made = await attempt(() => makeDisplayLink(groupId));
+    const made = await attempt("display", () => makeDisplayLink(groupId));
     if (made !== undefined) onDisplayChanged(made.code);
   }
 
   async function stopDisplay(): Promise<void> {
-    await attempt(() => stopDisplayLink(groupId));
+    await attempt("stop-display", () => stopDisplayLink(groupId));
     if (problem === null) onDisplayChanged(null);
   }
 
   async function remove(): Promise<void> {
-    await attempt(() => deleteGroup(groupId));
+    await attempt("delete", () => deleteGroup(groupId));
     if (problem !== null) return;
     open = false;
     onDeleted();
@@ -131,6 +135,7 @@
             void remove();
           }}
         >
+          {#if pending === "delete"}<Spinner aria-label={m.common_status_loading()} />{/if}
           {m.leaderboards_groups_delete_confirm()}
         </Button>
       </Dialog.Footer>
@@ -161,6 +166,7 @@
             variant="outline"
             disabled={isBusy || name.trim() === groupName || name.trim() === ""}
           >
+            {#if pending === "rename"}<Spinner aria-label={m.common_status_loading()} />{/if}
             {m.common_button_save()}
           </Button>
         </div>
@@ -183,6 +189,7 @@
                 void makeDisplay();
               }}
             >
+              {#if pending === "display"}<Spinner aria-label={m.common_status_loading()} />{/if}
               {m.leaderboards_groups_display_button_make()}
             </Button>
           {:else}
@@ -211,6 +218,9 @@
                 void stopDisplay();
               }}
             >
+              {#if pending === "stop-display"}<Spinner
+                  aria-label={m.common_status_loading()}
+                />{/if}
               {m.leaderboards_groups_display_button_stop()}
             </Button>
           {/if}

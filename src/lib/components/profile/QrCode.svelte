@@ -1,4 +1,5 @@
 <script lang="ts">
+  import type { ClassValue } from "svelte/elements";
   import { encode } from "uqr";
 
   interface Props {
@@ -7,7 +8,7 @@
     /** What the code is, for screen readers, which cannot scan it. */
     label: string;
     /** Width classes. The code is square and fills the width it is given. */
-    class?: string;
+    class?: ClassValue;
   }
 
   let { value, label, class: className = "" }: Props = $props();

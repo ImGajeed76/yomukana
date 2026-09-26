@@ -39,6 +39,7 @@
   "common_app_tagline": "Learn to read Japanese by typing it.",
   "common_button_cancel": "Cancel",
   "common_button_save": "Save",
+  "common_status_loading": "Loading",
   "common_time_just_now": "just now",
   "footer_credit_after_readings": ".",
   "footer_credit_before_licence": ", used under ",

@@ -6,6 +6,7 @@
   import ProfileCard from "$lib/components/profile/ProfileCard.svelte";
   import QrCode from "$lib/components/profile/QrCode.svelte";
   import { Button } from "$lib/components/ui/button";
+  import { Spinner } from "$lib/components/ui/spinner";
   import { Input } from "$lib/components/ui/input";
   import { Label } from "$lib/components/ui/label";
   import { Progress } from "$lib/db";
@@ -186,6 +187,7 @@
             disabled={isSavingName}
           />
           <Button type="submit" variant="outline" disabled={isSavingName || !isNameChanged}>
+            {#if isSavingName}<Spinner aria-label={m.common_status_loading()} />{/if}
             {m.common_button_save()}
           </Button>
         </div>

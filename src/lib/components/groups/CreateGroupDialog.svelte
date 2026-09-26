@@ -1,5 +1,6 @@
 <script lang="ts">
   import { Button } from "$lib/components/ui/button";
+  import { Spinner } from "$lib/components/ui/spinner";
   import * as Dialog from "$lib/components/ui/dialog";
   import { Input } from "$lib/components/ui/input";
   import { Label } from "$lib/components/ui/label";
@@ -85,6 +86,7 @@
           {/snippet}
         </Dialog.Close>
         <Button type="submit" disabled={isSaving || name.trim() === ""}>
+          {#if isSaving}<Spinner aria-label={m.common_status_loading()} />{/if}
           {m.leaderboards_groups_create_button()}
         </Button>
       </Dialog.Footer>

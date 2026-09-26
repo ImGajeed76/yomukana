@@ -1,5 +1,6 @@
 <script lang="ts">
   import { Button } from "$lib/components/ui/button";
+  import { Spinner } from "$lib/components/ui/spinner";
   import * as Dialog from "$lib/components/ui/dialog";
   import { Input } from "$lib/components/ui/input";
   import { Label } from "$lib/components/ui/label";
@@ -106,7 +107,10 @@
             </Button>
           {/snippet}
         </Dialog.Close>
-        <Button type="submit" disabled={isSaving || isReadOnly}>{m.common_button_save()}</Button>
+        <Button type="submit" disabled={isSaving || isReadOnly}>
+          {#if isSaving}<Spinner aria-label={m.common_status_loading()} />{/if}
+          {m.common_button_save()}
+        </Button>
       </Dialog.Footer>
     </form>
   </Dialog.Content>
