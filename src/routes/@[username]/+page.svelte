@@ -88,7 +88,7 @@
         {#if view.isYou}
           <Button variant="outline" href="/settings/profile">{m.profile_view_button_edit()}</Button>
         {:else if !isSignedIn}
-          <Button href="/account">{m.profile_view_button_sign_in()}</Button>
+          <Button href="/account?next=/@{username}">{m.profile_view_button_sign_in()}</Button>
         {:else if view.isFollowed}
           <Button
             variant="outline"

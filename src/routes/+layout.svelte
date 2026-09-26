@@ -1,6 +1,7 @@
 <script lang="ts">
   import { type Snippet } from "svelte";
   import { ModeWatcher } from "mode-watcher";
+  import { page } from "$app/state";
   import { DitherBackdrop } from "$lib/charts";
   import SiteFooter from "$lib/components/SiteFooter.svelte";
   import SiteNav from "$lib/components/SiteNav.svelte";
@@ -10,6 +11,8 @@
   import "./layout.css";
 
   let { children }: { children: Snippet } = $props();
+
+  let isDisplay = $derived(page.route.id === "/display/[code]");
 
   // The browser says whether the app can be installed as soon as the page has
   // loaded, so this has to be listening from the start. See install.svelte.ts.
@@ -48,9 +51,20 @@
   -->
   <DitherBackdrop />
 
-  <SiteNav />
-  <div class="mx-auto flex w-full max-w-[1152px] flex-1 flex-col px-6 py-6 md:py-12">
-    {@render children()}
-  </div>
+  <!--
+    A classroom screen showing a group's board has no use for the navigation
+    and needs every pixel of width. The credit stays: it is a licence
+    condition on every page.
+  -->
+  {#if isDisplay}
+    <div class="flex flex-1 flex-col">
+      {@render children()}
+    </div>
+  {:else}
+    <SiteNav />
+    <div class="mx-auto flex w-full max-w-[1152px] flex-1 flex-col px-6 py-6 md:py-12">
+      {@render children()}
+    </div>
+  {/if}
   <SiteFooter />
 </div>

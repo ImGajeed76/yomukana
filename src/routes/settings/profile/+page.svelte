@@ -12,9 +12,8 @@
   import { m } from "$lib/paraglide/messages";
   import { scoreOf } from "$lib/stats";
   import {
-    ensureProfile,
-    lastShownProfile,
     rememberProfile,
+    showOwnProfile,
     updateProfile,
     type Profile,
     type ProfileChanges,
@@ -65,18 +64,13 @@
         isLoaded = true;
         return;
       }
-      // The profile as it was last time, at once. Then the server's copy and a
-      // sync, side by side: the card's score is worked out on this device, so
-      // nothing here has to wait for the sync to finish.
-      const kept = await lastShownProfile(progress);
-      if (kept !== null) show(kept);
-      isLoaded = true;
+      // The server's copy and a sync, side by side: the card's score is
+      // worked out on this device, so nothing here waits for the sync.
       void sync(progress).then(() => {
         score = scoreOf(progress.store, new Date());
       });
-      const fresh = await ensureProfile();
-      hasFailed = fresh === null;
-      if (fresh !== null) await keep(fresh);
+      isLoaded = true;
+      hasFailed = !(await showOwnProfile(progress, show));
     })();
   });
 
@@ -260,7 +254,7 @@
     <section
       class="flex flex-col items-start gap-5 rounded-lg border border-border bg-card p-6 sm:flex-row sm:items-center"
     >
-      <QrCode value={link} label={m.settings_profile_label_qr()} size={160} />
+      <QrCode value={link} label={m.settings_profile_label_qr()} class="w-full sm:w-40" />
       <div class="flex min-w-0 flex-col gap-4">
         <div class="flex flex-col gap-1">
           <h2 class="text-lg leading-snug font-medium">{m.settings_profile_share_title()}</h2>

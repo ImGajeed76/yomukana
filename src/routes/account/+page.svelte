@@ -86,6 +86,16 @@
     isBusy = false;
   }
 
+  /**
+   * Where to go once signed in: back to the page that sent the reader here,
+   * like an invite, or to settings. Only a path on this site, so a link
+   * cannot use the sign-in page to send someone elsewhere.
+   */
+  function nextPage(): string {
+    const next = new URL(location.href).searchParams.get("next");
+    return next?.startsWith("/") === true && !next.startsWith("//") ? next : "/settings";
+  }
+
   /** Where a sign-in, a new account, a confirmation or a reset leads next. */
   async function follow(result: AccountResult): Promise<void> {
     if (result.status === "refused") {
@@ -93,7 +103,7 @@
       return;
     }
     if (result.status === "signed-in") {
-      await goto("/settings");
+      await goto(nextPage());
       return;
     }
     const failed = await sendConfirmationCode(email);

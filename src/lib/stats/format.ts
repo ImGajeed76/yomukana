@@ -17,6 +17,15 @@ export function timeAgo(at: number, now: number = Date.now()): string {
   return format.format(Math.round(seconds / 86_400), "day");
 }
 
+/** "in 6 days", in the reader's language, from the largest unit that fits. */
+export function timeUntil(at: number, now: number = Date.now()): string {
+  const seconds = Math.max(60, Math.round((at - now) / 1000));
+  const format = new Intl.RelativeTimeFormat(getLocale(), { numeric: "auto" });
+  if (seconds < 3600) return format.format(Math.round(seconds / 60), "minute");
+  if (seconds < 86_400) return format.format(Math.round(seconds / 3600), "hour");
+  return format.format(Math.round(seconds / 86_400), "day");
+}
+
 /** A day key as the reader would say it, like "10 Mar". */
 export function dayLabel(date: string): string {
   return startOfDay(date).toLocaleDateString(getLocale(), {

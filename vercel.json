@@ -4,6 +4,14 @@
     {
       "source": "/@:username",
       "destination": "/200.html"
+    },
+    {
+      "source": "/join/:code",
+      "destination": "/200.html"
+    },
+    {
+      "source": "/display/:code",
+      "destination": "/200.html"
     }
   ]
 }

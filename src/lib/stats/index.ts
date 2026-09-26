@@ -7,7 +7,7 @@ export type { DailyPoint } from "./series";
 export { dailyScores, scoreOf } from "./score";
 export type { ScoredAttempt } from "./score";
 
-export { dayLabel, timeAgo } from "./format";
+export { dayLabel, timeAgo, timeUntil } from "./format";
 
 export { demoBoard, demoProgress } from "./demo";
 export type { DemoProgress } from "./demo";

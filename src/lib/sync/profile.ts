@@ -99,3 +99,21 @@ export async function lastShownProfile(progress: Progress): Promise<Profile | nu
 export function rememberProfile(progress: Progress, profile: Profile): Promise<void> {
   return progress.saveShown(SHOWN_PROFILE, profile);
 }
+
+/**
+ * The reader's own profile, for the pages that show it: the kept copy at
+ * once if there is one, then the server's, which is kept for next time.
+ * Returns whether the server answered.
+ */
+export async function showOwnProfile(
+  progress: Progress,
+  show: (profile: Profile) => void,
+): Promise<boolean> {
+  const kept = await lastShownProfile(progress);
+  if (kept !== null) show(kept);
+  const fresh = await ensureProfile();
+  if (fresh === null) return false;
+  show(fresh);
+  await rememberProfile(progress, fresh);
+  return true;
+}

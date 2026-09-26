@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { ChartColumn, Keyboard, Settings, Trophy } from "@lucide/svelte";
+  import { ChartColumn, Keyboard, Settings, Trophy, UserRound } from "@lucide/svelte";
   import { page } from "$app/state";
   import { m } from "$lib/paraglide/messages";
 
@@ -11,6 +11,9 @@
     { href: "/stats", key: "stats", icon: ChartColumn },
     { href: "/leaderboards", key: "leaderboards", icon: Trophy },
     { href: "/settings", key: "settings", icon: Settings },
+    // Last, where an account usually sits. Your card and the code that lets
+    // someone follow you, one tap away when they are standing next to you.
+    { href: "/me", key: "profile", icon: UserRound },
   ] as const;
 
   /** Whether a link is the section the reader is in, including its subpages. */
@@ -23,6 +26,7 @@
     if (key === "stats") return m.nav_link_stats();
     if (key === "leaderboards") return m.nav_link_leaderboards();
     if (key === "settings") return m.nav_link_settings();
+    if (key === "profile") return m.nav_link_profile();
     return m.nav_link_practice();
   }
 </script>
@@ -43,7 +47,7 @@
   >
     <a href="/" class="text-sm font-medium tracking-tight">{m.common_app_name()}</a>
     <!--
-      Four words do not fit beside the name on a phone, so there each link is
+      Five words do not fit beside the name on a phone, so there each link is
       its icon, with the word kept for screen readers and shown on hover. The
       tap target stays 44 pixels square. See CLAUDE.md 11.2.
     -->
