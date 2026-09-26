@@ -187,7 +187,6 @@
         <Dialog.Content class="gap-5 text-center sm:max-w-[384px]">
           <Dialog.Header class="items-center text-center">
             <Dialog.Title>{m.leaderboards_following_qr_title()}</Dialog.Title>
-            <Dialog.Description>{m.leaderboards_following_qr_description()}</Dialog.Description>
           </Dialog.Header>
           <QrCode
             value={`${location.origin}/@${you.username}`}
