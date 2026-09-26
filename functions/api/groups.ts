@@ -232,18 +232,51 @@ groups.delete("/groups/:id", async (c) => {
   return c.body(null, 204);
 });
 
-/** A new invite, for 1, 7 or 30 days. The old one stops working. */
+/**
+ * A new invite link. The old one stops working. With `days` it lasts that
+ * long. Without, it replaces a leaked link and keeps its end, so replacing
+ * does not also cut short a link the admin just set to last a month.
+ */
 groups.post("/groups/:id/invite", async (c) => {
   const admin = await adminOf(c);
   if (admin instanceof Response) return admin;
   const days = (await bodyOf(c)).days;
-  if (!isInviteDays(days)) return refuse(c, "invalid");
+  if (days !== undefined && !isInviteDays(days)) return refuse(c, "invalid");
   const code = randomCode(INVITE_CODE_LENGTH);
-  const expiresAt = new Date(Date.now() + days * DAY_MS);
-  await pool.query(
-    "update groups set invite_code = $1, invite_expires_at = $2 where group_id = $3",
-    [code, expiresAt, admin.groupId],
+  const updated = await pool.query<{ invite_expires_at: Date }>(
+    `update groups set invite_code = $1,
+       invite_expires_at = case
+         when $2::int is null and invite_expires_at > now() then invite_expires_at
+         else now() + make_interval(days => coalesce($2::int, $3::int))
+       end
+     where group_id = $4
+     returning invite_expires_at`,
+    [code, days ?? null, DEFAULT_INVITE_DAYS, admin.groupId],
   );
+  const expiresAt = updated.rows[0]?.invite_expires_at;
+  if (expiresAt === undefined) return refuse(c, "not-found");
+  return c.json({ code, expiresAt: expiresAt.getTime() });
+});
+
+/**
+ * Moves when the invite ends, to 1, 7 or 30 days from now, and keeps the
+ * link itself, so a link already sent round keeps working. Only a link that
+ * is still working can be moved: an ended one is replaced instead.
+ */
+groups.patch("/groups/:id/invite", async (c) => {
+  const admin = await adminOf(c);
+  if (admin instanceof Response) return admin;
+  const days = (await bodyOf(c)).days;
+  if (!isInviteDays(days)) return refuse(c, "invalid");
+  const expiresAt = new Date(Date.now() + days * DAY_MS);
+  const updated = await pool.query<{ invite_code: string }>(
+    `update groups set invite_expires_at = $1
+     where group_id = $2 and invite_code is not null and invite_expires_at > now()
+     returning invite_code`,
+    [expiresAt, admin.groupId],
+  );
+  const code = updated.rows[0]?.invite_code;
+  if (code === undefined) return refuse(c, "not-found");
   return c.json({ code, expiresAt: expiresAt.getTime() });
 });
 

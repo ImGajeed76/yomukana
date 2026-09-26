@@ -123,8 +123,19 @@ export async function removeMember(id: string, username: string): Promise<Result
   );
 }
 
+/** A new invite link lasting `days`. The old link stops working. */
 export async function makeInvite(id: string, days: InviteDays): Promise<Result<Invite>> {
   return resultOf(await callApi(`/groups/${id}/invite`, { method: "POST", ...send({ days }) }));
+}
+
+/** A new invite link ending when the old one would have. The old link stops working. */
+export async function replaceInvite(id: string): Promise<Result<Invite>> {
+  return resultOf(await callApi(`/groups/${id}/invite`, { method: "POST", ...send({}) }));
+}
+
+/** Moves when the invite ends, keeping the link. */
+export async function extendInvite(id: string, days: InviteDays): Promise<Result<Invite>> {
+  return resultOf(await callApi(`/groups/${id}/invite`, { method: "PATCH", ...send({ days }) }));
 }
 
 export async function stopInvite(id: string): Promise<Result<undefined>> {

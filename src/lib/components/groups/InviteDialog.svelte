@@ -1,15 +1,21 @@
 <script lang="ts">
   import { Check, Copy } from "@lucide/svelte";
-  import ChoiceRow from "$lib/components/ChoiceRow.svelte";
   import QrCode from "$lib/components/profile/QrCode.svelte";
   import StatusLine from "$lib/components/StatusLine.svelte";
   import { Button } from "$lib/components/ui/button";
   import * as Dialog from "$lib/components/ui/dialog";
+  import * as Popover from "$lib/components/ui/popover";
   import { m } from "$lib/paraglide/messages";
   import { getLocale } from "$lib/paraglide/runtime";
-  import { timeUntil } from "$lib/stats";
   import { DEFAULT_INVITE_DAYS, INVITE_DAYS, type InviteDays } from "$lib/sync/group-rules";
-  import { makeInvite, stopInvite, type GroupProblem, type Invite } from "$lib/sync/groups";
+  import {
+    extendInvite,
+    makeInvite,
+    replaceInvite,
+    stopInvite,
+    type GroupProblem,
+    type Invite,
+  } from "$lib/sync/groups";
   import { groupProblemMessage } from "./problems";
 
   interface Props {
@@ -19,7 +25,7 @@
     groupName: string;
     /** The invite while it works, or null. */
     invite: Invite | null;
-    /** Called with the new invite, or null once it is turned off. */
+    /** Called with the invite as it is now, or null once it is turned off. */
     onChange: (invite: Invite | null) => void;
   }
 
@@ -28,12 +34,34 @@
   // eslint-disable-next-line @typescript-eslint/no-useless-default-assignment
   let { open = $bindable(), groupId, groupName, invite, onChange }: Props = $props();
 
-  let days = $state<InviteDays>(DEFAULT_INVITE_DAYS);
   let isBusy = $state(false);
   let problem = $state<GroupProblem | null>(null);
+  /** Whether the link was just replaced, which is worth saying: the old one is dead now. */
+  let isReplaced = $state(false);
   let isCopied = $state(false);
+  let isChoosingEnd = $state(false);
+
+  $effect(() => {
+    if (!open) return;
+    problem = null;
+    isReplaced = false;
+  });
 
   let link = $derived(invite === null ? "" : `${location.origin}/join/${invite.code}`);
+
+  // A date and a time, because what an admin plans around is "until Friday's
+  // class", not "in 7 days".
+  let ends = $derived(
+    invite === null
+      ? ""
+      : new Intl.DateTimeFormat(getLocale(), {
+          weekday: "short",
+          day: "numeric",
+          month: "short",
+          hour: "numeric",
+          minute: "2-digit",
+        }).format(invite.expiresAt),
+  );
 
   // "1 day", "7 days", "7 Tage", in the reader's language, from the browser.
   let durations = $derived.by(() => {
@@ -42,23 +70,43 @@
       unit: "day",
       unitDisplay: "long",
     });
-    return INVITE_DAYS.map((count) => ({ value: String(count), label: format.format(count) }));
+    return INVITE_DAYS.map((days) => ({ days, label: format.format(days) }));
   });
 
-  async function renew(): Promise<void> {
+  /** Runs one change to the invite and passes on what it became. */
+  async function change(
+    call: () => Promise<{ value: Invite | undefined } | { problem: GroupProblem }>,
+  ): Promise<boolean> {
     isBusy = true;
-    const result = await makeInvite(groupId, days);
+    const result = await call();
     isBusy = false;
-    problem = "problem" in result ? result.problem : null;
-    if ("value" in result) onChange(result.value);
+    if ("problem" in result) {
+      problem = result.problem;
+      return false;
+    }
+    problem = null;
+    onChange(result.value ?? null);
+    return true;
   }
 
-  async function stop(): Promise<void> {
-    isBusy = true;
-    const result = await stopInvite(groupId);
-    isBusy = false;
-    problem = "problem" in result ? result.problem : null;
-    if ("value" in result) onChange(null);
+  async function moveEnd(days: InviteDays): Promise<void> {
+    isChoosingEnd = false;
+    isReplaced = false;
+    await change(() => extendInvite(groupId, days));
+  }
+
+  async function replace(): Promise<void> {
+    isReplaced = await change(() => replaceInvite(groupId));
+  }
+
+  async function turnOn(): Promise<void> {
+    isReplaced = false;
+    await change(() => makeInvite(groupId, DEFAULT_INVITE_DAYS));
+  }
+
+  async function turnOff(): Promise<void> {
+    isReplaced = false;
+    await change(() => stopInvite(groupId));
   }
 
   async function copyLink(): Promise<void> {
@@ -71,9 +119,9 @@
 </script>
 
 <!--
-  The invite, big enough to scan off a projector or a phone held up in a
-  classroom. Anyone with the link can join until it ends, so it always ends,
-  and making a new one stops the old one.
+  For the admin getting people in, usually in front of a room: the code to
+  scan and the link to send come first. When it ends and what to do if it
+  spread too far are there, but out of the way.
 -->
 <Dialog.Root bind:open>
   <Dialog.Content class="max-h-svh overflow-y-auto sm:max-w-[448px]">
@@ -81,16 +129,28 @@
       <Dialog.Title>{m.leaderboards_groups_invite_title({ name: groupName })}</Dialog.Title>
       <Dialog.Description>
         {invite === null
-          ? m.leaderboards_groups_invite_description_off()
-          : m.leaderboards_groups_invite_description_on({ when: timeUntil(invite.expiresAt) })}
+          ? m.leaderboards_groups_invite_off()
+          : m.leaderboards_groups_invite_description()}
       </Dialog.Description>
     </Dialog.Header>
 
-    {#if invite !== null}
-      <QrCode value={link} label={m.leaderboards_groups_invite_label_qr()} class="w-full" />
-      <div class="flex flex-wrap gap-2">
+    {#if invite === null}
+      <div>
         <Button
-          variant="outline"
+          disabled={isBusy}
+          onclick={() => {
+            void turnOn();
+          }}
+        >
+          {m.leaderboards_groups_invite_button_on()}
+        </Button>
+      </div>
+    {:else}
+      <QrCode value={link} label={m.leaderboards_groups_invite_label_qr()} class="w-full" />
+
+      <div class="flex flex-col gap-3">
+        <Button
+          class="w-full"
           onclick={() => {
             void copyLink();
           }}
@@ -103,44 +163,76 @@
             {m.settings_profile_button_copy_link()}
           {/if}
         </Button>
-        <Button
-          variant="ghost"
-          disabled={isBusy}
-          onclick={() => {
-            void stop();
-          }}
-        >
-          {m.leaderboards_groups_invite_button_stop()}
-        </Button>
+
+        <div class="flex flex-wrap items-center justify-between gap-2 text-sm">
+          <span class="text-muted-foreground">
+            {m.leaderboards_groups_invite_label_until({ when: ends })}
+          </span>
+          <Popover.Root bind:open={isChoosingEnd}>
+            <Popover.Trigger>
+              {#snippet child({ props })}
+                <Button {...props} variant="ghost" size="sm" class="-mr-3" disabled={isBusy}>
+                  {m.leaderboards_groups_invite_button_change()}
+                </Button>
+              {/snippet}
+            </Popover.Trigger>
+            <Popover.Content class="flex w-auto flex-col gap-1 p-2" align="end">
+              <!-- The same link, lasting longer or shorter. Nothing already sent stops working. -->
+              {#each durations as option (option.days)}
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  class="justify-start"
+                  onclick={() => {
+                    void moveEnd(option.days);
+                  }}
+                >
+                  {m.leaderboards_groups_invite_option_from_now({ duration: option.label })}
+                </Button>
+              {/each}
+            </Popover.Content>
+          </Popover.Root>
+        </div>
       </div>
     {/if}
 
-    <div class="flex flex-col gap-2">
-      <span class="text-sm font-medium">{m.leaderboards_groups_invite_label_duration()}</span>
-      <div class="flex flex-wrap items-center justify-between gap-2">
-        <ChoiceRow
-          options={durations}
-          value={String(days)}
-          label={m.leaderboards_groups_invite_label_duration()}
-          onChange={(value: string) => {
-            days = Number(value) as InviteDays;
-          }}
-        />
-        <Button
-          variant={invite === null ? "default" : "outline"}
-          disabled={isBusy}
-          onclick={() => {
-            void renew();
-          }}
-        >
-          {invite === null
-            ? m.leaderboards_groups_invite_button_make()
-            : m.leaderboards_groups_invite_button_renew()}
-        </Button>
+    {#if problem !== null}
+      <StatusLine message={groupProblemMessage(problem)} isError={true} />
+    {:else if isReplaced}
+      <StatusLine message={m.leaderboards_groups_invite_status_replaced()} isError={false} />
+    {/if}
+
+    {#if invite !== null}
+      <!--
+        The two things an admin does only when something went wrong: the link
+        reached people it should not have, or the group is complete.
+      -->
+      <div class="flex flex-col gap-1 border-t border-border pt-4 text-sm">
+        <span class="text-muted-foreground">{m.leaderboards_groups_invite_label_leaked()}</span>
+        <!-- Pulled left by their own padding, so the words line up with the question. -->
+        <div class="-ml-3 flex flex-wrap gap-1">
+          <Button
+            variant="ghost"
+            size="sm"
+            disabled={isBusy}
+            onclick={() => {
+              void replace();
+            }}
+          >
+            {m.leaderboards_groups_invite_button_replace()}
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            disabled={isBusy}
+            onclick={() => {
+              void turnOff();
+            }}
+          >
+            {m.leaderboards_groups_invite_button_off()}
+          </Button>
+        </div>
       </div>
-      {#if problem !== null}
-        <StatusLine message={groupProblemMessage(problem)} isError={true} />
-      {/if}
-    </div>
+    {/if}
   </Dialog.Content>
 </Dialog.Root>
