@@ -7,26 +7,28 @@
 
 import { Hono } from "hono";
 import {
+  RELEARN_MAX_PER_10_MIN,
+  RELEARN_MAX_PER_DAY,
+  RELEARN_MAX_PER_HOUR,
   SCORE_CEILING,
-  SCORE_GAIN_MAX_PER_10_MIN,
-  SCORE_GAIN_MAX_PER_DAY,
-  SCORE_GAIN_MAX_PER_HOUR,
+  leastTimeTo,
 } from "../../src/lib/sync/score-limits";
 import { readerOf } from "./auth";
 import { pool } from "./db";
 import { refuse } from "./problems";
 import { profileOf, type ProfileRow } from "./profiles";
-import { judgeScore, type AcceptedScore, type ScoreLimits } from "./score-check";
+import { judgeScore, type ScoreLimits } from "./score-check";
 
 const MINUTE = 60_000;
 
 const LIMITS: ScoreLimits = {
-  gains: [
-    { windowMs: 10 * MINUTE, maxGain: SCORE_GAIN_MAX_PER_10_MIN },
-    { windowMs: 60 * MINUTE, maxGain: SCORE_GAIN_MAX_PER_HOUR },
-    { windowMs: 24 * 60 * MINUTE, maxGain: SCORE_GAIN_MAX_PER_DAY },
+  relearning: [
+    { windowMs: 10 * MINUTE, maxGain: RELEARN_MAX_PER_10_MIN },
+    { windowMs: 60 * MINUTE, maxGain: RELEARN_MAX_PER_HOUR },
+    { windowMs: 24 * 60 * MINUTE, maxGain: RELEARN_MAX_PER_DAY },
   ],
   ceiling: SCORE_CEILING,
+  leastTimeTo,
 };
 
 /**
@@ -51,35 +53,47 @@ scores.post("/score", async (c) => {
   const score =
     typeof body === "object" && body !== null && "score" in body ? Number(body.score) : Number.NaN;
 
-  // When the account was made, by the auth service's clock: the start every
-  // score is measured from. Plus what was accepted since.
-  const [account, accepted] = await Promise.all([
+  // When the account was made, by the auth service's clock: where every
+  // path starts. Plus the reader's best so far, and what was accepted lately.
+  const [account, peak, accepted, clock] = await Promise.all([
     pool.query<{ created_at: Date }>(
       `select "createdAt" as created_at from neon_auth."user" where id::text = $1`,
+      [userId],
+    ),
+    pool.query<{ peak_score: number; peak_at: Date | null }>(
+      "select peak_score, peak_at from profiles where user_id = $1",
       [userId],
     ),
     pool.query<{ score: number; accepted_at: Date }>(
       "select score, accepted_at from score_submissions where user_id = $1 order by accepted_at",
       [userId],
     ),
+    // The time comes from Postgres, like the timestamps in the log, so the two
+    // never disagree about what "ten minutes ago" means.
+    pool.query<{ now: Date }>("select now()"),
   ]);
   const createdAt = account.rows[0]?.created_at;
-  if (createdAt === undefined) return refuse(c, "not-found");
+  const best = peak.rows[0];
+  if (createdAt === undefined || best === undefined) return refuse(c, "not-found");
 
-  const history: AcceptedScore[] = [
-    { score: 0, at: createdAt.getTime() },
-    ...accepted.rows.map((row) => ({ score: row.score, at: row.accepted_at.getTime() })),
-  ];
-  // The time comes from Postgres, like the timestamps in the log, so the two
-  // never disagree about what "ten minutes ago" means.
-  const clock = await pool.query<{ now: Date }>("select now()");
   const now = clock.rows[0]?.now.getTime() ?? Date.now();
-  if (judgeScore(score, now, history, LIMITS) === "implausible") {
-    return refuse(c, "implausible");
-  }
+  const verdict = judgeScore(
+    score,
+    now,
+    {
+      createdAt: createdAt.getTime(),
+      peak: best.peak_at === null ? null : { score: best.peak_score, at: best.peak_at.getTime() },
+      recent: accepted.rows.map((row) => ({ score: row.score, at: row.accepted_at.getTime() })),
+    },
+    LIMITS,
+  );
+  if (verdict === "implausible") return refuse(c, "implausible");
 
   const updated = await pool.query<ProfileRow>(
-    "update profiles set score = $1, scored_at = now() where user_id = $2 returning *",
+    `update profiles set score = $1, scored_at = now(),
+       peak_score = greatest(peak_score, $1),
+       peak_at = case when $1 > peak_score then now() else peak_at end
+     where user_id = $2 returning *`,
     [score, userId],
   );
   const row = updated.rows[0];

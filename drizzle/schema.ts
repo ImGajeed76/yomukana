@@ -151,6 +151,12 @@ export const profiles = pgTable(
     isListed: boolean("is_listed").notNull().default(false),
     score: doublePrecision("score").notNull().default(0),
     scoredAt: timestamp("scored_at", { withTimezone: true }),
+    // The best score the API function has accepted, and when. A new best is
+    // held to the fastest path a reader can take; getting back to an old one
+    // after a break only to how fast a reader relearns. See
+    // functions/api/score-check.ts.
+    peakScore: doublePrecision("peak_score").notNull().default(0),
+    peakAt: timestamp("peak_at", { withTimezone: true }),
     updatedAt: changedAt(),
   },
   (table) => [

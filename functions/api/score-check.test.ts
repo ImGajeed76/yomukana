@@ -1,61 +1,106 @@
 import { describe, expect, test } from "bun:test";
-import { judgeScore, type AcceptedScore, type ScoreLimits } from "./score-check";
+import { judgeScore, type ScoreLimits, type ScoreRecord } from "./score-check";
 
 const MINUTE = 60_000;
 const HOUR = 60 * MINUTE;
 const DAY = 24 * HOUR;
 
-// Round numbers, so each test reads as arithmetic. The real ones come from
-// the simulation in scripts/simulate.
+/**
+ * A made-up fastest path with the real one's shape, in round numbers: 1,000
+ * points in the first hour, 5,000 by the end of the first day, then 500 a day.
+ */
+function leastTimeTo(score: number): number {
+  if (score <= 1000) return (score / 1000) * HOUR;
+  if (score <= 5000) return HOUR + ((score - 1000) / 4000) * (DAY - HOUR);
+  return DAY + ((score - 5000) / 500) * DAY;
+}
+
 const LIMITS: ScoreLimits = {
-  gains: [
-    { windowMs: 10 * MINUTE, maxGain: 100 },
-    { windowMs: HOUR, maxGain: 400 },
-    { windowMs: DAY, maxGain: 2000 },
+  relearning: [
+    { windowMs: 10 * MINUTE, maxGain: 400 },
+    { windowMs: HOUR, maxGain: 2000 },
+    { windowMs: DAY, maxGain: 6000 },
   ],
-  ceiling: 1_000_000,
+  ceiling: 100_000,
+  leastTimeTo,
 };
 
 const SIGNED_UP = 1_000_000_000_000;
-const start: AcceptedScore = { score: 0, at: SIGNED_UP };
+const fresh: ScoreRecord = { createdAt: SIGNED_UP, peak: null, recent: [] };
 
 describe("judgeScore", () => {
-  test("accepts a first score a reader could reach in the minutes since signing up", () => {
-    expect(judgeScore(90, SIGNED_UP + 10 * MINUTE, [start], LIMITS)).toBe("accept");
+  test("accepts a new account's first score when the fastest reader could have got there", () => {
+    expect(judgeScore(900, SIGNED_UP + HOUR, fresh, LIMITS)).toBe("accept");
   });
 
-  test("refuses a new account arriving with far more than its time allows", () => {
-    expect(judgeScore(5000, SIGNED_UP + 10 * MINUTE, [start], LIMITS)).toBe("implausible");
+  test("refuses a new account arriving with more than its age allows", () => {
+    expect(judgeScore(4000, SIGNED_UP + HOUR, fresh, LIMITS)).toBe("implausible");
+  });
+
+  test("holds an old account to the flat part of the path, not to its steep start", () => {
+    // Ten days old, best of 5,000 reached on day one. A day later the fastest
+    // reader adds 500, not the 4,000 a first day brings.
+    const record: ScoreRecord = {
+      createdAt: SIGNED_UP,
+      peak: { score: 5000, at: SIGNED_UP + DAY },
+      recent: [{ score: 5000, at: SIGNED_UP + 9 * DAY }],
+    };
+    const now = SIGNED_UP + 10 * DAY;
+    expect(judgeScore(5400, now, record, LIMITS)).toBe("accept");
+    expect(judgeScore(9000, now, record, LIMITS)).toBe("implausible");
+  });
+
+  test("counts days offline, as long as the path fits inside them", () => {
+    const record: ScoreRecord = {
+      createdAt: SIGNED_UP,
+      peak: { score: 5000, at: SIGNED_UP + DAY },
+      recent: [{ score: 5000, at: SIGNED_UP + DAY }],
+    };
+    // Four days on, the fastest reader could be 2,000 further.
+    const now = SIGNED_UP + 5 * DAY;
+    expect(judgeScore(6900, now, record, LIMITS)).toBe("accept");
+    expect(judgeScore(7200, now, record, LIMITS)).toBe("implausible");
+  });
+
+  test("lets a reader climb back to their old best quickly after a break", () => {
+    // Best of 8,000, fallen to 3,000 over a month away, back to 5,000 in an hour.
+    const record: ScoreRecord = {
+      createdAt: SIGNED_UP,
+      peak: { score: 8000, at: SIGNED_UP + 10 * DAY },
+      recent: [{ score: 3000, at: SIGNED_UP + 40 * DAY }],
+    };
+    expect(judgeScore(5000, SIGNED_UP + 40 * DAY + HOUR, record, LIMITS)).toBe("accept");
+  });
+
+  test("still limits how fast climbing back can go", () => {
+    const record: ScoreRecord = {
+      createdAt: SIGNED_UP,
+      peak: { score: 8000, at: SIGNED_UP + 10 * DAY },
+      recent: [{ score: 3000, at: SIGNED_UP + 40 * DAY }],
+    };
+    expect(judgeScore(7900, SIGNED_UP + 40 * DAY + 10 * MINUTE, record, LIMITS)).toBe(
+      "implausible",
+    );
   });
 
   test("always accepts a drop, because scores fall when people stop", () => {
-    const history = [start, { score: 800, at: SIGNED_UP + DAY }];
-    expect(judgeScore(300, SIGNED_UP + DAY + MINUTE, history, LIMITS)).toBe("accept");
-  });
-
-  test("lets three offline days go up at once, if three days could have produced them", () => {
-    const history = [start, { score: 1000, at: SIGNED_UP + DAY }];
-    const later = SIGNED_UP + 4 * DAY;
-    expect(judgeScore(1000 + 5500, later, history, LIMITS)).toBe("accept");
-    expect(judgeScore(1000 + 6500, later, history, LIMITS)).toBe("implausible");
-  });
-
-  test("refuses many small steps that each look fine but add up to too much in an hour", () => {
-    // Every ten minutes a gain of 90, under the ten-minute limit each time,
-    // but 540 in the hour, over its 400.
-    const base = SIGNED_UP + 2 * DAY;
-    const history: AcceptedScore[] = [start, { score: 1000, at: base }];
-    for (let step = 1; step <= 5; step++) {
-      history.push({ score: 1000 + step * 90, at: base + step * 10 * MINUTE });
-    }
-    expect(judgeScore(1000 + 6 * 90, base + 60 * MINUTE + 1, history, LIMITS)).toBe("implausible");
+    const record: ScoreRecord = {
+      createdAt: SIGNED_UP,
+      peak: { score: 8000, at: SIGNED_UP + DAY },
+      recent: [{ score: 8000, at: SIGNED_UP + DAY }],
+    };
+    expect(judgeScore(2000, SIGNED_UP + DAY + MINUTE, record, LIMITS)).toBe("accept");
   });
 
   test("refuses anything above the ceiling, and anything that is not a score", () => {
-    const history = [start, { score: 900_000, at: SIGNED_UP }];
+    const record: ScoreRecord = {
+      createdAt: SIGNED_UP,
+      peak: { score: 90_000, at: SIGNED_UP },
+      recent: [{ score: 90_000, at: SIGNED_UP }],
+    };
     const later = SIGNED_UP + 1000 * DAY;
-    expect(judgeScore(1_000_001, later, history, LIMITS)).toBe("implausible");
-    expect(judgeScore(Number.NaN, later, history, LIMITS)).toBe("implausible");
-    expect(judgeScore(-1, later, history, LIMITS)).toBe("implausible");
+    expect(judgeScore(100_001, later, record, LIMITS)).toBe("implausible");
+    expect(judgeScore(Number.NaN, later, record, LIMITS)).toBe("implausible");
+    expect(judgeScore(-1, later, record, LIMITS)).toBe("implausible");
   });
 });
