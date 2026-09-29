@@ -75,48 +75,55 @@
     return status === "done" || status === "frozen";
   }
 
-  /** Whether every day of a week row was read or frozen: a whole week kept. */
+  /**
+   * Whether every day of a week row was read. A week a freeze had to cover
+   * kept the streak, but it was not a week read, so it is not drawn as one.
+   */
   function isWholeWeek(week: readonly (number | null)[]): boolean {
-    return week.every((day) => isInStreak(day));
+    return week.every((day) => day !== null && mark(day) === "done");
   }
 </script>
 
 <!--
-  A month at a time, the way a wall calendar is read. Days that kept the
-  streak are joined by a band, so a run reads as one stretch, and a week kept
-  from Monday to Sunday is drawn stronger. Each kind of day has its own shape
-  as well as colour: a filled circle, a snowflake, a ring for today, a plain
-  number. See CLAUDE.md 8.4.
+  A month at a time, the way a wall calendar is read. A run of days that kept
+  the streak is one pill, so it reads as one stretch rather than as dots, and a
+  week read from Monday to Sunday is the same pill in solid colour. A freeze is
+  a snowflake inside the run: it kept the streak, so it belongs to the pill, and
+  its shape says it was not a day read. Today, not yet read, is a ring. Every
+  kind of day differs by shape as well as colour, see CLAUDE.md 8.4.
 -->
 <div class="flex flex-col gap-3">
   <div class="flex items-center justify-between">
     <span class="text-sm font-medium">{monthName.format(dateOf(month.first))}</span>
-    <div class="-mr-2 flex">
-      <Button
-        variant="ghost"
-        size="icon"
-        class="size-8"
-        aria-label={m.streak_calendar_previous()}
-        disabled={monthsBack >= monthsAvailable}
-        onclick={() => {
-          monthsBack += 1;
-        }}
-      >
-        <ChevronLeft class="size-4" />
-      </Button>
-      <Button
-        variant="ghost"
-        size="icon"
-        class="size-8"
-        aria-label={m.streak_calendar_next()}
-        disabled={monthsBack === 0}
-        onclick={() => {
-          monthsBack -= 1;
-        }}
-      >
-        <ChevronRight class="size-4" />
-      </Button>
-    </div>
+    <!-- Only once there is another month to go to. Until then they could only be disabled. -->
+    {#if monthsAvailable > 0}
+      <div class="-mr-2 flex">
+        <Button
+          variant="ghost"
+          size="icon"
+          class="size-8"
+          aria-label={m.streak_calendar_previous()}
+          disabled={monthsBack >= monthsAvailable}
+          onclick={() => {
+            monthsBack += 1;
+          }}
+        >
+          <ChevronLeft class="size-4" />
+        </Button>
+        <Button
+          variant="ghost"
+          size="icon"
+          class="size-8"
+          aria-label={m.streak_calendar_next()}
+          disabled={monthsBack === 0}
+          onclick={() => {
+            monthsBack -= 1;
+          }}
+        >
+          <ChevronRight class="size-4" />
+        </Button>
+      </div>
+    {/if}
   </div>
 
   <div class="grid grid-cols-7 text-center text-xs text-muted-foreground" aria-hidden="true">
@@ -145,23 +152,24 @@
             >
               {#if inStreak}
                 <!--
-                  The band behind a run, rounded where it starts and ends.
-                  Stronger through a whole week kept.
+                  This day's piece of the pill. It runs to the cell's edge
+                  where the run goes on, and stops a half pill past the centre
+                  where it ends, so a single day is a circle.
                 -->
                 <span
                   class={[
-                    "absolute inset-y-0.5 right-0 left-0",
-                    isWhole ? "bg-streak/30" : "bg-streak/15",
-                    !isInStreak(week[column - 1]) && "left-1 rounded-l-full",
-                    !isInStreak(week[column + 1]) && "right-1 rounded-r-full",
+                    "absolute inset-y-0",
+                    isWhole ? "bg-streak" : "bg-streak/20",
+                    isInStreak(week[column - 1]) ? "left-0" : "left-1/2 -ml-4 rounded-l-full",
+                    isInStreak(week[column + 1]) ? "right-0" : "right-1/2 -mr-4 rounded-r-full",
                   ]}
                 ></span>
               {/if}
               <span
                 class={[
-                  "relative flex size-7 items-center justify-center rounded-full text-xs tabular-nums",
-                  status === "done" && "bg-streak font-semibold text-background",
-                  status === "frozen" && "bg-freeze/20 text-freeze",
+                  "relative flex size-8 items-center justify-center rounded-full text-xs tabular-nums",
+                  status === "done" && (isWhole ? "font-semibold text-background" : "font-medium"),
+                  status === "frozen" && "text-freeze",
                   status === "today" && "border-2 border-streak font-semibold",
                   (status === "missed" || status === "empty") &&
                     (day > today ? "text-muted-foreground/50" : "text-muted-foreground"),
