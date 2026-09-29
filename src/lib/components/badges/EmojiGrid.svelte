@@ -79,7 +79,7 @@
       spellcheck={false}
     />
   </div>
-  <ScrollArea class="h-56 rounded-md border border-border">
+  <ScrollArea class="h-80 rounded-md border border-border">
     <div class="flex flex-col gap-3 p-2">
       {#each sections as section, index (section.title ?? index)}
         <section class="flex flex-col gap-1" aria-label={section.title ?? undefined}>

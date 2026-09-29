@@ -153,13 +153,13 @@
           <Button
             variant="outline"
             size="icon"
-            class={["size-11 shrink-0 text-2xl", isPickingEmoji && "ring-2 ring-ring"]}
+            class="size-11 shrink-0 text-2xl"
             aria-label={m.leaderboards_badges_button_emoji()}
             title={m.leaderboards_badges_button_emoji()}
-            aria-expanded={isPickingEmoji}
+            aria-haspopup="dialog"
             disabled={pending !== null}
             onclick={() => {
-              isPickingEmoji = !isPickingEmoji;
+              isPickingEmoji = true;
             }}
           >
             {#if emoji === null}
@@ -189,16 +189,6 @@
           {m.leaderboards_badges_hint_tag()}
         </p>
       </div>
-
-      {#if isPickingEmoji}
-        <EmojiGrid
-          value={emoji}
-          onPick={(picked: string | null) => {
-            emoji = picked;
-            isPickingEmoji = false;
-          }}
-        />
-      {/if}
 
       <div
         class="grid grid-cols-6 justify-items-center gap-y-2"
@@ -259,6 +249,32 @@
         </Button>
       </Dialog.Footer>
     </form>
+
+    <!--
+      The emoji, in a dialog of its own over this one, so the grid has room
+      and the badge dialog stays short. Picking closes it. On a phone the
+      search is not focused at once: that would put the keyboard over the grid,
+      and most people look before they search.
+    -->
+    <Dialog.Root bind:open={isPickingEmoji}>
+      <Dialog.Content
+        class="gap-4 sm:max-w-[384px]"
+        onOpenAutoFocus={(event: Event) => {
+          if (matchMedia("(pointer: coarse)").matches) event.preventDefault();
+        }}
+      >
+        <Dialog.Header>
+          <Dialog.Title>{m.leaderboards_badges_button_emoji()}</Dialog.Title>
+        </Dialog.Header>
+        <EmojiGrid
+          value={emoji}
+          onPick={(picked: string | null) => {
+            emoji = picked;
+            isPickingEmoji = false;
+          }}
+        />
+      </Dialog.Content>
+    </Dialog.Root>
   </Dialog.Content>
 </Dialog.Root>
 
