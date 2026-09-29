@@ -141,7 +141,7 @@
             would fall across its neighbour's number.
           -->
           <span
-            class="absolute inset-y-0 right-[calc(100%/14-1rem)] left-[calc(100%/14-1rem)] rounded-full bg-streak shadow-[0_0_16px_2px_color-mix(in_oklch,var(--color-streak)_55%,transparent)]"
+            class="absolute inset-y-0 right-[calc(100%/14-1rem)] left-[calc(100%/14-1rem)] rounded-full bg-streak shadow-[0_0_8px_color-mix(in_oklch,var(--color-streak)_30%,transparent)]"
             aria-hidden="true"
           ></span>
         {/if}
