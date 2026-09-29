@@ -110,6 +110,16 @@
     return event.target instanceof Element && event.target.closest('[role="dialog"]') !== null;
   }
 
+  // The popup's button says keep reading, so closing it goes on to the next
+  // sentence rather than back to the summary it covered, which would want a
+  // second Enter before typing works again.
+  let isNextAfterStreak = false;
+  $effect(() => {
+    if (isStreakOpen || !isNextAfterStreak) return;
+    isNextAfterStreak = false;
+    next();
+  });
+
   async function finish(attempt: Attempt, revealed: ReadonlySet<number>): Promise<void> {
     await practice.finish(attempt, revealed);
     // Day one, a week, a freeze: worth a popup. An ordinary goal day is
@@ -118,6 +128,7 @@
     if (moment === null || !isBigMoment(moment)) return;
     streakNews = { kind: "moment", moment };
     isStreakOpen = true;
+    isNextAfterStreak = true;
   }
 
   function next(): void {
