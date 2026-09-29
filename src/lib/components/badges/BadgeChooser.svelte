@@ -1,9 +1,8 @@
 <script lang="ts">
-  import GroupBadge from "./GroupBadge.svelte";
+  import BadgeSlots from "./BadgeSlots.svelte";
   import StatusLine from "$lib/components/StatusLine.svelte";
-  import { Switch } from "$lib/components/ui/switch";
   import { m } from "$lib/paraglide/messages";
-  import { BADGES_WORN_MAX, type Badge } from "$lib/sync/badge-rules";
+  import type { Badge } from "$lib/sync/badge-rules";
   import { loadOwnBadges, wearBadges, type OwnBadge } from "$lib/sync/badges";
 
   interface Props {
@@ -36,11 +35,10 @@
     return groupIds.flatMap((id) => available?.find((own) => own.groupId === id)?.badge ?? []);
   }
 
-  /** Wears or takes off one badge. Shown at once, put back if the server says no. */
-  async function toggle(groupId: string, isOn: boolean): Promise<void> {
+  /** Saves a new set of worn badges. Shown at once, put back if the server says no. */
+  async function wear(next: readonly string[]): Promise<void> {
     const before = worn;
-    // A badge put on goes to the end, so the order is the order they were chosen.
-    worn = isOn ? [...worn, groupId] : worn.filter((id) => id !== groupId);
+    worn = next;
     onChange(badgesOf(worn));
     const isSaved = await wearBadges(worn);
     hasSaveFailed = !isSaved;
@@ -69,25 +67,13 @@
   {:else if available.length === 0}
     <p class="text-sm text-muted-foreground">{m.settings_profile_badges_empty()}</p>
   {:else}
-    <ul class="flex flex-col gap-3">
-      {#each available as own (own.groupId)}
-        {@const isOn = worn.includes(own.groupId)}
-        <li class="flex items-center justify-between gap-4">
-          <label for="badge-{own.groupId}" class="flex min-w-0 items-center gap-3">
-            <GroupBadge badge={own.badge} />
-            <span class="truncate text-sm text-muted-foreground">{own.groupName}</span>
-          </label>
-          <Switch
-            id="badge-{own.groupId}"
-            checked={isOn}
-            disabled={!isOn && worn.length >= BADGES_WORN_MAX}
-            onCheckedChange={(checked: boolean) => {
-              void toggle(own.groupId, checked);
-            }}
-          />
-        </li>
-      {/each}
-    </ul>
+    <BadgeSlots
+      {available}
+      {worn}
+      onChange={(next: readonly string[]) => {
+        void wear(next);
+      }}
+    />
     {#if hasSaveFailed}
       <StatusLine message={m.settings_profile_badges_error_save()} isError={true} />
     {/if}

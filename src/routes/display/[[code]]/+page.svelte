@@ -5,6 +5,7 @@
   import { page } from "$app/state";
   import MadeBy from "$lib/components/MadeBy.svelte";
   import AutoScroll from "$lib/components/display/AutoScroll.svelte";
+  import GroupBadge from "$lib/components/badges/GroupBadge.svelte";
   import { groupProblemMessage } from "$lib/components/groups/problems";
   import { CARD_BACKGROUNDS } from "$lib/components/profile/colors";
   import { Button } from "$lib/components/ui/button";
@@ -288,6 +289,10 @@
             >
             <span class="flex min-w-0 flex-1 items-baseline gap-[0.5em]">
               <span class="max-w-full shrink-0 truncate font-medium">{nameOf(entry)}</span>
+              <!-- Only the first badge, as on every board row. -->
+              {#if entry.badges?.[0]}
+                <GroupBadge badge={entry.badges[0]} class="display-badge self-center" />
+              {/if}
               {#if entry.displayName !== null}
                 <span class="display-meta min-w-0 truncate text-muted-foreground"
                   >@{entry.username}</span
@@ -360,6 +365,14 @@
 
   .display-meta {
     font-size: calc(var(--line) * 0.55);
+  }
+
+  /* The badge, sized from the screen like everything else here. In em, so
+     the pill's padding grows with its text. */
+  :global(.display-badge) {
+    font-size: calc(var(--line) * 0.55);
+    gap: 0.35em;
+    padding: 0.35em 0.75em;
   }
 
   .display-status {

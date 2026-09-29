@@ -5,7 +5,8 @@
 // offline note can all be watched with numbers that change every few seconds.
 // Loaded on demand, so it never reaches a real visitor.
 
-import type { CardColor } from "./profile-rules";
+import type { Badge } from "./badge-rules";
+import { CARD_COLORS, type CardColor } from "./profile-rules";
 import type { DisplayBoard, GroupMember, GroupProblem } from "./groups";
 
 const ADJECTIVES = ["quiet", "brave", "sleepy", "swift", "gentle", "clever", "bright", "calm"];
@@ -21,7 +22,15 @@ const DISPLAY_NAMES = [
   "Lea 🌸",
   "たけし",
 ];
-const COLORS: readonly CardColor[] = ["green", "blue", "violet", "rose", "amber", "slate"];
+const COLORS: readonly CardColor[] = CARD_COLORS;
+
+// Badges a pretend class might wear. Most readers wear one, some none.
+const BADGES: readonly Badge[] = [
+  { emoji: "🦊", tag: "KITS", color: "orange" },
+  { emoji: null, tag: "N5", color: "teal" },
+  { emoji: "🐱", tag: "ネコ", color: "pink" },
+  { emoji: "🔰", tag: "1A", color: "blue" },
+];
 
 /** The class it starts with, and the most it grows to as people join. */
 const STARTING_SIZE = 28;
@@ -52,6 +61,7 @@ function newReader(index: number): Reader {
       score: Math.round(900 * Math.pow(0.92, index) * (0.8 + Math.random() * 0.4)),
       scoredAt: Date.now(),
       role: index === 0 ? "admin" : "member",
+      badges: Math.random() < 0.7 ? [pick(BADGES)] : [],
       isYou: false,
     },
     pace: 2 + Math.random() * 10,
