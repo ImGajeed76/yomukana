@@ -1,7 +1,13 @@
 import { describe, expect, test } from "bun:test";
 import { segmentKana } from "../romaji";
 import { startAttempt, type Attempt } from "./attempt";
-import { applyKey, classifyKey, shouldPreventDefault, type KeyEvent } from "./keyboard";
+import {
+  applyKey,
+  classifyKey,
+  shouldHoldKana,
+  shouldPreventDefault,
+  type KeyEvent,
+} from "./keyboard";
 
 function event(key: string, modifiers: Partial<KeyEvent> = {}): KeyEvent {
   return { key, ctrlKey: false, metaKey: false, altKey: false, ...modifiers };
@@ -94,5 +100,36 @@ describe("applyKey", () => {
     expect(attempt.finishedAt).not.toBeNull();
     expect(attempt.errors).toBe(2);
     expect(attempt.typing.keystrokes.join("")).toBe("konkai");
+  });
+});
+
+describe("shouldHoldKana", () => {
+  const nothingBefore = { backspaces: 0, keys: [] };
+
+  test("holds a kana the flick keypad's ゛゜小 key can still correct", () => {
+    expect(shouldHoldKana(type("が", ""), "か", nothingBefore, 2000)).toBe(true);
+    expect(shouldHoldKana(type("ぱ", ""), "ば", nothingBefore, 2000)).toBe(true);
+    expect(shouldHoldKana(type("きゃ", "ki"), "や", nothingBefore, 2000)).toBe(true);
+    expect(shouldHoldKana(type("ガ", ""), "カ", nothingBefore, 2000)).toBe(true);
+  });
+
+  test("holds a kana multitap passes through on the way to the right one", () => {
+    expect(shouldHoldKana(type("ね", ""), "な", nothingBefore, 2000)).toBe(true);
+    expect(shouldHoldKana(type("ど", ""), "た", nothingBefore, 2000)).toBe(true);
+  });
+
+  test("types a kana that is already right", () => {
+    expect(shouldHoldKana(type("か", ""), "か", nothingBefore, 2000)).toBe(false);
+  });
+
+  test("types a wrong kana on a key that cannot reach the right one", () => {
+    // A mistake, and counted as one straight away.
+    expect(shouldHoldKana(type("ね", ""), "か", nothingBefore, 2000)).toBe(false);
+  });
+
+  test("judges the kana after what the same change typed first", () => {
+    expect(shouldHoldKana(type("ねが", ""), "か", { backspaces: 0, keys: ["n", "e"] }, 2000)).toBe(
+      true,
+    );
   });
 });

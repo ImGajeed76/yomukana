@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { keysForCharacter, keysForText } from "./kana-keys";
+import { keypadNeighbours, keysForCharacter, keysForText } from "./kana-keys";
 import { press, startTypingKana } from "./matcher";
 
 /** Whether typing `text` on a Japanese keyboard reads the whole of `target`. */
@@ -55,5 +55,20 @@ describe("typing on a Japanese keyboard", () => {
 
   test("still refuses the wrong kana", () => {
     expect(acceptsKana("ねこ", "ねご")).toBe(false);
+  });
+});
+
+describe("keypadNeighbours", () => {
+  test("gives the rest of the key's row and what the ゛゜小 key makes", () => {
+    expect(keypadNeighbours("か")).toContain("が");
+    expect(keypadNeighbours("か")).toContain("こ");
+    expect(keypadNeighbours("ぱ")).toContain("は");
+    for (const kana of ["っ", "づ", "た"]) expect(keypadNeighbours("つ")).toContain(kana);
+    expect(keypadNeighbours("ヤ")).toContain("ゃ");
+  });
+
+  test("keeps separate keys apart", () => {
+    expect(keypadNeighbours("か")).not.toContain("さ");
+    expect(keypadNeighbours("猫")).toEqual([]);
   });
 });

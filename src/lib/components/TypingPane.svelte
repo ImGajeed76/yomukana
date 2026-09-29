@@ -11,6 +11,7 @@
   import {
     applyKey,
     classifyKey,
+    shouldHoldKana,
     shouldPreventDefault,
     type KeyAction,
   } from "$lib/session/keyboard";
@@ -82,6 +83,12 @@
    */
   let fieldKeyCounts: readonly number[] = [0];
   /**
+   * The keys of a kana a phone keypad is still on its way from, and when it
+   * was tapped. See Keypad in field.ts.
+   */
+  let held: string | null = null;
+  let heldAt = 0;
+  /**
    * The same for the desktop path: how many keys each key press stood for, so
    * a backspace after a kana typed in a Japanese keyboard's kana mode takes it
    * back whole. A plain letter is one, as it always was.
@@ -135,6 +142,7 @@
     // A sentence can end on a kana the keyboard is still composing. The field
     // is left to it, and what is in there stops counting towards this sentence.
     // It is reset when the keyboard finishes. See finishComposing.
+    held = null;
     if (isComposing) fieldKeyCounts = fieldKeyCounts.map(() => 0);
     else resetField();
   });
@@ -235,14 +243,24 @@
     if (element === null) return;
 
     const change = fieldChange(fieldWas, element.value);
-    const reading = readFieldChange(fieldKeyCounts, change, keysForCharacter);
+    const reading = readFieldChange(fieldKeyCounts, change, keysForCharacter, {
+      held,
+      shouldHold: (character, before) => shouldHoldKana(attempt, character, before, at),
+    });
     const from: InputMethod = change.inserted.some(isSpellableKana) ? "kana" : method;
+    // A kana the keypad turned into another was read when it was first tapped.
+    // The tap on ゛ or the next multitap press after it is hand, not eye.
+    const typedAt = held !== null && change.deleted > 0 ? heldAt : at;
+    heldAt = reading.held === null || held === null || change.deleted === 0 ? at : heldAt;
+    held = reading.held;
     fieldWas = element.value;
     fieldKeyCounts = reading.keyCounts;
 
     if (attempt.finishedAt === null) {
-      for (let count = 0; count < reading.backspaces; count++) apply({ kind: "backspace" }, at);
-      for (const key of reading.keys) apply({ kind: "type", key }, at, from);
+      for (let count = 0; count < reading.backspaces; count++) {
+        apply({ kind: "backspace" }, typedAt);
+      }
+      for (const key of reading.keys) apply({ kind: "type", key }, typedAt, from);
     }
 
     // Emptied, or backspaced past the resting value: put it back, or the next
@@ -260,6 +278,7 @@
   function resetField() {
     fieldWas = RESTING;
     fieldKeyCounts = [0];
+    held = null;
     if (field !== null) field.value = RESTING;
   }
 
@@ -275,7 +294,8 @@
   function finishComposing() {
     isComposing = false;
     setTimeout(() => {
-      if (!isComposing) resetField();
+      // A held kana stays where the keypad can still change it.
+      if (!isComposing && held === null) resetField();
     }, 0);
   }
 

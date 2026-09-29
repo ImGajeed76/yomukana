@@ -5,6 +5,7 @@
 // component is left with nothing but rendering. See CLAUDE.md 3.2.
 
 import { toCodePoints } from "../japanese/text";
+import { keypadNeighbours, keysForCharacter } from "../romaji/kana-keys";
 import type { InputMethod } from "../srs";
 import { backspaceKey, pressKey, type Attempt } from "./attempt";
 
@@ -82,4 +83,45 @@ export function applyKey(
 /** Whether this key press is the exercise's rather than the browser's. */
 export function shouldPreventDefault(action: KeyAction): boolean {
   return action.kind !== "ignore";
+}
+
+/** Whether every key of `keys` would be taken, starting from `attempt`. */
+function takesAll(attempt: Attempt, keys: string, at: number): boolean {
+  let state = attempt;
+  for (const key of keys) {
+    const outcome = applyKey(state, { kind: "type", key }, at);
+    if (outcome.wasRejected) return false;
+    state = outcome.attempt;
+  }
+  return true;
+}
+
+/**
+ * Whether a phone keypad's kana should be held rather than typed: it would be
+ * a mistake here, and another kana on the same keypad key would not. The
+ * reader is most likely still on their way to that one. See Keypad in field.ts.
+ *
+ * `before` is what the same field change does first, so the kana is judged
+ * where it will land.
+ */
+export function shouldHoldKana(
+  attempt: Attempt,
+  character: string,
+  before: { readonly backspaces: number; readonly keys: readonly string[] },
+  at: number,
+): boolean {
+  const own = keysForCharacter(character);
+  if (own === null || own === "") return false;
+
+  let state = attempt;
+  for (let count = 0; count < before.backspaces; count++) {
+    state = applyKey(state, { kind: "backspace" }, at).attempt;
+  }
+  for (const key of before.keys) state = applyKey(state, { kind: "type", key }, at).attempt;
+
+  if (takesAll(state, own, at)) return false;
+  return keypadNeighbours(character).some((neighbour) => {
+    const keys = keysForCharacter(neighbour) ?? "";
+    return keys !== "" && takesAll(state, keys, at);
+  });
 }

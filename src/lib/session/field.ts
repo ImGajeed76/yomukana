@@ -48,6 +48,31 @@ export interface FieldReading {
    * between changes, because deleting ね has to take back two keys, not one.
    */
   readonly keyCounts: readonly number[];
+  /** The keys of the last character, held back rather than typed. See Keypad. */
+  readonly held: string | null;
+}
+
+/**
+ * A phone keypad's way of reaching a kana through others.
+ *
+ * To type が on a flick keypad the reader types か and then turns it into が,
+ * and to type ね by multitap they pass through な, に and ぬ. Read one by one,
+ * each of those is a wrong key, and a reader who never meant any of them could
+ * not finish a sentence without mistakes. So a kana that is wrong, on a key
+ * that can still become the right one, is held: not a mistake, not progress,
+ * until the keypad changes it or the reader moves on and leaves it there.
+ */
+export interface Keypad {
+  /** The keys of the last character in the field, if it is being held. */
+  readonly held: string | null;
+  /**
+   * Whether to hold `character`, typed after `before` has been applied: it is
+   * wrong now and the keypad could still make it right.
+   */
+  readonly shouldHold: (
+    character: string,
+    before: { readonly backspaces: number; readonly keys: readonly string[] },
+  ) => boolean;
 }
 
 /**
@@ -68,9 +93,17 @@ export function readFieldChange(
   keyCounts: readonly number[],
   change: FieldChange,
   spell: (character: string) => string | null,
+  keypad: Keypad = { held: null, shouldHold: () => false },
 ): FieldReading {
-  const kept = keyCounts.slice(0, Math.max(0, keyCounts.length - change.deleted));
-  const removed = keyCounts.slice(kept.length);
+  // A held character still in the field after this change was left there on
+  // purpose: the reader moved on, so it is typed now, mistake or not. One the
+  // change deleted was never typed, and there is nothing to take back.
+  const released = change.deleted === 0 ? (keypad.held ?? "") : "";
+  const counts =
+    released === "" ? keyCounts : [...keyCounts.slice(0, -1), toCodePoints(released).length];
+
+  const kept = counts.slice(0, Math.max(0, counts.length - change.deleted));
+  const removed = counts.slice(kept.length);
   const removedKeys = removed.reduce((total, count) => total + count, 0);
 
   const spelled = change.inserted.map(spell);
@@ -83,9 +116,20 @@ export function readFieldChange(
   // What was typed after it, or the whole change when nothing was converted.
   const typed = spelled.slice(lastConverted + 1).map((keys) => keys ?? "");
 
+  const backspaces = lastConverted === -1 ? removedKeys : 0;
+  const keysBefore = [...toCodePoints(released), ...typed.slice(0, -1).flatMap(toCodePoints)];
+  const last = typed.at(-1) ?? "";
+  const lastCharacter = change.inserted.at(-1) ?? "";
+  const isHeld = last !== "" && keypad.shouldHold(lastCharacter, { backspaces, keys: keysBefore });
+
   return {
-    backspaces: lastConverted === -1 ? removedKeys : 0,
-    keys: typed.flatMap((keys) => toCodePoints(keys)),
-    keyCounts: [...kept, ...convertedCounts, ...typed.map((keys) => keys.length)],
+    backspaces,
+    keys: isHeld ? keysBefore : [...keysBefore, ...toCodePoints(last)],
+    keyCounts: [
+      ...kept,
+      ...convertedCounts,
+      ...typed.map((keys, index) => (isHeld && index === typed.length - 1 ? 0 : keys.length)),
+    ],
+    held: isHeld ? last : null,
   };
 }
