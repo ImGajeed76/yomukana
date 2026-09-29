@@ -3,6 +3,7 @@
   import { flip } from "svelte/animate";
   import { prefersReducedMotion } from "svelte/motion";
   import { page } from "$app/state";
+  import FlagCredit from "$lib/components/FlagCredit.svelte";
   import MadeBy from "$lib/components/MadeBy.svelte";
   import AutoScroll from "$lib/components/display/AutoScroll.svelte";
   import GroupBadge from "$lib/components/badges/GroupBadge.svelte";
@@ -323,6 +324,8 @@
       class="display-footer display-meta flex items-baseline justify-between gap-8 border-t border-border text-muted-foreground"
     >
       <span class="font-medium text-foreground">{m.common_app_name()}</span>
+      <!-- A classroom screen is often a Windows PC, where flags on badges need the credit. -->
+      <FlagCredit />
       <MadeBy />
     </footer>
   {/if}

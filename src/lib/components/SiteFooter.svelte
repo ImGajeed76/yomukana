@@ -1,4 +1,5 @@
 <script lang="ts">
+  import FlagCredit from "$lib/components/FlagCredit.svelte";
   import MadeBy from "$lib/components/MadeBy.svelte";
   import { ATTRIBUTION } from "$lib/corpus/types";
   import { m } from "$lib/paraglide/messages";
@@ -24,22 +25,25 @@
   <div
     class="mx-auto flex w-full max-w-[1152px] flex-wrap items-baseline justify-between gap-x-8 gap-y-2 px-6 py-6 text-xs text-muted-foreground"
   >
-    <!--
-      Built from pieces around the links, because the order changes with the
-      language: Japanese puts the source first and the maker last. The pieces
-      carry their own spaces, since Japanese has none between words.
-    -->
-    <p>
-      {m.footer_credit_before_source()}<a
-        class="underline underline-offset-2"
-        href={ATTRIBUTION.sourceUrl}
-        rel="noreferrer">{ATTRIBUTION.source}</a
-      >{m.footer_credit_before_licence()}<a
-        class="underline underline-offset-2"
-        href={ATTRIBUTION.licenceUrl}
-        rel="noreferrer">{ATTRIBUTION.licence}</a
-      >{m.footer_credit_before_readings()}{readings}{m.footer_credit_after_readings()}
-    </p>
+    <div class="flex flex-col gap-1">
+      <!--
+        Built from pieces around the links, because the order changes with the
+        language: Japanese puts the source first and the maker last. The pieces
+        carry their own spaces, since Japanese has none between words.
+      -->
+      <p>
+        {m.footer_credit_before_source()}<a
+          class="underline underline-offset-2"
+          href={ATTRIBUTION.sourceUrl}
+          rel="noreferrer">{ATTRIBUTION.source}</a
+        >{m.footer_credit_before_licence()}<a
+          class="underline underline-offset-2"
+          href={ATTRIBUTION.licenceUrl}
+          rel="noreferrer">{ATTRIBUTION.licence}</a
+        >{m.footer_credit_before_readings()}{readings}{m.footer_credit_after_readings()}
+      </p>
+      <FlagCredit />
+    </div>
 
     <!--
       A mail link, not a form: a form would need a server or a service to post

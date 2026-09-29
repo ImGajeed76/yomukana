@@ -5,6 +5,7 @@
   import { DitherBackdrop } from "$lib/charts";
   import SiteFooter from "$lib/components/SiteFooter.svelte";
   import SiteNav from "$lib/components/SiteNav.svelte";
+  import { drawFlagsWhereMissing } from "$lib/flag-font.svelte";
   import { install } from "$lib/install.svelte";
   import { m } from "$lib/paraglide/messages";
   import { getLocale } from "$lib/paraglide/runtime";
@@ -18,6 +19,12 @@
   // loaded, so this has to be listening from the start. See install.svelte.ts.
   $effect(() => {
     install.listen();
+  });
+
+  // Once, before any badge is drawn: on Windows, flags come from a font of
+  // their own. See flag-font.svelte.ts.
+  $effect(() => {
+    drawFlagsWhereMissing();
   });
 
   // app.html is prerendered with lang="en" because there is no server to

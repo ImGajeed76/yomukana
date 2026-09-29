@@ -184,7 +184,9 @@
   --color-qr-light: var(--qr-light);
   /* Geist has no Japanese, so Japanese interface text falls through to Noto
      Sans JP rather than to whatever the system has. */
-  --font-sans: "Geist Variable", "Noto Sans JP", sans-serif;
+  /* "Twemoji Country Flags" is only ever defined on Windows, and only holds
+     flags: everywhere else it is skipped. See src/lib/flag-font.svelte.ts. */
+  --font-sans: "Twemoji Country Flags", "Geist Variable", "Noto Sans JP", sans-serif;
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -223,7 +225,7 @@
   --radius-2xl: calc(var(--radius) * 1.8);
   --radius-3xl: calc(var(--radius) * 2.2);
   --radius-4xl: calc(var(--radius) * 2.6);
-  --font-heading: "Geist Variable", sans-serif;
+  --font-heading: "Twemoji Country Flags", "Geist Variable", sans-serif;
   --font-mono: "Geist Mono Variable", ui-monospace, monospace;
   /* The sentence under test. Kept separate from --font-sans so a fallback here
 	   is visible as a bug rather than silently degrading the thing being measured.

@@ -23,14 +23,18 @@ const APP_CACHE = `app-${version}`;
 /** Sentence chunks, cached as they are first read. */
 const CORPUS_CACHE = `corpus-${version}`;
 const CORPUS_PATH = "/corpus/";
+/** The folder the flag font is served from. */
+const FONTS_PATH = "/fonts/";
 
 // The corpus is twelve megabytes across ten bands, and most readers only ever
 // open a few of them. So it is not downloaded up front: each band is kept the
-// first time it is read, which the app already does a band ahead of need.
+// first time it is read, which the app already does a band ahead of need. The
+// flag font is left out too: only Windows uses it (see
+// src/lib/flag-font.svelte.ts), and everyone else would download it for nothing.
 const APP_FILES = [
   ...build,
   ...prerendered,
-  ...files.filter((file) => !file.startsWith(CORPUS_PATH)),
+  ...files.filter((file) => !file.startsWith(CORPUS_PATH) && !file.startsWith(FONTS_PATH)),
 ];
 
 /**
