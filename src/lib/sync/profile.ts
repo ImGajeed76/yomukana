@@ -4,6 +4,7 @@
 
 import { callApi, callApiSignedOut } from "./api";
 import type { Progress } from "../db";
+import type { Badge } from "./badge-rules";
 import { isCardColor, type CardColor } from "./profile-rules";
 
 export interface Profile {
@@ -15,6 +16,11 @@ export interface Profile {
   readonly score: number;
   /** When the score was last sent, in epoch milliseconds. */
   readonly scoredAt: number | null;
+  /**
+   * The group badges they wear, in the order they chose. Missing from anything
+   * kept on this device from before badges existed, which shows as none.
+   */
+  readonly badges?: readonly Badge[];
 }
 
 /** A profile at /@username, and how the visitor stands to it. */

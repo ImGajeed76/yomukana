@@ -11,6 +11,7 @@
     "corpus:fetch": "bun scripts/corpus/sources.ts",
     "corpus:build": "bun scripts/corpus/build.ts",
     "corpus:text-share": "bun scripts/corpus/text-share.ts",
+    "badges:emoji-names": "bun scripts/badges/emoji-names.ts",
     "prepare": "svelte-kit sync || echo ''",
     "check": "bun run format:check && bun run lint && bun run check:dashes && bun run check:messages && svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
     "check:fast": "prettier --check --cache . && eslint --cache . && bun run check:dashes && bun run check:messages",

@@ -40,6 +40,7 @@ export async function loadGlobalDisplayBoard(
     scoredAt: line.scoredAt,
     role: "member",
     isYou: false,
+    badges: line.badges,
   }));
   return { value: { name, members } };
 }

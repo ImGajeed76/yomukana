@@ -2,7 +2,8 @@
   import { Check, Copy } from "@lucide/svelte";
   import StatusLine from "$lib/components/StatusLine.svelte";
   import UsernameDialog from "$lib/components/UsernameDialog.svelte";
-  import { CARD_BACKGROUNDS } from "$lib/components/profile/colors";
+  import BadgeChooser from "$lib/components/badges/BadgeChooser.svelte";
+  import { CARD_BACKGROUNDS, COLOR_NAMES } from "$lib/components/profile/colors";
   import ProfileCard from "$lib/components/profile/ProfileCard.svelte";
   import QrCode from "$lib/components/profile/QrCode.svelte";
   import { Button } from "$lib/components/ui/button";
@@ -21,7 +22,8 @@
     type ProfileChanges,
     type ProfileProblem,
   } from "$lib/sync/profile";
-  import { CARD_COLORS, DISPLAY_NAME_MAX, type CardColor } from "$lib/sync/profile-rules";
+  import type { Badge } from "$lib/sync/badge-rules";
+  import { CARD_COLORS, DISPLAY_NAME_MAX } from "$lib/sync/profile-rules";
   import { sync } from "$lib/sync/sync";
 
   const progress = new Progress();
@@ -47,15 +49,6 @@
     taken: m.leaderboards_following_rename_error_taken,
     offline: m.leaderboards_following_error_offline,
     unknown: m.leaderboards_following_error_unknown,
-  };
-
-  const COLOR_NAMES: Record<CardColor, () => string> = {
-    green: m.settings_profile_color_green,
-    blue: m.settings_profile_color_blue,
-    violet: m.settings_profile_color_violet,
-    rose: m.settings_profile_color_rose,
-    amber: m.settings_profile_color_amber,
-    slate: m.settings_profile_color_slate,
   };
 
   $effect(() => {
@@ -164,6 +157,7 @@
       displayName={displayName.trim() === "" ? null : displayName.trim()}
       cardColor={profile.cardColor}
       {score}
+      badges={profile.badges}
     />
 
     <section class="flex flex-col gap-5 rounded-lg border border-border bg-card p-6">
@@ -271,6 +265,12 @@
         <StatusLine message={PROBLEM_MESSAGES[choiceProblem]()} isError={true} />
       {/if}
     </section>
+
+    <BadgeChooser
+      onChange={(badges: readonly Badge[]) => {
+        if (profile !== null) void keep({ ...profile, badges });
+      }}
+    />
 
     <!--
       The link, and the same link as a code a phone camera opens. Showing

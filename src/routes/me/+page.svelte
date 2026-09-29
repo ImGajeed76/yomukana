@@ -71,6 +71,7 @@
         displayName={profile.displayName}
         cardColor={profile.cardColor}
         {score}
+        badges={profile.badges}
       />
       <QrCode value={link} label={m.settings_profile_label_qr()} class="w-full" />
       <div class="flex flex-wrap gap-2">

@@ -2,9 +2,11 @@
 
 import { Hono } from "hono";
 import { toCodePoints } from "../../src/lib/japanese/text";
+import type { Badge } from "../../src/lib/sync/badge-rules";
 import { DISPLAY_NAME_MAX, isCardColor, type CardColor } from "../../src/lib/sync/profile-rules";
 import { isValidUsername, normaliseUsername, randomUsername } from "../../src/lib/sync/username";
 import { readerOf } from "./auth";
+import { badgesFor } from "./badges";
 import { isUniqueViolation, pool } from "./db";
 import { isOffensiveName } from "./names";
 import { refuse } from "./problems";
@@ -22,8 +24,8 @@ export interface ProfileRow {
   scored_at: Date | null;
 }
 
-/** A profile as the app sees it. */
-export function profileOf(row: ProfileRow): Record<string, unknown> {
+/** A profile as the app sees it, with the badges it wears. */
+export function profileOf(row: ProfileRow, badges: readonly Badge[]): Record<string, unknown> {
   return {
     username: row.username,
     displayName: row.display_name,
@@ -31,7 +33,14 @@ export function profileOf(row: ProfileRow): Record<string, unknown> {
     isListed: row.is_listed,
     score: row.score,
     scoredAt: row.scored_at === null ? null : row.scored_at.getTime(),
+    badges,
   };
+}
+
+/** One reader's profile, with their badges looked up. */
+export async function profileWithBadges(row: ProfileRow): Promise<Record<string, unknown>> {
+  const badges = await badgesFor([row.user_id]);
+  return profileOf(row, badges.get(row.user_id) ?? []);
 }
 
 export const profiles = new Hono();
@@ -48,7 +57,7 @@ profiles.post("/profile/ensure", async (c) => {
     userId,
   ]);
   const found = existing.rows[0];
-  if (found !== undefined) return c.json(profileOf(found));
+  if (found !== undefined) return c.json(await profileWithBadges(found));
 
   for (let attempt = 0; attempt < NAME_ATTEMPTS; attempt++) {
     // Only the name clashing is expected and retried. Anything else propagates.
@@ -62,12 +71,12 @@ profiles.post("/profile/ensure", async (c) => {
         [userId, randomUsername()],
       );
       const row = created.rows[0];
-      if (row !== undefined) return c.json(profileOf(row), 201);
+      if (row !== undefined) return c.json(profileOf(row, []), 201);
       const made = await pool.query<ProfileRow>("select * from profiles where user_id = $1", [
         userId,
       ]);
       const other = made.rows[0];
-      if (other !== undefined) return c.json(profileOf(other));
+      if (other !== undefined) return c.json(await profileWithBadges(other));
     } catch (error) {
       if (!isUniqueViolation(error)) throw error;
     }
@@ -134,7 +143,7 @@ profiles.patch("/profile", async (c) => {
       values,
     );
     const row = updated.rows[0];
-    return row === undefined ? refuse(c, "not-found") : c.json(profileOf(row));
+    return row === undefined ? refuse(c, "not-found") : c.json(await profileWithBadges(row));
   } catch (error) {
     if (isUniqueViolation(error)) return refuse(c, "taken");
     throw error;
@@ -161,5 +170,9 @@ profiles.get("/u/:username", async (c) => {
   );
   const row = result.rows[0];
   if (row === undefined) return refuse(c, "not-found");
-  return c.json({ ...profileOf(row), isYou: viewer === row.user_id, isFollowed: row.is_followed });
+  return c.json({
+    ...(await profileWithBadges(row)),
+    isYou: viewer === row.user_id,
+    isFollowed: row.is_followed,
+  });
 });

@@ -57,6 +57,7 @@
             score: line.score,
             scoredAt: line.scoredAt,
             isYou: line.isYou,
+            badges: line.badges,
           })),
           ownScore,
         ),

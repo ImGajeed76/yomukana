@@ -19,11 +19,13 @@ import { authenticatedRole, authUid, crudPolicy } from "drizzle-orm/neon";
 import {
   check,
   doublePrecision,
+  foreignKey,
   index,
   jsonb,
   pgPolicy,
   pgTable,
   primaryKey,
+  smallint,
   text,
   boolean,
   timestamp,
@@ -165,7 +167,10 @@ export const profiles = pgTable(
     check("profiles_display_name_length", sql`char_length(${table.displayName}) between 1 and 32`),
     check(
       "profiles_card_color",
-      sql`${table.cardColor} in ('green', 'blue', 'violet', 'rose', 'amber', 'slate')`,
+      sql`${table.cardColor} in (
+        'rose', 'orange', 'amber', 'lime', 'green', 'teal',
+        'cyan', 'blue', 'indigo', 'violet', 'pink', 'slate'
+      )`,
     ),
     pgPolicy("profiles_read_own_and_added", {
       for: "select",
@@ -260,12 +265,33 @@ export const groups = pgTable(
     // Shows the board, read-only and without signing in, on a screen in a
     // classroom. Null until the admin makes one.
     displayCode: text("display_code"),
+    // The group's badge, which members can wear on their card: a tag of 2 to
+    // 4 characters in a card colour, and an emoji from the app's own list if
+    // the admin wants one. No tag, no badge. The function checks the emoji and
+    // the tag's letters, see src/lib/sync/badge-rules.ts.
+    badgeEmoji: text("badge_emoji"),
+    badgeTag: text("badge_tag"),
+    badgeColor: text("badge_color"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
     uniqueIndex("groups_invite_code").on(table.inviteCode),
     uniqueIndex("groups_display_code").on(table.displayCode),
     check("groups_name_length", sql`char_length(${table.name}) between 1 and 40`),
+    check(
+      "groups_badge_whole",
+      sql`(${table.badgeTag} is null) = (${table.badgeColor} is null)
+        and (${table.badgeTag} is not null or ${table.badgeEmoji} is null)`,
+    ),
+    check("groups_badge_emoji_length", sql`char_length(${table.badgeEmoji}) between 1 and 8`),
+    check("groups_badge_tag_length", sql`char_length(${table.badgeTag}) between 2 and 4`),
+    check(
+      "groups_badge_color",
+      sql`${table.badgeColor} in (
+        'rose', 'orange', 'amber', 'lime', 'green', 'teal',
+        'cyan', 'blue', 'indigo', 'violet', 'pink', 'slate'
+      )`,
+    ),
   ],
 ).enableRLS();
 
@@ -293,5 +319,34 @@ export const groupMembers = pgTable(
     primaryKey({ columns: [table.groupId, table.userId] }),
     index("group_members_by_reader").on(table.userId),
     check("group_members_role", sql`${table.role} in ('admin', 'member')`),
+  ],
+).enableRLS();
+
+/**
+ * The group badges a reader wears on their card, up to three, in the order
+ * they chose. Tied to their membership, not just to the group: leaving a group
+ * or being removed from it takes its badge off by the same cascade, so no rule
+ * anywhere has to remember to.
+ *
+ * Closed to the Data API like the group tables. The following board reads the
+ * badges through the `followed_badges` view instead, which shows only the
+ * reader and the people they follow. See drizzle/migrations.
+ */
+export const profileBadges = pgTable(
+  "profile_badges",
+  {
+    userId: text("user_id").notNull(),
+    groupId: uuid("group_id").notNull(),
+    position: smallint("position").notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.userId, table.groupId] }),
+    uniqueIndex("profile_badges_position").on(table.userId, table.position),
+    check("profile_badges_position_range", sql`${table.position} between 0 and 2`),
+    foreignKey({
+      columns: [table.groupId, table.userId],
+      foreignColumns: [groupMembers.groupId, groupMembers.userId],
+      name: "profile_badges_membership",
+    }).onDelete("cascade"),
   ],
 ).enableRLS();

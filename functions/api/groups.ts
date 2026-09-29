@@ -9,6 +9,12 @@ import { Hono, type Context } from "hono";
 import type { PoolClient } from "pg";
 import { toCodePoints } from "../../src/lib/japanese/text";
 import {
+  badgeTagFrom,
+  isBadgeColor,
+  isBadgeEmoji,
+  type Badge,
+} from "../../src/lib/sync/badge-rules";
+import {
   DEFAULT_INVITE_DAYS,
   GROUP_MEMBERS_MAX,
   GROUP_NAME_MAX,
@@ -17,11 +23,13 @@ import {
 } from "../../src/lib/sync/group-rules";
 import { normaliseUsername } from "../../src/lib/sync/username";
 import { readerOf } from "./auth";
+import { badgesFor } from "./badges";
 import { DISPLAY_CODE_LENGTH, INVITE_CODE_LENGTH, isCode, isUuid, randomCode } from "./codes";
-import { pool } from "./db";
+import { inTransaction, pool } from "./db";
 import { isOffensiveName } from "./names";
 import { refuse } from "./problems";
 import type { ProfileRow } from "./profiles";
+import type { CardColor } from "../../src/lib/sync/profile-rules";
 
 type Role = "admin" | "member";
 
@@ -31,6 +39,9 @@ interface GroupRow {
   invite_code: string | null;
   invite_expires_at: Date | null;
   display_code: string | null;
+  badge_emoji: string | null;
+  badge_tag: string | null;
+  badge_color: CardColor | null;
 }
 
 interface MemberRow extends ProfileRow {
@@ -50,8 +61,20 @@ async function membersOf(groupId: string): Promise<MemberRow[]> {
   return result.rows;
 }
 
+/** The group's own badge, or null when it has none. */
+function badgeOf(group: GroupRow): Badge | null {
+  if (group.badge_tag === null || group.badge_color === null) {
+    return null;
+  }
+  return { emoji: group.badge_emoji, tag: group.badge_tag, color: group.badge_color };
+}
+
 /** A member as a board line. Ids stay on the server: the username is enough to link to them. */
-function lineOf(row: MemberRow, viewer: string | null): Record<string, unknown> {
+function lineOf(
+  row: MemberRow,
+  viewer: string | null,
+  badges: ReadonlyMap<string, Badge[]>,
+): Record<string, unknown> {
   return {
     username: row.username,
     displayName: row.display_name,
@@ -60,6 +83,7 @@ function lineOf(row: MemberRow, viewer: string | null): Record<string, unknown> 
     scoredAt: row.scored_at === null ? null : row.scored_at.getTime(),
     role: row.role,
     isYou: row.user_id === viewer,
+    badges: badges.get(row.user_id) ?? [],
   };
 }
 
@@ -100,24 +124,6 @@ async function groupsOfReader(userId: string, client: PoolClient | null = null):
     [userId],
   );
   return Number(result.rows[0]?.count ?? 0);
-}
-
-/** Runs `work` in one transaction, so a group is never left half made. */
-async function inTransaction<T>(work: (client: PoolClient) => Promise<T>): Promise<T> {
-  const client = await pool.connect();
-  // Whatever goes wrong, the transaction is rolled back and the connection
-  // returned, then the error goes on to Hono, which answers 500.
-  try {
-    await client.query("begin");
-    const result = await work(client);
-    await client.query("commit");
-    return result;
-  } catch (error) {
-    await client.query("rollback");
-    throw error;
-  } finally {
-    client.release();
-  }
 }
 
 export const groups = new Hono();
@@ -193,11 +199,13 @@ groups.get("/groups/:id", async (c) => {
   const row = group.rows[0];
   if (row === undefined) return refuse(c, "not-found");
   const isAdmin = role === "admin";
+  const badges = await badgesFor(members.map((member) => member.user_id));
   return c.json({
     id: row.group_id,
     name: row.name,
     role,
-    members: members.map((member) => lineOf(member, userId)),
+    badge: badgeOf(row),
+    members: members.map((member) => lineOf(member, userId, badges)),
     invite: isAdmin ? inviteOf(row) : null,
     displayCode: isAdmin ? row.display_code : null,
   });
@@ -287,6 +295,43 @@ groups.delete("/groups/:id/invite", async (c) => {
     "update groups set invite_code = null, invite_expires_at = null where group_id = $1",
     [admin.groupId],
   );
+  return c.body(null, 204);
+});
+
+/**
+ * Sets the group's badge, which members can then wear. The tag is checked like
+ * a name, because it ends up on people's cards in front of everyone.
+ */
+groups.put("/groups/:id/badge", async (c) => {
+  const admin = await adminOf(c);
+  if (admin instanceof Response) return admin;
+  const body = await bodyOf(c);
+  const tag = typeof body.tag === "string" ? badgeTagFrom(body.tag) : null;
+  // The emoji is optional: missing or null means a tag on its own.
+  const emoji = body.emoji ?? null;
+  if ((emoji !== null && !isBadgeEmoji(emoji)) || tag === null || !isBadgeColor(body.color)) {
+    return refuse(c, "invalid");
+  }
+  if (isOffensiveName(tag)) return refuse(c, "offensive");
+  const badge: Badge = { emoji, tag, color: body.color };
+  await pool.query(
+    "update groups set badge_emoji = $1, badge_tag = $2, badge_color = $3 where group_id = $4",
+    [badge.emoji, badge.tag, badge.color, admin.groupId],
+  );
+  return c.json(badge);
+});
+
+/** Takes the badge away, off every card that wore it. */
+groups.delete("/groups/:id/badge", async (c) => {
+  const admin = await adminOf(c);
+  if (admin instanceof Response) return admin;
+  await inTransaction(async (client) => {
+    await client.query("delete from profile_badges where group_id = $1", [admin.groupId]);
+    await client.query(
+      "update groups set badge_emoji = null, badge_tag = null, badge_color = null where group_id = $1",
+      [admin.groupId],
+    );
+  });
   return c.body(null, 204);
 });
 
@@ -420,5 +465,9 @@ groups.get("/display/:code", async (c) => {
   const row = group.rows[0];
   if (row === undefined) return refuse(c, "not-found");
   const members = await membersOf(row.group_id);
-  return c.json({ name: row.name, members: members.map((member) => lineOf(member, null)) });
+  const badges = await badgesFor(members.map((member) => member.user_id));
+  return c.json({
+    name: row.name,
+    members: members.map((member) => lineOf(member, null, badges)),
+  });
 });

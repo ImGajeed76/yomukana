@@ -6,6 +6,7 @@
 // drizzle/schema.ts and drizzle/migrations/0003_friend_lookup.sql.
 
 import type { Progress } from "../db";
+import { isBadgeColor, type Badge } from "./badge-rules";
 import type { BoardEntry } from "./board";
 import { callApi } from "./api";
 import { connect, type SyncClient } from "./client";
@@ -54,10 +55,23 @@ export async function loadBoard(): Promise<BoardEntry[] | null> {
   try {
     const client = await connect();
     const userId = await currentUserId(client);
-    const rows = await client
-      .from("profiles")
-      .select("user_id, username, display_name, score, scored_at");
+    // Side by side, so the badges cost no extra wait. The view shows the same
+    // people the profiles do: the reader and whoever they follow.
+    const [rows, worn] = await Promise.all([
+      client.from("profiles").select("user_id, username, display_name, score, scored_at"),
+      client.from("followed_badges").select("user_id, emoji, tag, color").order("position"),
+    ]);
     if (rows.error !== null || userId === null) return null;
+
+    // A board without badges is still a board, so a failed badge read only
+    // leaves them off.
+    const badges = new Map<string, Badge[]>();
+    for (const row of worn.data ?? []) {
+      if (!isBadgeColor(row.color)) continue;
+      const list = badges.get(row.user_id) ?? [];
+      list.push({ emoji: row.emoji, tag: row.tag, color: row.color });
+      badges.set(row.user_id, list);
+    }
 
     return rows.data.map((row) => ({
       userId: row.user_id,
@@ -66,6 +80,7 @@ export async function loadBoard(): Promise<BoardEntry[] | null> {
       score: row.score,
       scoredAt: row.scored_at === null ? null : Date.parse(row.scored_at),
       isYou: row.user_id === userId,
+      badges: badges.get(row.user_id) ?? [],
     }));
   } catch (error) {
     console.warn("could not load the friends board", error);

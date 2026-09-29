@@ -6,7 +6,20 @@
  * a pair of theme tokens in layout.css, a shade for light mode and one for
  * dark, so a card reads well in both. Mirrors the check in drizzle/schema.ts.
  */
-export const CARD_COLORS = ["green", "blue", "violet", "rose", "amber", "slate"] as const;
+export const CARD_COLORS = [
+  "rose",
+  "orange",
+  "amber",
+  "lime",
+  "green",
+  "teal",
+  "cyan",
+  "blue",
+  "indigo",
+  "violet",
+  "pink",
+  "slate",
+] as const;
 export type CardColor = (typeof CARD_COLORS)[number];
 
 /** A display name is free text in any script, up to this many characters. */

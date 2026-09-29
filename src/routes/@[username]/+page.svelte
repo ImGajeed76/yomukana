@@ -82,6 +82,7 @@
         displayName={view.displayName}
         cardColor={view.cardColor}
         score={view.score}
+        badges={view.badges}
       />
 
       <div class="flex flex-wrap gap-2">

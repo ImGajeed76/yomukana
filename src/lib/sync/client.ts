@@ -73,7 +73,19 @@ interface Database {
       >;
       friends: Table<{ follower_id: string; followee_id: string }, { followee_id: string }>;
     };
-    Views: Record<string, never>;
+    Views: {
+      // The badges of the reader and the people they follow. Read only.
+      followed_badges: {
+        Row: {
+          user_id: string;
+          position: number;
+          emoji: string | null;
+          tag: string;
+          color: string;
+        };
+        Relationships: [];
+      };
+    };
     Functions: {
       find_profile: {
         Args: { name: string };

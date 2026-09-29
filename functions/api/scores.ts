@@ -12,10 +12,12 @@ import {
   RELEARN_MAX_PER_HOUR,
   leastTimeTo,
 } from "../../src/lib/sync/score-limits";
+import type { Badge } from "../../src/lib/sync/badge-rules";
 import { readerOf } from "./auth";
+import { badgesFor } from "./badges";
 import { pool } from "./db";
 import { refuse } from "./problems";
-import { profileOf, type ProfileRow } from "./profiles";
+import { profileOf, profileWithBadges, type ProfileRow } from "./profiles";
 import { judgeScore, type ScoreLimits } from "./score-check";
 
 const MINUTE = 60_000;
@@ -106,16 +108,20 @@ scores.post("/score", async (c) => {
        and accepted_at < (select max(accepted_at) from score_submissions where user_id = $1)`,
     [userId, KEEP_INTERVAL],
   );
-  return c.json(profileOf(row));
+  return c.json(await profileWithBadges(row));
 });
 
 interface GlobalRow extends ProfileRow {
   rank: string;
 }
 
-function lineOf(row: GlobalRow, viewer: string | null): Record<string, unknown> {
+function lineOf(
+  row: GlobalRow,
+  viewer: string | null,
+  badges: ReadonlyMap<string, Badge[]>,
+): Record<string, unknown> {
   return {
-    ...profileOf(row),
+    ...profileOf(row, badges.get(row.user_id) ?? []),
     rank: Number(row.rank),
     isYou: row.user_id === viewer,
   };
@@ -140,8 +146,11 @@ scores.get("/global", async (c) => {
   ]);
   const ownRow = own?.rows[0];
   const isOwnShown = ownRow === undefined || top.rows.some((row) => row.user_id === viewer);
+  const badges = await badgesFor(
+    [...top.rows, ...(ownRow === undefined ? [] : [ownRow])].map((row) => row.user_id),
+  );
   return c.json({
-    lines: top.rows.map((row) => lineOf(row, viewer)),
-    you: isOwnShown ? null : lineOf(ownRow, viewer),
+    lines: top.rows.map((row) => lineOf(row, viewer, badges)),
+    you: isOwnShown ? null : lineOf(ownRow, viewer, badges),
   });
 });

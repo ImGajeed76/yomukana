@@ -1,5 +1,7 @@
 <script lang="ts">
   import type { Snippet } from "svelte";
+  import GroupBadge from "$lib/components/badges/GroupBadge.svelte";
+  import type { Badge } from "$lib/sync/badge-rules";
   import { m } from "$lib/paraglide/messages";
   import type { CardColor } from "$lib/sync/profile-rules";
   import { CARD_BACKGROUNDS } from "./colors";
@@ -10,11 +12,13 @@
     cardColor: CardColor;
     /** The score to show, or null to leave it off, as a private profile does. */
     score: number | null;
+    /** The group badges they wear, in their order. */
+    badges?: readonly Badge[];
     /** Buttons under the name, like Follow. */
     children?: Snippet;
   }
 
-  let { username, displayName, cardColor, score, children }: Props = $props();
+  let { username, displayName, cardColor, score, badges = [], children }: Props = $props();
 
   const graphemes = new Intl.Segmenter(undefined, { granularity: "grapheme" });
 
@@ -48,6 +52,13 @@
       <div class="flex min-w-0 flex-col">
         <span class="truncate text-xl leading-snug font-semibold">{name}</span>
         <span class="truncate text-sm text-muted-foreground">@{username}</span>
+        {#if badges.length > 0}
+          <div class="mt-2 flex flex-wrap gap-1">
+            {#each badges as badge, index (index)}
+              <GroupBadge {badge} />
+            {/each}
+          </div>
+        {/if}
       </div>
       {#if score !== null}
         <div class="flex flex-col items-end">

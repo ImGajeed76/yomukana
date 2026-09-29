@@ -4,6 +4,7 @@
 
 import type { Progress } from "../db";
 import { callApi, callApiSignedOut } from "./api";
+import type { Badge } from "./badge-rules";
 import type { BoardEntry } from "./board";
 import type { InviteDays } from "./group-rules";
 import type { CardColor } from "./profile-rules";
@@ -18,6 +19,11 @@ export interface GroupMember {
   readonly scoredAt: number | null;
   readonly role: GroupRole;
   readonly isYou: boolean;
+  /**
+   * The group badges they wear, in the order they chose. Missing from anything
+   * kept on this device from before badges existed, which shows as none.
+   */
+  readonly badges?: readonly Badge[];
 }
 
 export interface Invite {
@@ -30,6 +36,8 @@ export interface Group {
   readonly id: string;
   readonly name: string;
   readonly role: GroupRole;
+  /** The badge members can wear, or null. Missing from a group kept from before badges existed. */
+  readonly badge?: Badge | null;
   readonly members: readonly GroupMember[];
   /** The invite while it works. Only the admin is sent it. */
   readonly invite: Invite | null;
@@ -138,6 +146,16 @@ export async function stopDisplayLink(id: string): Promise<Result<undefined>> {
   return resultOf(await callApi(`/groups/${id}/display`, { method: "DELETE" }));
 }
 
+/** Admin only: gives the group a badge, or changes it. Answers with the badge as kept. */
+export async function setGroupBadge(id: string, badge: Badge): Promise<Result<Badge>> {
+  return resultOf(await callApi(`/groups/${id}/badge`, { method: "PUT", ...send(badge) }));
+}
+
+/** Admin only: takes the badge away, off every card that wore it. */
+export async function removeGroupBadge(id: string): Promise<Result<undefined>> {
+  return resultOf(await callApi(`/groups/${id}/badge`, { method: "DELETE" }));
+}
+
 /** What an invite leads to. Asked as nobody when the visitor is not signed in. */
 export async function previewInvite(
   code: string,
@@ -165,6 +183,7 @@ export function boardOf(members: readonly GroupMember[]): BoardEntry[] {
     score: member.score,
     scoredAt: member.scoredAt,
     isYou: member.isYou,
+    badges: member.badges,
   }));
 }
 

@@ -1,12 +1,15 @@
 <script lang="ts">
-  import { Presentation, Settings2, UserPlus } from "@lucide/svelte";
+  import { Plus, Presentation, Settings2, UserPlus } from "@lucide/svelte";
   import BoardList from "$lib/components/BoardList.svelte";
+  import BadgeDialog from "$lib/components/badges/BadgeDialog.svelte";
+  import GroupBadge from "$lib/components/badges/GroupBadge.svelte";
   import StatusLine from "$lib/components/StatusLine.svelte";
   import * as AlertDialog from "$lib/components/ui/alert-dialog";
   import { Button } from "$lib/components/ui/button";
   import type { Progress } from "$lib/db";
   import { m } from "$lib/paraglide/messages";
   import { timeAgo } from "$lib/stats";
+  import type { Badge } from "$lib/sync/badge-rules";
   import { nameOf, rankBoard, standingOf, type RankedEntry, type Standing } from "$lib/sync/board";
   import {
     boardOf,
@@ -84,6 +87,12 @@
   });
 
   let isAdmin = $derived(group?.role === "admin");
+  let isBadgeOpen = $state(false);
+  /** The reader's own name on this board, for the badge preview. */
+  let ownName = $derived.by(() => {
+    const own = group?.members.find((member) => member.isYou);
+    return own === undefined ? "" : (own.displayName ?? own.username);
+  });
   let ranked = $derived(group === null ? [] : rankBoard(boardOf(group.members), ownScore));
   let standing = $derived(standingOf(ranked));
 
@@ -140,7 +149,40 @@
 <section class="flex flex-col gap-5 rounded-lg border border-border bg-background p-6">
   <div class="flex flex-wrap items-center justify-between gap-2">
     <div class="flex min-w-0 flex-col">
-      <h2 class="truncate text-lg leading-snug font-medium">{group?.name ?? ""}</h2>
+      <!--
+        The group's badge beside its name, so members see there is one to
+        wear. For the admin it is also where the badge is made and changed.
+      -->
+      <div class="flex min-w-0 items-center gap-2">
+        <h2 class="truncate text-lg leading-snug font-medium">{group?.name ?? ""}</h2>
+        {#if group?.badge && isAdmin}
+          <button
+            type="button"
+            class="rounded-sm focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+            aria-label={m.leaderboards_badges_button_edit()}
+            title={m.leaderboards_badges_button_edit()}
+            onclick={() => {
+              isBadgeOpen = true;
+            }}
+          >
+            <GroupBadge badge={group.badge} class="transition-opacity hover:opacity-80" />
+          </button>
+        {:else if group?.badge}
+          <GroupBadge badge={group.badge} />
+        {:else if isAdmin}
+          <Button
+            variant="ghost"
+            size="sm"
+            class="h-6 px-2 text-xs text-muted-foreground"
+            onclick={() => {
+              isBadgeOpen = true;
+            }}
+          >
+            <Plus class="size-3" />
+            {m.leaderboards_badges_button_add()}
+          </Button>
+        {/if}
+      </div>
       {#if group !== null}
         <span class="text-xs text-muted-foreground">
           {m.leaderboards_groups_label_members({ count: String(group.members.length) })}
@@ -248,6 +290,18 @@
     displayCode={group.displayCode}
     onChange={(displayCode: string | null) => {
       if (group !== null) group = { ...group, displayCode };
+    }}
+  />
+  <BadgeDialog
+    bind:open={isBadgeOpen}
+    {groupId}
+    badge={group.badge ?? null}
+    previewName={ownName}
+    previewScore={ownScore}
+    onChange={(badge: Badge | null) => {
+      if (group !== null) group = { ...group, badge };
+      // Members who wore it are shown without it once it is gone.
+      void refresh(groupId);
     }}
   />
   <GroupSettingsDialog
