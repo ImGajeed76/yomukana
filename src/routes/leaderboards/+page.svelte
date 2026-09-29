@@ -1,11 +1,12 @@
 <script lang="ts">
-  import { Plus } from "@lucide/svelte";
+  import { Plus, ScanQrCode } from "@lucide/svelte";
   import { replaceState } from "$app/navigation";
   import { page } from "$app/state";
   import BoardOverview from "$lib/components/BoardOverview.svelte";
   import FollowingBoard from "$lib/components/FollowingBoard.svelte";
   import GlobalBoard from "$lib/components/GlobalBoard.svelte";
-  import CreateGroupDialog from "$lib/components/groups/CreateGroupDialog.svelte";
+  import AddGroupDialog from "$lib/components/groups/AddGroupDialog.svelte";
+  import ScanDialog from "$lib/components/ScanDialog.svelte";
   import GroupBoard from "$lib/components/groups/GroupBoard.svelte";
   import { Button } from "$lib/components/ui/button";
   import { Progress } from "$lib/db";
@@ -17,6 +18,7 @@
     rememberStandings,
     type Standings,
   } from "$lib/sync/boards";
+  import { canScan } from "$lib/qr/scanner";
   import { sync } from "$lib/sync/sync";
 
   const progress = new Progress();
@@ -38,6 +40,15 @@
   /** The board on show: FOLLOWING, GLOBAL, or a group's id. */
   let board = $state(FOLLOWING);
   let isCreating = $state(false);
+  /** Whether this is a phone or tablet with a camera, the only kind anyone scans with. */
+  let isScanner = $state(false);
+  let isScanning = $state(false);
+
+  $effect(() => {
+    void canScan().then((result) => {
+      isScanner = result;
+    });
+  });
   /** A group just made, whose invite opens as soon as it loads. */
   let justCreated = $state<string | null>(null);
 
@@ -88,9 +99,29 @@
 </script>
 
 <main class="flex w-full flex-1 flex-col gap-8">
-  <h1 class="text-3xl leading-tight font-semibold tracking-tight">
-    {m.leaderboards_page_title()}
-  </h1>
+  <!--
+    The scanner sits here, on the page where following and joining happen,
+    and only on a phone: nobody holds a laptop up to a code.
+  -->
+  <div class="flex items-center justify-between gap-4">
+    <h1 class="text-3xl leading-tight font-semibold tracking-tight">
+      {m.leaderboards_page_title()}
+    </h1>
+    {#if isScanner && !isDemo}
+      <Button
+        variant="ghost"
+        size="icon"
+        class="-mr-2 size-11"
+        aria-label={m.leaderboards_scan_button()}
+        title={m.leaderboards_scan_button()}
+        onclick={() => {
+          isScanning = true;
+        }}
+      >
+        <ScanQrCode class="size-6" />
+      </Button>
+    {/if}
+  </div>
 
   <!--
     On a wide screen, every board and your place on it on the left, and the
@@ -145,7 +176,7 @@
               }}
             >
               <Plus class="size-4" />
-              {m.leaderboards_groups_create_title()}
+              {m.leaderboards_groups_button_add()}
             </Button>
           {/if}
         </div>
@@ -174,7 +205,7 @@
   </div>
 </main>
 
-<CreateGroupDialog
+<AddGroupDialog
   bind:open={isCreating}
   onCreated={(id: string) => {
     justCreated = id;
@@ -182,3 +213,5 @@
     void refreshStandings();
   }}
 />
+
+<ScanDialog bind:open={isScanning} />

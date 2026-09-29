@@ -170,6 +170,18 @@
         {/if}
       </div>
 
+      <!--
+        For a reader on a laptop, who cannot scan it. Split in two, the way
+        people read a code out, and shown in a face where every character is
+        unmistakable.
+      -->
+      <p
+        class="text-center font-mono text-3xl tracking-widest"
+        aria-label={m.leaderboards_groups_join_label_code()}
+      >
+        {invite.code.slice(0, 4)}&nbsp;{invite.code.slice(4)}
+      </p>
+
       <div class="flex flex-col gap-3">
         <Button
           class="w-full"

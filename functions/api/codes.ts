@@ -1,9 +1,9 @@
-// Codes for invite and display links.
-//
-// Random, from an alphabet with no letters that look alike (no i, l, o, 0,
-// 1), because an invite is sometimes read off a projector and typed by hand.
+// Codes for invite and display links. The alphabet and the invite's length
+// are in group-rules.ts, where the app reads them too.
 
-const ALPHABET = "abcdefghjkmnpqrstuvwxyz23456789";
+import { CODE_ALPHABET as ALPHABET, INVITE_CODE_LENGTH } from "../../src/lib/sync/group-rules";
+
+export { INVITE_CODE_LENGTH };
 
 /**
  * Bytes at or above this are thrown away and drawn again. Taking the rest
@@ -22,12 +22,6 @@ export function randomCode(length: number): string {
   }
   return code;
 }
-
-/**
- * An invite is short enough to type, and lasts at most a month: guessing one
- * of 31^8 codes in that time is not a real risk.
- */
-export const INVITE_CODE_LENGTH = 8;
 
 /**
  * A display link shows a board without signing in and lasts until the admin

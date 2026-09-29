@@ -92,7 +92,7 @@
         onclick={onCreate}
       >
         <Plus class="size-4" />
-        {m.leaderboards_groups_create_title()}
+        {m.leaderboards_groups_button_add()}
       </Button>
     </div>
   {/if}
