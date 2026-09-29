@@ -28,7 +28,30 @@ export const BADGE_COLORS = CARD_COLORS;
 export const isBadgeColor = isCardColor;
 
 export type BadgeEmojiGroup =
-  "animals" | "nature" | "food" | "japan" | "play" | "things" | "symbols" | "faces";
+  "animals" | "nature" | "food" | "japan" | "play" | "things" | "symbols" | "faces" | "flags";
+
+/**
+ * Every region with an emoji flag, as its two-letter code: the flags CLDR
+ * names, less Sark (CQ), which is from Unicode 15 and shows as two letters on
+ * older phones. Windows draws no flag emoji at all and shows these as letters
+ * too; that is Windows, and every other system draws them.
+ */
+const FLAG_REGIONS =
+  "AC AD AE AF AG AI AL AM AO AQ AR AS AT AU AW AX AZ BA BB BD BE BF BG BH BI BJ BL BM BN BO BQ BR BS BT BV BW BY BZ CA CC CD CF CG CH CI CK CL CM CN CO CP CR CU CV CW CX CY CZ DE DG DJ DK DM DO DZ EA EC EE EG EH ER ES ET EU FI FJ FK FM FO FR GA GB GD GE GF GG GH GI GL GM GN GP GQ GR GS GT GU GW GY HK HM HN HR HT HU IC ID IE IL IM IN IO IQ IR IS IT JE JM JO JP KE KG KH KI KM KN KP KR KW KY KZ LA LB LC LI LK LR LS LT LU LV LY MA MC MD ME MF MG MH MK ML MM MN MO MP MQ MR MS MT MU MV MW MX MY MZ NA NC NE NF NG NI NL NO NP NR NU NZ OM PA PE PF PG PH PK PL PM PN PR PS PT PW PY QA RE RO RS RU RW SA SB SC SD SE SG SH SI SJ SK SL SM SN SO SR SS ST SV SX SY SZ TA TC TD TF TG TH TJ TK TL TM TN TO TR TT TV TW TZ UA UG UM UN US UY UZ VA VC VE VG VI VN VU WF WS XK YE YT ZA ZM ZW";
+
+/** The first of the 26 regional indicator letters, 🇦. A flag is two of them. */
+const REGIONAL_A = 0x1f1e6;
+/** Plain "A", which a region code counts its letters from. */
+const LATIN_A = 0x41;
+
+/** A region's flag: its two letters, each as a regional indicator. */
+function flagOf(region: string): string {
+  let flag = "";
+  for (const letter of region) {
+    flag += String.fromCodePoint(REGIONAL_A + (letter.codePointAt(0) ?? 0) - LATIN_A);
+  }
+  return flag;
+}
 
 /** An emoji string split into single emoji, keeping each variation selector with its emoji. */
 function emojiIn(text: string): string[] {
@@ -41,7 +64,7 @@ function emojiIn(text: string): string[] {
  *
  * Chosen by hand rather than taken from all of Unicode, so nothing offensive
  * can end up on someone's card and no list of exceptions has to be kept. No
- * weapons, no drink or smoking, no flags, nothing with a skin tone. Only
+ * weapons, no drink or smoking, nothing with a skin tone. Only
  * emoji from Unicode 13 or before, so every phone still in use draws them.
  */
 export const BADGE_EMOJI: readonly {
@@ -93,6 +116,10 @@ export const BADGE_EMOJI: readonly {
     emoji: emojiIn(
       "😀😃😄😁😆😅😂🤣😊😇🙂🙃😉😌😍🥰😘😋😛😜🤪😝🤓😎🥳🤩🤔🤗🤭🤫😴😮😲🥺😤🤠🤡👻👽🤖🎃😺😸😹😻😼🙀👀👋👍✌️🤞🤟🤘👌🙌👏💪🧠",
     ),
+  },
+  {
+    group: "flags",
+    emoji: FLAG_REGIONS.split(" ").map(flagOf),
   },
 ];
 const ALL_EMOJI: ReadonlySet<string> = new Set(BADGE_EMOJI.flatMap((group) => group.emoji));

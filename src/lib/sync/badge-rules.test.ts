@@ -19,6 +19,13 @@ describe("BADGE_EMOJI", () => {
     expect(isBadgeEmoji("✏️")).toBe(true);
   });
 
+  test("offers every country's flag, and none from after Unicode 13", () => {
+    expect(isBadgeEmoji("🇯🇵")).toBe(true);
+    expect(isBadgeEmoji("🇨🇭")).toBe(true);
+    // Sark's flag is from 2024, and shows as two letters on older phones.
+    expect(isBadgeEmoji("🇨🇶")).toBe(false);
+  });
+
   test("accepts only what it offers", () => {
     expect(isBadgeEmoji("🦊")).toBe(true);
     expect(isBadgeEmoji("🖕")).toBe(false);

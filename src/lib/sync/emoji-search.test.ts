@@ -23,6 +23,12 @@ describe("searchEmoji", () => {
     expect(searchEmoji("gradu", [english])).toContain("🎓");
   });
 
+  test("finds a flag by its country's name", () => {
+    expect(searchEmoji("japan", [english])).toContain("🇯🇵");
+    expect(searchEmoji("schweiz", [german])).toContain("🇨🇭");
+    expect(searchEmoji("日本", [japanese])).toContain("🇯🇵");
+  });
+
   test("reads katakana as hiragana and ignores case", () => {
     expect(searchEmoji("ネコ", [japanese])).toContain("🐱");
     expect(searchEmoji("CAT", [english])).toContain("🐱");

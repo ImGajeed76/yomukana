@@ -14,8 +14,12 @@ import { BADGE_EMOJI } from "../../src/lib/sync/badge-rules";
 
 const LOCALES = ["en", "de", "ja"] as const;
 const OUT_DIR = "static/emoji";
-const SOURCE = (locale: string): string =>
-  `https://cdn.jsdelivr.net/npm/cldr-annotations-full@47.0.0/annotations/${locale}/annotations.json`;
+// Two files: most emoji are named in the first, and emoji made of several
+// characters, flags among them, in the second.
+const SOURCES = (locale: string): string[] => [
+  `https://cdn.jsdelivr.net/npm/cldr-annotations-full@47.0.0/annotations/${locale}/annotations.json`,
+  `https://cdn.jsdelivr.net/npm/cldr-annotations-derived-full@47.0.0/annotationsDerived/${locale}/annotations.json`,
+];
 
 /** What CLDR says about one emoji: its keywords, and the name a screen reader uses. */
 interface Annotation {
@@ -23,8 +27,16 @@ interface Annotation {
   readonly tts?: readonly string[];
 }
 
-interface AnnotationFile {
-  readonly annotations: { readonly annotations: Readonly<Record<string, Annotation>> };
+type AnnotationFile = Readonly<
+  Record<string, { readonly annotations: Readonly<Record<string, Annotation>> }>
+>;
+
+/** Every emoji one file names, whichever of the two it is. */
+async function annotationsFrom(url: string): Promise<Readonly<Record<string, Annotation>>> {
+  const response = await fetch(url);
+  if (!response.ok) throw new Error(`${url}: ${String(response.status)}`);
+  const file = (await response.json()) as AnnotationFile;
+  return file.annotations?.annotations ?? file.annotationsDerived?.annotations ?? {};
 }
 
 // CLDR keys most emoji without the variation selector that asks for the
@@ -35,9 +47,9 @@ const emoji = BADGE_EMOJI.flatMap((group) => group.emoji);
 
 await mkdir(OUT_DIR, { recursive: true });
 for (const locale of LOCALES) {
-  const response = await fetch(SOURCE(locale));
-  if (!response.ok) throw new Error(`${locale}: ${String(response.status)}`);
-  const annotations = ((await response.json()) as AnnotationFile).annotations.annotations;
+  const files = await Promise.all(SOURCES(locale).map(annotationsFrom));
+  const annotations: Record<string, Annotation> = {};
+  for (const file of files) Object.assign(annotations, file);
 
   const names: Record<string, string> = {};
   const missing: string[] = [];

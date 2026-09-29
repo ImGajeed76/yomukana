@@ -36,6 +36,7 @@
     things: m.leaderboards_badges_emoji_things,
     symbols: m.leaderboards_badges_emoji_symbols,
     faces: m.leaderboards_badges_emoji_faces,
+    flags: m.leaderboards_badges_emoji_flags,
   };
 
   /** Stands for "no emoji" in the grid's first cell. Never an emoji itself. */
