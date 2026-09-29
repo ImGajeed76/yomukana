@@ -11,5 +11,5 @@ export type { TextShare } from "./text-share";
 
 export { dayLabel, timeAgo, timeUntil } from "./format";
 
-export { demoBoard, demoProgress } from "./demo";
+export { demoBoard, demoProgress, demoStreak } from "./demo";
 export type { DemoProgress } from "./demo";

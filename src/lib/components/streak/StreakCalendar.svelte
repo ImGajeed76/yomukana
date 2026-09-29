@@ -69,12 +69,6 @@
     return Array.from({ length: cells.length / 7 }, (_, row) => cells.slice(row * 7, row * 7 + 7));
   });
 
-  function isInStreak(day: number | null | undefined): boolean {
-    if (day === null || day === undefined) return false;
-    const status = mark(day);
-    return status === "done" || status === "frozen";
-  }
-
   /**
    * Whether every day of a week row was read. A week a freeze had to cover
    * kept the streak, but it was not a week read, so it is not drawn as one.
@@ -85,12 +79,11 @@
 </script>
 
 <!--
-  A month at a time, the way a wall calendar is read. A run of days that kept
-  the streak is one pill, so it reads as one stretch rather than as dots, and a
-  week read from Monday to Sunday is the same pill in solid colour. A freeze is
-  a snowflake inside the run: it kept the streak, so it belongs to the pill, and
-  its shape says it was not a day read. Today, not yet read, is a ring. Every
-  kind of day differs by shape as well as colour, see CLAUDE.md 8.4.
+  A month at a time, the way a wall calendar is read. Each day says how it went
+  on its own: a day read is an orange circle, a day a freeze covered is a blue
+  one with a snowflake, today not yet read is a ring. Shape as well as colour,
+  see CLAUDE.md 8.4. A week read on all seven days is joined by a band behind
+  it, the one reward the calendar gives, so it is kept for that alone.
 -->
 <div class="flex flex-col gap-3">
   <div class="flex items-center justify-between">
@@ -141,7 +134,6 @@
             <span></span>
           {:else}
             {@const status = mark(day)}
-            {@const inStreak = isInStreak(day)}
             {@const label = LABELS[status]}
             <span
               class="relative flex h-8 items-center justify-center"
@@ -150,26 +142,21 @@
                 : `${fullDate.format(dateOf(day))}, ${label()}`}
               role="img"
             >
-              {#if inStreak}
-                <!--
-                  This day's piece of the pill. It runs to the cell's edge
-                  where the run goes on, and stops a half pill past the centre
-                  where it ends, so a single day is a circle.
-                -->
+              {#if isWhole}
+                <!-- The band from Monday's centre to Sunday's, so it ends round with them. -->
                 <span
                   class={[
-                    "absolute inset-y-0",
-                    isWhole ? "bg-streak" : "bg-streak/20",
-                    isInStreak(week[column - 1]) ? "left-0" : "left-1/2 -ml-4 rounded-l-full",
-                    isInStreak(week[column + 1]) ? "right-0" : "right-1/2 -mr-4 rounded-r-full",
+                    "absolute inset-y-0 bg-streak/25",
+                    column === 0 ? "left-1/2 -ml-4 rounded-l-full" : "left-0",
+                    column === 6 ? "right-1/2 -mr-4 rounded-r-full" : "right-0",
                   ]}
                 ></span>
               {/if}
               <span
                 class={[
                   "relative flex size-8 items-center justify-center rounded-full text-xs tabular-nums",
-                  status === "done" && (isWhole ? "font-semibold text-background" : "font-medium"),
-                  status === "frozen" && "text-freeze",
+                  status === "done" && "bg-streak font-semibold text-background",
+                  status === "frozen" && "bg-freeze text-background",
                   status === "today" && "border-2 border-streak font-semibold",
                   (status === "missed" || status === "empty") &&
                     (day > today ? "text-muted-foreground/50" : "text-muted-foreground"),

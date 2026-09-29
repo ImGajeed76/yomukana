@@ -24,6 +24,7 @@ import {
   type TimedSegment,
 } from "../srs";
 import { scoreOf } from "./score";
+import { streakOf, type Streak } from "./streak";
 import type { TextShare } from "./text-share";
 
 const MS_PER_DAY = 86_400_000;
@@ -216,4 +217,29 @@ export function demoProgress(now: Date, share: TextShare): DemoProgress {
 
   built = { store, attempts };
   return built;
+}
+
+/**
+ * Days back from today with fewer than 5 sentences, for {@link demoStreak}.
+ * Chosen so the calendar shows every kind of day: weeks read through, a miss a
+ * freeze covers, two misses in a row that end a run, and a new run after.
+ */
+const STREAK_MISSES: ReadonlySet<number> = new Set([11, 12, 13, 26, 38, 39, 40]);
+
+/**
+ * A made-up streak for `?demo`: six weeks of reading with gaps, reaching back
+ * into last month so the month buttons have somewhere to go. Today is started
+ * but not done, so it shows as a ring.
+ */
+export function demoStreak(now: Date): Streak {
+  const finishedAt: number[] = [];
+  const noon = new Date(now);
+  noon.setHours(12, 0, 0, 0);
+  for (let back = 45; back >= 0; back--) {
+    const count = back === 0 ? 2 : STREAK_MISSES.has(back) ? 0 : back === 20 ? 25 : 5;
+    for (let sentence = 0; sentence < count; sentence++) {
+      finishedAt.push(noon.getTime() - back * MS_PER_DAY + sentence * 60_000);
+    }
+  }
+  return streakOf(finishedAt, now.getTime());
 }

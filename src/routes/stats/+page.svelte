@@ -35,6 +35,7 @@
     loadTextShare,
     dayLabel,
     demoProgress,
+    demoStreak,
     scoreOf,
     totalsOf,
     type Totals,
@@ -77,6 +78,7 @@
    * own progress is untouched either way. See stats/demo.ts.
    */
   let isDemo = $derived(import.meta.env.DEV && page.url.searchParams.has("demo"));
+  let shownStreak = $derived(isDemo ? demoStreak(new Date()) : streak.value);
 
   $effect(() => {
     void (async () => {
@@ -254,9 +256,9 @@
           {/each}
         </div>
       </section>
-      {#if streak.value !== null}
+      {#if shownStreak !== null}
         <div class="lg:col-span-1">
-          <StreakPanel streak={streak.value} />
+          <StreakPanel streak={shownStreak} />
         </div>
       {/if}
     </div>
