@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Plus, ScanQrCode } from "@lucide/svelte";
+  import { Camera, Plus } from "@lucide/svelte";
   import { replaceState } from "$app/navigation";
   import { page } from "$app/state";
   import BoardOverview from "$lib/components/BoardOverview.svelte";
@@ -118,7 +118,7 @@
           isScanning = true;
         }}
       >
-        <ScanQrCode class="size-6" />
+        <Camera class="size-6" />
       </Button>
     {/if}
   </div>
