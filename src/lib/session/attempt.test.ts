@@ -324,4 +324,9 @@ describe("typed keys", () => {
     const attempt = typeAll("がっこう", ["g", "a", "k", "k", "o", "u"]);
     expect(attempt.typedBySegment).toEqual(["ga", "k", "ko", "u"]);
   });
+
+  test("stay under their own characters after an opening quote", () => {
+    const attempt = typeAll("「ねこ」と", ["n", "e", "k", "o", "t", "o"]);
+    expect(attempt.typedBySegment).toEqual(["", "ne", "ko", "", "to"]);
+  });
 });

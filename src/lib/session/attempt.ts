@@ -86,8 +86,9 @@ export interface Attempt {
 }
 
 export function startAttempt(segments: readonly Segment[], at: number): Attempt {
+  const typing = startTyping(segments);
   return {
-    typing: startTyping(segments),
+    typing,
     input: "keyboard",
     startedAt: at,
     finishedAt: null,
@@ -100,7 +101,10 @@ export function startAttempt(segments: readonly Segment[], at: number): Attempt 
     isCurrentCorrected: false,
     isCurrentCarried: false,
     stray: "",
-    typedBySegment: [],
+    // A sentence opening on 「 has it stepped over before the first key. It
+    // was typed with nothing, and without its place here every key after it
+    // would be shown under the character before its own.
+    typedBySegment: Array.from({ length: typing.settled }, () => ""),
     settledKeys: 0,
   };
 }
