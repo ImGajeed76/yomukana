@@ -21,6 +21,7 @@ import {
   doublePrecision,
   foreignKey,
   index,
+  integer,
   jsonb,
   pgPolicy,
   pgTable,
@@ -159,6 +160,12 @@ export const profiles = pgTable(
     // functions/api/score-check.ts.
     peakScore: doublePrecision("peak_score").notNull().default(0),
     peakAt: timestamp("peak_at", { withTimezone: true }),
+    // The reading streak, worked out on the device from its sentences (see
+    // src/lib/stats/streak.ts) and sent with each sync, for the card. With
+    // when it ends if nothing more is read, so a card stops showing a streak
+    // that has broken since, however long ago the reader last synced.
+    streakDays: integer("streak_days").notNull().default(0),
+    streakAliveUntil: timestamp("streak_alive_until", { withTimezone: true }),
     updatedAt: changedAt(),
   },
   (table) => [

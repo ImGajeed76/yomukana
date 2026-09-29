@@ -33,6 +33,7 @@ import {
   type WordSpan,
 } from "../srs";
 import { scoreOf } from "../stats/score";
+import { streak } from "../stats/streak-state.svelte";
 import { loadTextShare, type TextShare } from "../stats/text-share";
 import { sync } from "../sync/sync";
 import {
@@ -389,6 +390,8 @@ export class Practice {
     this.#seenAt.set(current.id, at.getTime());
     this.#recent = [current.id, ...this.#recent].slice(0, RECENT_MEMORY);
     await this.#progress.commit(store, changed, record);
+    // After the save, between sentences: the streak never runs on a keystroke.
+    streak.record(record.finishedAt);
     await this.#progress.saveSession({
       band: this.#progression.band,
       easyStreak: this.#progression.easyStreak,

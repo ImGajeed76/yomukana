@@ -170,6 +170,24 @@ export class Progress {
     return attempts;
   }
 
+  /**
+   * When every sentence was finished, oldest first, for the streak. Read from
+   * the index's keys alone, so years of attempts are never loaded whole.
+   */
+  async finishTimes(): Promise<number[]> {
+    // Opens the database itself: the streak is read on every page, including
+    // ones that never load the reader's items.
+    this.#db ??= await openProgressDb();
+    if (this.#db === null) return [];
+    const times: number[] = [];
+    let cursor = await this.#db.transaction("attempts").store.index("by-finished").openKeyCursor();
+    while (cursor !== null) {
+      times.push(cursor.key);
+      cursor = await cursor.continue();
+    }
+    return times;
+  }
+
   /** Everything the reader has, in one object they can save to a file. */
   async exportAll(): Promise<ProgressExport> {
     const attempts = this.#db === null ? [] : await this.#db.getAll("attempts");

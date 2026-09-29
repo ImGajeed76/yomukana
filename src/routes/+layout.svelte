@@ -9,6 +9,7 @@
   import { install } from "$lib/install.svelte";
   import { m } from "$lib/paraglide/messages";
   import { getLocale } from "$lib/paraglide/runtime";
+  import { streak } from "$lib/stats/streak-state.svelte";
   import "./layout.css";
 
   let { children }: { children: Snippet } = $props();
@@ -19,6 +20,20 @@
   // loaded, so this has to be listening from the start. See install.svelte.ts.
   $effect(() => {
     install.listen();
+  });
+
+  // The streak shows in the nav on every page, so it is read once here. The
+  // day turns at 4 am, so it is worked out again whenever the reader comes
+  // back to a tab left open.
+  $effect(() => {
+    void streak.load();
+    const refresh = (): void => {
+      if (document.visibilityState === "visible") streak.refresh();
+    };
+    document.addEventListener("visibilitychange", refresh);
+    return () => {
+      document.removeEventListener("visibilitychange", refresh);
+    };
   });
 
   // Once, before any badge is drawn: on Windows, flags come from a font of

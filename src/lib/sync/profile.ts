@@ -21,6 +21,8 @@ export interface Profile {
    * kept on this device from before badges existed, which shows as none.
    */
   readonly badges?: readonly Badge[];
+  /** Days in their reading streak, while it is alive. Missing from a profile kept from before streaks. */
+  readonly streak?: number;
 }
 
 /** A profile at /@username, and how the visitor stands to it. */

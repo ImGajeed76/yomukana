@@ -14,9 +14,10 @@ import {
 } from "../db";
 import { readerFrom, type ItemState } from "../srs";
 import { scoreOf } from "../stats/score";
+import { streak } from "../stats/streak-state.svelte";
 import { loadTextShare } from "../stats/text-share";
 import { connect, type SyncClient } from "./client";
-import { publishScore } from "./friends";
+import { publishScore, publishStreak } from "./friends";
 import {
   attemptIdOf,
   lastReviewOf,
@@ -225,6 +226,8 @@ export async function sync(progress: Progress): Promise<SyncOutcome> {
       },
       RULES,
     );
+    // Sentences read on another device just arrived, and may carry the streak on.
+    await streak.load();
 
     // All at once: none of them depends on another, and each is a round trip
     // to Frankfurt, so one after the other they added up to seconds. The
@@ -235,6 +238,7 @@ export async function sync(progress: Progress): Promise<SyncOutcome> {
       pushAttempts(client, progress, state.pushedUpTo),
       pushReader(client, progress),
       pushSession(client, progress),
+      publishStreak(streak.value),
       loadTextShare().then((share) => publishScore(scoreOf(progress.store, new Date(), share))),
     ]);
 

@@ -2,10 +2,15 @@
   import TypingPane from "$lib/components/TypingPane.svelte";
   import ScoreChangeDialog from "$lib/components/ScoreChangeDialog.svelte";
   import WelcomeDialog from "$lib/components/WelcomeDialog.svelte";
+  import StreakCelebration from "$lib/components/streak/StreakCelebration.svelte";
+  import StreakDialog from "$lib/components/streak/StreakDialog.svelte";
+  import StreakToday from "$lib/components/streak/StreakToday.svelte";
   import { Button } from "$lib/components/ui/button";
   import { m } from "$lib/paraglide/messages";
   import { Practice } from "$lib/session/practice.svelte";
   import type { Attempt } from "$lib/session";
+  import { freezeSaveToTell, isBigMoment, type StreakNews } from "$lib/stats/streak";
+  import { streak } from "$lib/stats/streak-state.svelte";
 
   const practice = new Practice();
 
@@ -85,21 +90,48 @@
     isExplainingScore = true;
   });
 
+  let isStreakOpen = $state(false);
+  let streakNews = $state.raw<StreakNews | null>(null);
+
+  // A freeze that kept the streak alive on a day the reader was away works
+  // silently, so it is told once, when they are back. Not over the welcome or
+  // the score notice: those come first, and this waits for the next visit.
+  $effect(() => {
+    const value = streak.value;
+    if (!practice.isLoaded || value === null || isWelcoming || isExplainingScore) return;
+    const day = freezeSaveToTell(value, streak.freezeToldUpTo());
+    if (day === null) return;
+    streak.rememberFreezeTold(day);
+    streakNews = { kind: "saved", days: value.current };
+    isStreakOpen = true;
+  });
+
   function isFromDialog(event: KeyboardEvent): boolean {
     return event.target instanceof Element && event.target.closest('[role="dialog"]') !== null;
   }
 
-  function finish(attempt: Attempt, revealed: ReadonlySet<number>) {
-    void practice.finish(attempt, revealed);
+  async function finish(attempt: Attempt, revealed: ReadonlySet<number>): Promise<void> {
+    await practice.finish(attempt, revealed);
+    // Day one, a week, a freeze: worth a popup. An ordinary goal day is
+    // celebrated in the summary instead, since it comes every day.
+    const moment = streak.moment;
+    if (moment === null || !isBigMoment(moment)) return;
+    streakNews = { kind: "moment", moment };
+    isStreakOpen = true;
+  }
+
+  function next(): void {
+    streak.clearMoment();
+    practice.next();
   }
 
   function handleKeydown(event: KeyboardEvent) {
     // A key pressed inside a dialog belongs to it. Checked by where the key
     // came from, not by whether the dialog is still open: the dialog closes on
     // this same Escape before it reaches here, and would read as a skip.
-    if (isWelcoming || isExplainingScore || isFromDialog(event)) return;
+    if (isWelcoming || isExplainingScore || isStreakOpen || isFromDialog(event)) return;
     if (practice.summary !== null) {
-      if (event.key === "Enter") practice.next();
+      if (event.key === "Enter") next();
       return;
     }
     // Escape is the way out of a sentence the reader cannot read. The typing
@@ -116,6 +148,7 @@
 
 <WelcomeDialog bind:open={isWelcoming} />
 <ScoreChangeDialog bind:open={isExplainingScore} />
+<StreakDialog bind:open={isStreakOpen} news={streakNews} streak={streak.value} />
 
 <!--
   This screen has one job and one thing on it. The sentence sits on the optical
@@ -141,8 +174,10 @@
         segments={practice.current.segments}
         tokens={practice.current.tokens}
         round={practice.round}
-        isPaused={isWelcoming || isExplainingScore}
-        onFinished={finish}
+        isPaused={isWelcoming || isExplainingScore || isStreakOpen}
+        onFinished={(attempt: Attempt, revealed: ReadonlySet<number>) => {
+          void finish(attempt, revealed);
+        }}
         onSkip={() => {
           practice.skip();
         }}
@@ -196,30 +231,40 @@
         </p>
 
         <div class="flex flex-wrap items-end justify-between gap-6">
-          <dl class="flex gap-10">
-            <div class="flex flex-col gap-1">
-              <dt class="text-xs text-muted-foreground">{m.session_summary_label_speed()}</dt>
-              <dd class="text-2xl font-semibold tabular-nums">
-                {Math.round(summary?.segmentsPerMinute ?? 0)}
-              </dd>
-            </div>
-            <div class="flex flex-col gap-1">
-              <dt class="text-xs text-muted-foreground">{m.session_summary_label_accuracy()}</dt>
-              <dd class="text-2xl font-semibold tabular-nums">{percent(summary?.accuracy ?? 0)}</dd>
-            </div>
-            <div class="flex flex-col gap-1">
-              <dt class="text-xs text-muted-foreground">{m.session_summary_label_errors()}</dt>
-              <dd class="text-2xl font-semibold tabular-nums">{summary?.errors ?? 0}</dd>
-            </div>
-          </dl>
+          <!--
+            The sentence that reached today's goal gets the streak in place of
+            its stats. Every other one shows its stats, and today's progress
+            beside them.
+          -->
+          {#if summary !== null && streak.moment?.isGoalReached === true && streak.value !== null}
+            <StreakCelebration streak={streak.value} />
+          {:else}
+            <dl class="flex flex-wrap gap-x-10 gap-y-4">
+              <div class="flex flex-col gap-1">
+                <dt class="text-xs text-muted-foreground">{m.session_summary_label_speed()}</dt>
+                <dd class="text-2xl font-semibold tabular-nums">
+                  {Math.round(summary?.segmentsPerMinute ?? 0)}
+                </dd>
+              </div>
+              <div class="flex flex-col gap-1">
+                <dt class="text-xs text-muted-foreground">{m.session_summary_label_accuracy()}</dt>
+                <dd class="text-2xl font-semibold tabular-nums">
+                  {percent(summary?.accuracy ?? 0)}
+                </dd>
+              </div>
+              <div class="flex flex-col gap-1">
+                <dt class="text-xs text-muted-foreground">{m.session_summary_label_errors()}</dt>
+                <dd class="text-2xl font-semibold tabular-nums">{summary?.errors ?? 0}</dd>
+              </div>
+              {#if streak.value !== null}
+                <StreakToday streak={streak.value} />
+              {/if}
+            </dl>
+          {/if}
 
           <div class="flex items-center gap-3">
             <span class="text-xs text-muted-foreground">{m.session_summary_hint_enter()}</span>
-            <Button
-              onclick={() => {
-                practice.next();
-              }}>{m.session_summary_button_next()}</Button
-            >
+            <Button onclick={next}>{m.session_summary_button_next()}</Button>
           </div>
         </div>
       </div>

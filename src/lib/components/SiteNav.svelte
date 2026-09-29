@@ -1,6 +1,7 @@
 <script lang="ts">
   import { ChartColumn, Keyboard, Settings, Trophy, UserRound } from "@lucide/svelte";
   import { page } from "$app/state";
+  import NavStreak from "$lib/components/streak/NavStreak.svelte";
   import { m } from "$lib/paraglide/messages";
 
   // Labels are read where they are rendered rather than collected into a list of
@@ -47,7 +48,10 @@
     class="mx-auto flex h-14 w-full max-w-[1152px] items-center gap-6 px-6"
     aria-label={m.nav_label_main()}
   >
-    <a href="/" class="text-sm font-medium tracking-tight">{m.common_app_name()}</a>
+    <div class="flex items-center gap-3">
+      <a href="/" class="text-sm font-medium tracking-tight">{m.common_app_name()}</a>
+      <NavStreak />
+    </div>
     <!--
       Four words do not fit beside the name on a phone, so there each link is
       its icon, with the word kept for screen readers and shown on hover. The

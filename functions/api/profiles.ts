@@ -22,6 +22,8 @@ export interface ProfileRow {
   is_listed: boolean;
   score: number;
   scored_at: Date | null;
+  streak_days: number;
+  streak_alive_until: Date | null;
 }
 
 /** A profile as the app sees it, with the badges it wears. */
@@ -34,7 +36,18 @@ export function profileOf(row: ProfileRow, badges: readonly Badge[]): Record<str
     score: row.score,
     scoredAt: row.scored_at === null ? null : row.scored_at.getTime(),
     badges,
+    streak: streakOf(row),
   };
+}
+
+/**
+ * The streak a card shows: the one last sent, while it is still alive. A
+ * reader who stopped a week ago synced a streak that has broken since, and
+ * nothing will send a new one until they come back.
+ */
+function streakOf(row: ProfileRow): number {
+  const aliveUntil = row.streak_alive_until?.getTime() ?? 0;
+  return aliveUntil > Date.now() ? row.streak_days : 0;
 }
 
 /** One reader's profile, with their badges looked up. */
@@ -148,6 +161,43 @@ profiles.patch("/profile", async (c) => {
     if (isUniqueViolation(error)) return refuse(c, "taken");
     throw error;
   }
+});
+
+/**
+ * The furthest ahead a streak can be alive: today, tomorrow and two frozen
+ * days after, plus a day for time zones. A device claiming more is capped, so
+ * a streak cannot be sent once and shown for ever.
+ */
+const STREAK_ALIVE_MAX_MS = 5 * 86_400_000;
+
+/**
+ * Takes the caller's streak, worked out on their device from the sentences
+ * they read. Like the score, it cannot be checked here, and between friends it
+ * need not be: it is what their own card shows.
+ */
+profiles.post("/streak", async (c) => {
+  const userId = await readerOf(c.req.raw);
+  if (userId === null) return refuse(c, "unauthorized");
+  const body: unknown = await c.req.json().catch(() => null);
+  const fields = typeof body === "object" && body !== null ? (body as Record<string, unknown>) : {};
+  const days = fields.days;
+  const aliveUntil = fields.aliveUntil;
+  if (
+    typeof days !== "number" ||
+    !Number.isInteger(days) ||
+    days < 0 ||
+    days > 100_000 ||
+    typeof aliveUntil !== "number" ||
+    !Number.isFinite(aliveUntil)
+  ) {
+    return refuse(c, "invalid");
+  }
+  const until = new Date(Math.min(aliveUntil, Date.now() + STREAK_ALIVE_MAX_MS));
+  const updated = await pool.query(
+    "update profiles set streak_days = $1, streak_alive_until = $2 where user_id = $3",
+    [days, until, userId],
+  );
+  return updated.rowCount === 0 ? refuse(c, "not-found") : c.body(null, 204);
 });
 
 /**

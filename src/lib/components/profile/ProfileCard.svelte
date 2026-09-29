@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { Flame } from "@lucide/svelte";
   import type { Snippet } from "svelte";
   import GroupBadge from "$lib/components/badges/GroupBadge.svelte";
   import type { Badge } from "$lib/sync/badge-rules";
@@ -14,11 +15,21 @@
     score: number | null;
     /** The group badges they wear, in their order. */
     badges?: readonly Badge[];
+    /** Days in their reading streak. Left off at 0, when there is none to show. */
+    streak?: number;
     /** Buttons under the name, like Follow. */
     children?: Snippet;
   }
 
-  let { username, displayName, cardColor, score, badges = [], children }: Props = $props();
+  let {
+    username,
+    displayName,
+    cardColor,
+    score,
+    badges = [],
+    streak = 0,
+    children,
+  }: Props = $props();
 
   const graphemes = new Intl.Segmenter(undefined, { granularity: "grapheme" });
 
@@ -60,12 +71,23 @@
           </div>
         {/if}
       </div>
-      {#if score !== null}
-        <div class="flex flex-col items-end">
-          <span class="text-xs text-muted-foreground">{m.stats_score_label()}</span>
-          <span class="text-2xl leading-none font-semibold tabular-nums">{Math.round(score)}</span>
-        </div>
-      {/if}
+      <div class="flex items-end gap-6">
+        {#if streak > 0}
+          <div class="flex flex-col items-end">
+            <span class="text-xs text-muted-foreground">{m.streak_label()}</span>
+            <span class="flex items-center gap-1 text-2xl leading-none font-semibold tabular-nums">
+              <Flame class="size-5 fill-streak text-streak" aria-hidden="true" />{streak}
+            </span>
+          </div>
+        {/if}
+        {#if score !== null}
+          <div class="flex flex-col items-end">
+            <span class="text-xs text-muted-foreground">{m.stats_score_label()}</span>
+            <span class="text-2xl leading-none font-semibold tabular-nums">{Math.round(score)}</span
+            >
+          </div>
+        {/if}
+      </div>
     </div>
     {#if children}
       {@render children()}

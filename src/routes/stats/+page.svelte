@@ -23,7 +23,9 @@
   import { page } from "$app/state";
   import { Progress, type AttemptRecord } from "$lib/db";
   import { sync } from "$lib/sync/sync";
+  import StreakPanel from "$lib/components/streak/StreakPanel.svelte";
   import { m } from "$lib/paraglide/messages";
+  import { streak } from "$lib/stats/streak-state.svelte";
   import { allowsKanji, hiraganaMastery, katakanaMastery } from "$lib/selection";
   import { EMPTY_STORE, kanaItem, primaryInput, type Item, type ItemStore } from "$lib/srs";
   import {
@@ -198,55 +200,66 @@
       I in each script. The level is the largest thing on the page because it is
       the one number the reader can hold in their head and say out loud.
     -->
-    <section class="overflow-hidden rounded-lg border border-border">
-      <div class="flex flex-wrap items-start justify-between gap-6 p-6">
-        <div class="flex flex-col gap-1">
-          <span class="text-xs text-muted-foreground">{m.stats_score_label()}</span>
-          <span class="text-5xl leading-none font-semibold tabular-nums">{score}</span>
+    <!--
+      The score and the streak side by side on a wide screen, two thirds and
+      one third, and one under the other on a narrow one.
+    -->
+    <div class="grid gap-6 lg:grid-cols-3">
+      <section class="overflow-hidden rounded-lg border border-border lg:col-span-2">
+        <div class="flex flex-wrap items-start justify-between gap-6 p-6">
+          <div class="flex flex-col gap-1">
+            <span class="text-xs text-muted-foreground">{m.stats_score_label()}</span>
+            <span class="text-5xl leading-none font-semibold tabular-nums">{score}</span>
+          </div>
+
+          <SpanPicker
+            value={span}
+            onChange={(days: number) => {
+              span = days;
+            }}
+          />
         </div>
 
-        <SpanPicker
-          value={span}
-          onChange={(days: number) => {
-            span = days;
-          }}
-        />
-      </div>
-
-      <!--
+        <!--
         The score line runs the full width of the card with no padding of its
         own. It is the shape of the reader getting better, so it is drawn as a
         surface rather than as a line on axes: the number is already above it,
         and what is worth reading here is the slope.
       -->
-      <DitherArea
-        points={chart}
-        label={m.stats_score_chart_label()}
-        seriesLabel={m.stats_score_label()}
-        height={140}
-      />
+        <DitherArea
+          points={chart}
+          label={m.stats_score_chart_label()}
+          seriesLabel={m.stats_score_label()}
+          height={140}
+        />
 
-      <dl class="grid grid-cols-2 gap-px border-t border-border bg-border sm:grid-cols-4">
-        {#each figures as figure (figure.label)}
-          <div class="flex flex-col gap-1 bg-card p-6">
-            <dt class="text-xs text-muted-foreground">{figure.label}</dt>
-            <dd class="text-2xl font-semibold tabular-nums">{figure.value}</dd>
-          </div>
-        {/each}
-      </dl>
+        <dl class="grid grid-cols-2 gap-px border-t border-border bg-border sm:grid-cols-4">
+          {#each figures as figure (figure.label)}
+            <div class="flex flex-col gap-1 bg-card p-6">
+              <dt class="text-xs text-muted-foreground">{figure.label}</dt>
+              <dd class="text-2xl font-semibold tabular-nums">{figure.value}</dd>
+            </div>
+          {/each}
+        </dl>
 
-      <div class="flex flex-col gap-3 border-t border-border bg-card p-6">
-        {#each scripts as script (script.label)}
-          <div class="flex items-center gap-4">
-            <span class="w-20 text-sm font-medium">{script.label}</span>
-            <ProgressBar value={script.mastery * 100} class="flex-1" />
-            <span class="w-10 text-right text-sm text-muted-foreground tabular-nums">
-              {percent(script.mastery)}
-            </span>
-          </div>
-        {/each}
-      </div>
-    </section>
+        <div class="flex flex-col gap-3 border-t border-border bg-card p-6">
+          {#each scripts as script (script.label)}
+            <div class="flex items-center gap-4">
+              <span class="w-20 text-sm font-medium">{script.label}</span>
+              <ProgressBar value={script.mastery * 100} class="flex-1" />
+              <span class="w-10 text-right text-sm text-muted-foreground tabular-nums">
+                {percent(script.mastery)}
+              </span>
+            </div>
+          {/each}
+        </div>
+      </section>
+      {#if streak.value !== null}
+        <div class="lg:col-span-1">
+          <StreakPanel streak={streak.value} />
+        </div>
+      {/if}
+    </div>
 
     <!--
       The tab labels are the heading. A "Characters" heading above a strip that

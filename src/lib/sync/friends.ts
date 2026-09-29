@@ -6,6 +6,7 @@
 // drizzle/schema.ts and drizzle/migrations/0003_friend_lookup.sql.
 
 import type { Progress } from "../db";
+import type { Streak } from "../stats/streak";
 import { isBadgeColor, type Badge } from "./badge-rules";
 import type { BoardEntry } from "./board";
 import { callApi } from "./api";
@@ -41,6 +42,20 @@ export async function publishScore(score: number): Promise<void> {
   // function makes one with a random name, which they can change in settings,
   // and the score goes onto it.
   if (response?.status === 404 && (await ensureProfile()) !== null) await send();
+}
+
+/**
+ * Sends the reader's streak, for their card. Its own call, so a score the API
+ * function turns down does not take the streak with it. A reader with no
+ * profile yet gets one from publishScore in the same sync, and their streak
+ * the sync after.
+ */
+export async function publishStreak(streak: Streak | null): Promise<void> {
+  if (streak === null) return;
+  await callApi("/streak", {
+    method: "POST",
+    body: JSON.stringify({ days: streak.current, aliveUntil: streak.aliveUntil }),
+  });
 }
 
 /**

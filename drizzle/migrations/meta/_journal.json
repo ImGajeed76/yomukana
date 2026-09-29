@@ -134,6 +134,13 @@
       "when": 1790644005440,
       "tag": "0018_more_colors_optional_emoji",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1790658910779,
+      "tag": "0019_profile_streak",
+      "breakpoints": true
     }
   ]
 }

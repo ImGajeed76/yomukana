@@ -6,6 +6,7 @@
   import { Button } from "$lib/components/ui/button";
   import { Progress } from "$lib/db";
   import { m } from "$lib/paraglide/messages";
+  import { streak } from "$lib/stats/streak-state.svelte";
   import { addFriend, removeFriendByName, type FriendProblem } from "$lib/sync/friends";
   import { viewProfile, viewProfileSignedOut, type ProfileView } from "$lib/sync/profile";
 
@@ -83,6 +84,7 @@
         cardColor={view.cardColor}
         score={view.score}
         badges={view.badges}
+        streak={view.isYou ? (streak.value?.current ?? view.streak ?? 0) : (view.streak ?? 0)}
       />
 
       <div class="flex flex-wrap gap-2">

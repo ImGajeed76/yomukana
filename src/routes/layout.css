@@ -66,6 +66,10 @@
   --primary-foreground: oklch(0.979 0.021 166.113);
   /* A gain, like "+12" or a climb: the primary green, which reads well on light. */
   --gain: var(--primary);
+  /* The reading streak's flame, once today is done. See src/lib/stats/streak.ts. */
+  --streak: oklch(0.66 0.19 45);
+  /* A streak freeze: icy, so a saved day never reads as a read one. */
+  --freeze: oklch(0.58 0.12 230);
   --secondary: oklch(0.967 0.001 286.375);
   --secondary-foreground: oklch(0.21 0.006 285.885);
   --muted: oklch(0.96 0.002 17.2);
@@ -128,6 +132,8 @@
   --primary-foreground: oklch(0.979 0.021 166.113);
   /* A gain, like "+12" or a climb, read from across a room on a dark screen. */
   --gain: oklch(0.8 0.14 164);
+  --streak: oklch(0.74 0.17 55);
+  --freeze: oklch(0.78 0.1 225);
   --secondary: oklch(0.274 0.006 286.033);
   --secondary-foreground: oklch(0.985 0 0);
   --muted: oklch(0.268 0.011 36.5);
@@ -179,6 +185,8 @@
   --color-badge-pink: var(--badge-pink);
   --color-badge-slate: var(--badge-slate);
   --color-gain: var(--gain);
+  --color-streak: var(--streak);
+  --color-freeze: var(--freeze);
   --color-profile-foreground: var(--profile-foreground);
   --color-qr-dark: var(--qr-dark);
   --color-qr-light: var(--qr-light);

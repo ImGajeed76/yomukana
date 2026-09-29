@@ -13,6 +13,7 @@
   import { Switch } from "$lib/components/ui/switch";
   import { Progress } from "$lib/db";
   import { m } from "$lib/paraglide/messages";
+  import { streak } from "$lib/stats/streak-state.svelte";
   import { loadTextShare, scoreOf } from "$lib/stats";
   import {
     rememberProfile,
@@ -158,6 +159,7 @@
       cardColor={profile.cardColor}
       {score}
       badges={profile.badges}
+      streak={streak.value?.current ?? 0}
     />
 
     <section class="flex flex-col gap-5 rounded-lg border border-border bg-card p-6">
