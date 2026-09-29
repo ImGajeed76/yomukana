@@ -59,13 +59,17 @@
     return { first: start / DAY_MS, length: (end - start) / DAY_MS };
   });
 
-  /** The month as weeks, Monday first. Null for the blanks before the 1st and after the last. */
+  /**
+   * The month as weeks, Monday first. Null for the blanks before the 1st and
+   * after the last. Always six weeks, the most a month can touch, so the grid
+   * is the same height every month and moving to a longer one never shifts it.
+   */
   let weeks = $derived.by(() => {
     const cells: (number | null)[] = [
       ...Array.from({ length: weekdayOf(month.first) }, () => null),
       ...Array.from({ length: month.length }, (_, index) => month.first + index),
     ];
-    while (cells.length % 7 !== 0) cells.push(null);
+    while (cells.length < 6 * 7) cells.push(null);
     return Array.from({ length: cells.length / 7 }, (_, row) => cells.slice(row * 7, row * 7 + 7));
   });
 
@@ -80,10 +84,10 @@
 
 <!--
   A month at a time, the way a wall calendar is read. Each day says how it went
-  on its own: a day read is an orange circle, a day a freeze covered is a blue
-  one with a snowflake, today not yet read is a ring. Shape as well as colour,
-  see CLAUDE.md 8.4. A week read on all seven days is joined by a band behind
-  it, the one reward the calendar gives, so it is kept for that alone.
+  on its own, tinted the way a badge is: a day read in orange, a day a freeze
+  covered in blue with a snowflake, today not yet read as a dashed ring. Shape
+  as well as colour, see CLAUDE.md 8.4. A week read on all seven days is one
+  solid band instead, the one reward the calendar gives, so it is kept for that.
 -->
 <div class="flex flex-col gap-3">
   <div class="flex items-center justify-between">
@@ -128,10 +132,22 @@
   <ol class="flex flex-col gap-1">
     {#each weeks as week, row (row)}
       {@const isWhole = isWholeWeek(week)}
-      <li class="grid grid-cols-7">
+      <li class="relative grid grid-cols-7">
+        {#if isWhole}
+          <!--
+            One band for the whole week, from Monday's centre to Sunday's so it
+            ends round like a day does, and glowing: the one reward the
+            calendar gives. One piece rather than seven, or the glow of each
+            would fall across its neighbour's number.
+          -->
+          <span
+            class="absolute inset-y-0 right-[calc(100%/14-1rem)] left-[calc(100%/14-1rem)] rounded-full bg-streak shadow-[0_0_16px_2px_color-mix(in_oklch,var(--color-streak)_55%,transparent)]"
+            aria-hidden="true"
+          ></span>
+        {/if}
         {#each week as day, column (column)}
           {#if day === null}
-            <span></span>
+            <span class="h-8"></span>
           {:else}
             {@const status = mark(day)}
             {@const label = LABELS[status]}
@@ -142,29 +158,24 @@
                 : `${fullDate.format(dateOf(day))}, ${label()}`}
               role="img"
             >
-              {#if isWhole}
-                <!-- The band from Monday's centre to Sunday's, so it ends round with them. -->
-                <span
-                  class={[
-                    "absolute inset-y-0 bg-streak/25",
-                    column === 0 ? "left-1/2 -ml-4 rounded-l-full" : "left-0",
-                    column === 6 ? "right-1/2 -mr-4 rounded-r-full" : "right-0",
-                  ]}
-                ></span>
-              {/if}
               <span
                 class={[
                   "relative flex size-8 items-center justify-center rounded-full text-xs tabular-nums",
-                  status === "done" && "bg-streak font-semibold text-background",
-                  status === "frozen" && "bg-freeze text-background",
-                  status === "today" && "border-2 border-streak font-semibold",
+                  // Inside a week read through, the day is part of the band and
+                  // needs no circle of its own.
+                  status === "done" &&
+                    (isWhole
+                      ? "font-semibold text-streak-foreground"
+                      : "bg-streak/12 font-semibold ring-1 ring-streak/40 ring-inset"),
+                  status === "frozen" && "bg-freeze/12 ring-1 ring-freeze/40 ring-inset",
+                  status === "today" && "border border-dashed border-streak font-semibold",
                   (status === "missed" || status === "empty") &&
                     (day > today ? "text-muted-foreground/50" : "text-muted-foreground"),
                 ]}
                 aria-hidden="true"
               >
                 {#if status === "frozen"}
-                  <Snowflake class="size-4" />
+                  <Snowflake class="size-4 text-freeze" />
                 {:else}
                   {dateOf(day).getUTCDate()}
                 {/if}

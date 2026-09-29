@@ -68,6 +68,8 @@
   --gain: var(--primary);
   /* The reading streak's flame, once today is done. See src/lib/stats/streak.ts. */
   --streak: oklch(0.66 0.19 45);
+  /* Text on solid streak orange. White in both themes, the way it is on a flame. */
+  --streak-foreground: oklch(1 0 0);
   /* A streak freeze: icy, so a saved day never reads as a read one. */
   --freeze: oklch(0.58 0.12 230);
   --secondary: oklch(0.967 0.001 286.375);
@@ -133,6 +135,7 @@
   /* A gain, like "+12" or a climb, read from across a room on a dark screen. */
   --gain: oklch(0.8 0.14 164);
   --streak: oklch(0.74 0.17 55);
+  --streak-foreground: oklch(1 0 0);
   --freeze: oklch(0.78 0.1 225);
   --secondary: oklch(0.274 0.006 286.033);
   --secondary-foreground: oklch(0.985 0 0);
@@ -186,6 +189,7 @@
   --color-badge-slate: var(--badge-slate);
   --color-gain: var(--gain);
   --color-streak: var(--streak);
+  --color-streak-foreground: var(--streak-foreground);
   --color-freeze: var(--freeze);
   --color-profile-foreground: var(--profile-foreground);
   --color-qr-dark: var(--qr-dark);
