@@ -70,6 +70,8 @@
   --streak: oklch(0.66 0.19 45);
   /* Text on solid streak orange. White in both themes, the way it is on a flame. */
   --streak-foreground: oklch(1 0 0);
+  /* The hot heart of the flame. */
+  --streak-core: oklch(0.86 0.16 85);
   /* A streak freeze: icy, so a saved day never reads as a read one. */
   --freeze: oklch(0.58 0.12 230);
   --secondary: oklch(0.967 0.001 286.375);
@@ -136,6 +138,7 @@
   --gain: oklch(0.8 0.14 164);
   --streak: oklch(0.74 0.17 55);
   --streak-foreground: oklch(1 0 0);
+  --streak-core: oklch(0.9 0.14 90);
   --freeze: oklch(0.78 0.1 225);
   --secondary: oklch(0.274 0.006 286.033);
   --secondary-foreground: oklch(0.985 0 0);
@@ -190,6 +193,7 @@
   --color-gain: var(--gain);
   --color-streak: var(--streak);
   --color-streak-foreground: var(--streak-foreground);
+  --color-streak-core: var(--streak-core);
   --color-freeze: var(--freeze);
   --color-profile-foreground: var(--profile-foreground);
   --color-qr-dark: var(--qr-dark);

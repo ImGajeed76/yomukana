@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { Flame, Snowflake } from "@lucide/svelte";
+  import StreakFlame from "$lib/components/streak/StreakFlame.svelte";
+  import IceDrop from "./IceDrop.svelte";
   import StreakWeek from "./StreakWeek.svelte";
   import { Button } from "$lib/components/ui/button";
   import * as Dialog from "$lib/components/ui/dialog";
@@ -78,9 +79,9 @@
         aria-hidden="true"
       >
         {#if content.isFreeze}
-          <Snowflake class="size-12 text-freeze" />
+          <IceDrop class="size-12" />
         {:else}
-          <Flame class="size-12 fill-streak text-streak" />
+          <StreakFlame class="size-12" />
         {/if}
       </div>
       {#if content.number !== null}

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Flame } from "@lucide/svelte";
+  import StreakFlame from "$lib/components/streak/StreakFlame.svelte";
   import { m } from "$lib/paraglide/messages";
   import { streak } from "$lib/stats/streak-state.svelte";
 
@@ -24,7 +24,7 @@
     aria-label={label}
     title={label}
   >
-    <Flame class={["size-4", value.isTodayDone && "fill-streak text-streak"]} aria-hidden="true" />
+    <StreakFlame class="size-4" isLit={value.isTodayDone} />
     {value.current}
   </a>
 {/if}

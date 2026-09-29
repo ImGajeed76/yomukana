@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Snowflake } from "@lucide/svelte";
+  import IceDrop from "./IceDrop.svelte";
   import { m } from "$lib/paraglide/messages";
   import { DAY_GOAL, FREEZE_EARNED_AT, FREEZES_MAX, type Streak } from "$lib/stats/streak";
 
@@ -36,7 +36,7 @@
   <div class="flex flex-col gap-1">
     <dt class="text-xs text-muted-foreground">{m.streak_label_next_freeze()}</dt>
     <dd class="flex items-center gap-1.5 text-2xl font-semibold tabular-nums">
-      <Snowflake class="size-5 text-freeze" aria-hidden="true" />
+      <IceDrop class="size-5" />
       {streak.today}<span class="text-base font-normal text-muted-foreground"
         >/ {FREEZE_EARNED_AT}</span
       >

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Flame } from "@lucide/svelte";
+  import StreakFlame from "$lib/components/streak/StreakFlame.svelte";
   import { prefersReducedMotion } from "svelte/motion";
   import { scale } from "svelte/transition";
   import StreakWeek from "./StreakWeek.svelte";
@@ -23,7 +23,7 @@
 <div class="flex flex-wrap items-center gap-x-8 gap-y-4">
   <div class="flex items-center gap-3">
     <span in:scale={{ start: 0.6, duration: prefersReducedMotion.current ? 0 : 300 }}>
-      <Flame class="size-10 fill-streak text-streak" aria-hidden="true" />
+      <StreakFlame class="size-10" />
     </span>
     <div class="flex flex-col">
       <span class="text-3xl leading-none font-semibold tabular-nums">{streak.current}</span>

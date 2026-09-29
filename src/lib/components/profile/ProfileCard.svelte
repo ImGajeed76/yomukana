@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Flame } from "@lucide/svelte";
+  import StreakFlame from "$lib/components/streak/StreakFlame.svelte";
   import type { Snippet } from "svelte";
   import GroupBadge from "$lib/components/badges/GroupBadge.svelte";
   import type { Badge } from "$lib/sync/badge-rules";
@@ -76,7 +76,7 @@
           <div class="flex flex-col items-end">
             <span class="text-xs text-muted-foreground">{m.streak_label()}</span>
             <span class="flex items-center gap-1 text-2xl leading-none font-semibold tabular-nums">
-              <Flame class="size-5 fill-streak text-streak" aria-hidden="true" />{streak}
+              <StreakFlame class="size-5" />{streak}
             </span>
           </div>
         {/if}

@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { ChevronLeft, ChevronRight, Snowflake } from "@lucide/svelte";
+  import IceDrop from "./IceDrop.svelte";
+  import { ChevronLeft, ChevronRight } from "@lucide/svelte";
   import { Button } from "$lib/components/ui/button";
   import { m } from "$lib/paraglide/messages";
   import { getLocale } from "$lib/paraglide/runtime";
@@ -102,13 +103,28 @@
     return runs;
   }
 
-  /** Where a whole week's two sparkles sit: on a gap between days, varied by week. */
-  function sparklesOf(week: readonly number[]): { left: number; isHigh: boolean }[] {
+  interface Sparkle {
+    /** Across the row, as a share of it: always on a gap between two days. */
+    left: number;
+    isHigh: boolean;
+    /** Its own rhythm, in seconds, so the four never blink together. */
+    period: number;
+    /** How far into that rhythm it starts, so the row is already sparkling when drawn. */
+    offset: number;
+  }
+
+  /**
+   * A whole week's four sparkles, each on a different gap between days. Varied
+   * by week, so two full weeks do not twinkle in step.
+   */
+  function sparklesOf(week: readonly number[]): Sparkle[] {
     const seed = week[0] ?? 0;
-    return [
-      { left: ((seed % 3) + 1) / 7, isHigh: true },
-      { left: ((seed % 2) + 4) / 7, isHigh: false },
-    ];
+    return [0, 2, 5, 1].map((step, index) => ({
+      left: (((seed + step) % 6) + 1) / 7,
+      isHigh: index % 2 === 0,
+      period: 4.5 + ((seed + index) % 3) * 0.7,
+      offset: index * 1.3 + (seed % 5) * 0.4,
+    }));
   }
 
   function percent(share: number): string {
@@ -121,7 +137,7 @@
   draws its streak. A run of streak days is a soft band with the days in
   orange on it. A day a freeze covered is a drop of ice on the band, and today,
   not yet read, a grey one. A week read on all seven days is a solid pill with
-  a sparkle or two: the one reward the calendar gives, so it is kept for that.
+  sparkles that come and go: the one reward the calendar gives, so it is kept for that.
   Each kind differs by shape as well as colour, see CLAUDE.md 8.4.
 -->
 <div class="flex flex-col gap-3">
@@ -177,13 +193,16 @@
           ></span>
           {#each sparklesOf(week) as sparkle, index (index)}
             <span
-              class={[
-                "absolute size-1 -translate-x-1/2 rotate-45 bg-streak-foreground/90",
-                sparkle.isHigh ? "top-1.5" : "bottom-1.5",
-              ]}
+              class={["absolute -translate-x-1/2", sparkle.isHigh ? "top-1" : "bottom-1"]}
               style:left={percent(sparkle.left)}
               aria-hidden="true"
-            ></span>
+            >
+              <span
+                class="sparkle block size-1 bg-streak-foreground/70"
+                style:animation-duration={`${String(sparkle.period)}s`}
+                style:animation-delay={`${String(-sparkle.offset)}s`}
+              ></span>
+            </span>
           {/each}
         {:else}
           {#each runsOf(week) as run (run.from)}
@@ -216,7 +235,6 @@
                 class={[
                   "relative flex size-8 items-center justify-center rounded-full text-xs font-semibold tabular-nums",
                   status === "done" && (isWhole ? "text-streak-foreground" : "text-streak"),
-                  status === "frozen" && "bg-freeze text-streak-foreground ring-2 ring-freeze/35",
                   status === "today" && "bg-muted text-foreground",
                   (status === "missed" || status === "empty") &&
                     (day > today ? "text-muted-foreground/50" : "text-muted-foreground"),
@@ -224,13 +242,7 @@
                 aria-hidden="true"
               >
                 {#if status === "frozen"}
-                  <!-- Frozen over: a drop of ice, with two icicles hanging off it. -->
-                  <Snowflake class="size-4" />
-                  <span class="absolute top-full left-2.5 -mt-1 h-2 w-1.5 rounded-b-full bg-freeze"
-                  ></span>
-                  <span
-                    class="absolute top-full left-4.5 -mt-1 h-1.5 w-1.5 rounded-b-full bg-freeze"
-                  ></span>
+                  <IceDrop class="size-8" />
                 {:else}
                   {dateOf(day).getUTCDate()}
                 {/if}
@@ -242,3 +254,41 @@
     {/each}
   </ol>
 </div>
+
+<style>
+  /*
+   * A sparkle pops in, stays a while, pops out, and stays away a while. Quick
+   * both ways, with a little overshoot on the way in, so it twinkles rather
+   * than fades. Still for a reader who asks for less motion.
+   */
+  .sparkle {
+    transform: rotate(45deg) scale(0);
+    animation-name: sparkle;
+    animation-iteration-count: infinite;
+  }
+
+  @keyframes sparkle {
+    0% {
+      transform: rotate(45deg) scale(0);
+      animation-timing-function: cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+    6% {
+      transform: rotate(45deg) scale(1);
+    }
+    55% {
+      transform: rotate(45deg) scale(1);
+      animation-timing-function: ease-in;
+    }
+    61%,
+    100% {
+      transform: rotate(45deg) scale(0);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .sparkle {
+      animation: none;
+      transform: rotate(45deg);
+    }
+  }
+</style>
