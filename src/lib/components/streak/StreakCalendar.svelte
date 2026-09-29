@@ -60,99 +60,153 @@
   });
 
   /**
-   * The month as weeks, Monday first. Null for the blanks before the 1st and
-   * after the last. Always six weeks, the most a month can touch, so the grid
-   * is the same height every month and moving to a longer one never shifts it.
+   * The month as weeks, Monday to Sunday, each day as its day number. The days
+   * of the months either side are kept too, unnumbered, so a run that crosses
+   * into a month is drawn across the blanks. Always six weeks, the most a month
+   * can touch, so the grid is the same height every month and moving to a
+   * longer one never shifts it.
    */
   let weeks = $derived.by(() => {
-    const cells: (number | null)[] = [
-      ...Array.from({ length: weekdayOf(month.first) }, () => null),
-      ...Array.from({ length: month.length }, (_, index) => month.first + index),
-    ];
-    while (cells.length < 6 * 7) cells.push(null);
-    return Array.from({ length: cells.length / 7 }, (_, row) => cells.slice(row * 7, row * 7 + 7));
+    const monday = month.first - weekdayOf(month.first);
+    return Array.from({ length: 6 }, (_, row) =>
+      Array.from({ length: 7 }, (_, column) => monday + row * 7 + column),
+    );
   });
+
+  function isInMonth(day: number): boolean {
+    return day >= month.first && day < month.first + month.length;
+  }
+
+  function isInStreak(day: number): boolean {
+    const status = mark(day);
+    return status === "done" || status === "frozen";
+  }
 
   /**
    * Whether every day of a week row was read. A week a freeze had to cover
    * kept the streak, but it was not a week read, so it is not drawn as one.
    */
-  function isWholeWeek(week: readonly (number | null)[]): boolean {
-    return week.every((day) => day !== null && mark(day) === "done");
+  function isWholeWeek(week: readonly number[]): boolean {
+    return week.every((day) => mark(day) === "done");
+  }
+
+  /** The runs of streak days in a week row, as first and last column. */
+  function runsOf(week: readonly number[]): { from: number; to: number }[] {
+    const runs: { from: number; to: number }[] = [];
+    for (const [column, day] of week.entries()) {
+      if (!isInStreak(day)) continue;
+      const last = runs.at(-1);
+      if (last?.to === column - 1) last.to = column;
+      else runs.push({ from: column, to: column });
+    }
+    return runs;
+  }
+
+  /** Where a whole week's two sparkles sit: on a gap between days, varied by week. */
+  function sparklesOf(week: readonly number[]): { left: number; isHigh: boolean }[] {
+    const seed = week[0] ?? 0;
+    return [
+      { left: ((seed % 3) + 1) / 7, isHigh: true },
+      { left: ((seed % 2) + 4) / 7, isHigh: false },
+    ];
+  }
+
+  function percent(share: number): string {
+    return `${String(share * 100)}%`;
   }
 </script>
 
 <!--
-  A month at a time, the way a wall calendar is read. Each day says how it went
-  on its own, tinted the way a badge is: a day read in orange, a day a freeze
-  covered in blue with a snowflake, today not yet read as a dashed ring. Shape
-  as well as colour, see CLAUDE.md 8.4. A week read on all seven days is one
-  solid band instead, the one reward the calendar gives, so it is kept for that.
+  A month at a time, the way a wall calendar is read, drawn the way Duolingo
+  draws its streak. A run of streak days is a soft band with the days in
+  orange on it. A day a freeze covered is a drop of ice on the band, and today,
+  not yet read, a grey one. A week read on all seven days is a solid pill with
+  a sparkle or two: the one reward the calendar gives, so it is kept for that.
+  Each kind differs by shape as well as colour, see CLAUDE.md 8.4.
 -->
 <div class="flex flex-col gap-3">
-  <div class="flex items-center justify-between">
-    <span class="text-sm font-medium">{monthName.format(dateOf(month.first))}</span>
+  <div class="grid grid-cols-[2rem_1fr_2rem] items-center">
     <!-- Only once there is another month to go to. Until then they could only be disabled. -->
     {#if monthsAvailable > 0}
-      <div class="-mr-2 flex">
-        <Button
-          variant="ghost"
-          size="icon"
-          class="size-8"
-          aria-label={m.streak_calendar_previous()}
-          disabled={monthsBack >= monthsAvailable}
-          onclick={() => {
-            monthsBack += 1;
-          }}
-        >
-          <ChevronLeft class="size-4" />
-        </Button>
-        <Button
-          variant="ghost"
-          size="icon"
-          class="size-8"
-          aria-label={m.streak_calendar_next()}
-          disabled={monthsBack === 0}
-          onclick={() => {
-            monthsBack -= 1;
-          }}
-        >
-          <ChevronRight class="size-4" />
-        </Button>
-      </div>
+      <Button
+        variant="ghost"
+        size="icon"
+        class="size-8"
+        aria-label={m.streak_calendar_previous()}
+        disabled={monthsBack >= monthsAvailable}
+        onclick={() => {
+          monthsBack += 1;
+        }}
+      >
+        <ChevronLeft class="size-4" />
+      </Button>
+    {:else}
+      <span class="size-8"></span>
+    {/if}
+    <span class="text-center text-sm font-medium">{monthName.format(dateOf(month.first))}</span>
+    {#if monthsAvailable > 0}
+      <Button
+        variant="ghost"
+        size="icon"
+        class="size-8"
+        aria-label={m.streak_calendar_next()}
+        disabled={monthsBack === 0}
+        onclick={() => {
+          monthsBack -= 1;
+        }}
+      >
+        <ChevronRight class="size-4" />
+      </Button>
     {/if}
   </div>
 
   <div class="grid grid-cols-7 text-center text-xs text-muted-foreground" aria-hidden="true">
-    {#each weeks[0] ?? [] as _, index (index)}
-      <span>{weekdayName.format(dateOf(month.first - weekdayOf(month.first) + index))}</span>
+    {#each weeks[0] ?? [] as day (day)}
+      <span>{weekdayName.format(dateOf(day))}</span>
     {/each}
   </div>
 
-  <ol class="flex flex-col gap-1">
+  <ol class="flex flex-col gap-1.5">
     {#each weeks as week, row (row)}
       {@const isWhole = isWholeWeek(week)}
       <li class="relative grid grid-cols-7">
         {#if isWhole}
-          <!--
-            One band for the whole week, from Monday's centre to Sunday's so it
-            ends round like a day does, and glowing: the one reward the
-            calendar gives. One piece rather than seven, or the glow of each
-            would fall across its neighbour's number.
-          -->
           <span
-            class="absolute inset-y-0 right-[calc(100%/14-1rem)] left-[calc(100%/14-1rem)] rounded-full bg-streak shadow-[0_0_8px_color-mix(in_oklch,var(--color-streak)_30%,transparent)]"
+            class="absolute inset-0 rounded-full bg-streak ring-2 ring-streak/25"
             aria-hidden="true"
           ></span>
+          {#each sparklesOf(week) as sparkle, index (index)}
+            <span
+              class={[
+                "absolute size-1 -translate-x-1/2 rotate-45 bg-streak-foreground/90",
+                sparkle.isHigh ? "top-1.5" : "bottom-1.5",
+              ]}
+              style:left={percent(sparkle.left)}
+              aria-hidden="true"
+            ></span>
+          {/each}
+        {:else}
+          {#each runsOf(week) as run (run.from)}
+            <span
+              class="absolute inset-y-0 rounded-full bg-streak/12"
+              style:left={percent(run.from / 7)}
+              style:right={percent((6 - run.to) / 7)}
+              aria-hidden="true"
+            ></span>
+          {/each}
         {/if}
-        {#each week as day, column (column)}
-          {#if day === null}
+        {#each week as day (day)}
+          {#if !isInMonth(day)}
             <span class="h-8"></span>
           {:else}
             {@const status = mark(day)}
             {@const label = LABELS[status]}
             <span
-              class="relative flex h-8 items-center justify-center"
+              class={[
+                "relative flex h-8 items-center justify-center",
+                // Above the next row, so the icicles hang over its band.
+                status === "frozen" && "z-10",
+              ]}
               aria-label={label === null
                 ? fullDate.format(dateOf(day))
                 : `${fullDate.format(dateOf(day))}, ${label()}`}
@@ -160,22 +214,23 @@
             >
               <span
                 class={[
-                  "relative flex size-8 items-center justify-center rounded-full text-xs tabular-nums",
-                  // Inside a week read through, the day is part of the band and
-                  // needs no circle of its own.
-                  status === "done" &&
-                    (isWhole
-                      ? "font-semibold text-streak-foreground"
-                      : "bg-streak/12 font-semibold ring-1 ring-streak/40 ring-inset"),
-                  status === "frozen" && "bg-freeze/12 ring-1 ring-freeze/40 ring-inset",
-                  status === "today" && "border border-dashed border-streak font-semibold",
+                  "relative flex size-8 items-center justify-center rounded-full text-xs font-semibold tabular-nums",
+                  status === "done" && (isWhole ? "text-streak-foreground" : "text-streak"),
+                  status === "frozen" && "bg-freeze text-streak-foreground ring-2 ring-freeze/35",
+                  status === "today" && "bg-muted text-foreground",
                   (status === "missed" || status === "empty") &&
                     (day > today ? "text-muted-foreground/50" : "text-muted-foreground"),
                 ]}
                 aria-hidden="true"
               >
                 {#if status === "frozen"}
-                  <Snowflake class="size-4 text-freeze" />
+                  <!-- Frozen over: a drop of ice, with two icicles hanging off it. -->
+                  <Snowflake class="size-4" />
+                  <span class="absolute top-full left-2.5 -mt-1 h-2 w-1.5 rounded-b-full bg-freeze"
+                  ></span>
+                  <span
+                    class="absolute top-full left-4.5 -mt-1 h-1.5 w-1.5 rounded-b-full bg-freeze"
+                  ></span>
                 {:else}
                   {dateOf(day).getUTCDate()}
                 {/if}
