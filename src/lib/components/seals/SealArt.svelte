@@ -9,9 +9,15 @@
     /** The size to draw it at, in pixels: the pill measures itself, the dialog's banner is set. */
     width: number;
     height: number;
+    /**
+     * Whether to draw it still: its shape, colours and scene, without the
+     * ribbons, glints, rising particles and breathing. For many seals side by
+     * side, where every one of them moving would drown the one that matters.
+     */
+    isCalm?: boolean;
   }
 
-  let { seal, width, height }: Props = $props();
+  let { seal, width, height, isCalm = false }: Props = $props();
 
   const id = $props.id();
 
@@ -24,9 +30,9 @@
     seal.tier === 1 ? "" : outlineOf("pill", seal.tier, width - inset * 2, height - inset * 2),
   );
   let scene = $derived(seal.tier === 1 ? [] : sceneOf(sceneOfKind(seal.kind), width, height));
-  let ribbons = $derived(ribbonsOf(seal.tier, width, height));
-  let glints = $derived(glintsOf(seal.tier, width, height));
-  let particles = $derived(particlesOf(seal.tier));
+  let ribbons = $derived(isCalm ? [] : ribbonsOf(seal.tier, width, height));
+  let glints = $derived(isCalm ? [] : glintsOf(seal.tier, width, height));
+  let particles = $derived(isCalm ? [] : particlesOf(seal.tier));
   /** How strongly the scene shows: faint at first, full from epic. */
   let sceneStrength = $derived([0, 0, 0.55, 0.8, 1, 1][seal.tier] ?? 1);
 </script>
@@ -39,7 +45,14 @@
   behind whatever holds it, which sets its palette with data-seal-look.
 -->
 {#if outline !== ""}
-  <svg class="seal-art" data-tier={seal.tier} {width} {height} aria-hidden="true">
+  <svg
+    class="seal-art"
+    data-tier={seal.tier}
+    data-calm={isCalm}
+    {width}
+    {height}
+    aria-hidden="true"
+  >
     <defs>
       <linearGradient id={`${id}-body`} x1="0" y1="0" x2="0" y2="1">
         <stop offset="0%" class="stop-body-top" />
@@ -331,6 +344,13 @@
       opacity: 0;
       transform: translateY(-1.4em) scale(1);
     }
+  }
+
+  .seal-art[data-calm="true"] {
+    animation: none;
+  }
+  .seal-art[data-calm="true"] .seal-sheen {
+    display: none;
   }
 
   @media (prefers-reduced-motion: reduce) {

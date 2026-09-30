@@ -208,3 +208,19 @@ const TIERS: Readonly<Record<SealTier, () => string>> = {
 export function sealTierName(seal: Seal): string {
   return TIERS[seal.tier]();
 }
+
+const KINDS: Readonly<Record<SealKind, () => string>> = {
+  streak: m.seal_kind_streak,
+  days: m.seal_kind_days,
+  sentences: m.seal_kind_sentences,
+  perfect: m.seal_kind_perfect,
+  invited: m.seal_kind_invited,
+  followers: m.seal_kind_followers,
+  years: m.seal_kind_years,
+  joined: m.seal_kind_joined,
+};
+
+/** What a kind of seal is for, as a heading over its shelf. */
+export function sealKindName(kind: SealKind): string {
+  return KINDS[kind]();
+}

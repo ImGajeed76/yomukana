@@ -18,9 +18,17 @@
      * not allowed.
      */
     isStatic?: boolean;
+    /** Whether to draw it still, for many side by side. See SealArt. */
+    isCalm?: boolean;
   }
 
-  let { seal, earnedAt = null, class: className = "text-xs", isStatic = false }: Props = $props();
+  let {
+    seal,
+    earnedAt = null,
+    class: className = "text-xs",
+    isStatic = false,
+    isCalm = false,
+  }: Props = $props();
 
   let name = $derived(sealName(seal, earnedAt));
   let meaning = $derived(sealMeaning(seal, earnedAt));
@@ -56,7 +64,7 @@
         isOpen = true;
       }}
 >
-  {#if width > 0}<SealArt {seal} {width} {height} />{/if}
+  {#if width > 0}<SealArt {seal} {width} {height} {isCalm} />{/if}
   <SealKanji kanji={seal.kanji} tier={seal.tier} />
   <span class="seal-rule" aria-hidden="true"></span>
   <span class="seal-name" aria-hidden="true">{name}</span>

@@ -3,11 +3,11 @@
   import GroupBadge from "./GroupBadge.svelte";
   import WornBadge from "./WornBadge.svelte";
   import SealPill from "$lib/components/seals/SealPill.svelte";
-  import { sealMeaning, sealName } from "$lib/components/seals/seal-copy";
+  import { sealKindName, sealName } from "$lib/components/seals/seal-copy";
   import { m } from "$lib/paraglide/messages";
-  import { BADGES_WORN_MAX, type Badge, type Worn } from "$lib/sync/badge-rules";
+  import { BADGES_WORN_MAX, type Worn } from "$lib/sync/badge-rules";
   import type { OwnBadge, OwnSeal } from "$lib/sync/badges";
-  import { sealOf, type Seal } from "$lib/sync/seal-rules";
+  import { sealOf, type Seal, type SealKind } from "$lib/sync/seal-rules";
 
   interface Props {
     /** Every group badge the reader could wear. */
@@ -29,14 +29,12 @@
     readonly label: string;
   }
 
-  /** Each earned seal, with its rules looked up, rarest first. Unknown ids are left out. */
+  /** Each earned seal, with its rules looked up. Unknown ids are left out. */
   let ownSeals = $derived(
-    seals
-      .flatMap((own) => {
-        const seal = sealOf(own.seal);
-        return seal === null ? [] : [{ own, seal }];
-      })
-      .sort((a, b) => b.seal.tier - a.seal.tier || b.own.earnedAt - a.own.earnedAt),
+    seals.flatMap((own) => {
+      const seal = sealOf(own.seal);
+      return seal === null ? [] : [{ own, seal }];
+    }),
   );
 
   let slots = $derived(
@@ -54,42 +52,36 @@
       ];
     }),
   );
-  interface TrayItem {
-    readonly key: string;
-    readonly seal: Seal | null;
-    readonly earnedAt: number | null;
-    readonly badge: Badge | null;
-    /** What tells it apart: what a seal is for, which group a badge is from. */
-    readonly caption: string;
-    /** Read out for putting it on. */
-    readonly label: string;
+  interface Shelf {
+    readonly kind: SealKind;
+    /** Its seals not worn, in the order they are earned. */
+    readonly seals: readonly { seal: Seal; earnedAt: number }[];
   }
 
-  /** Everything not worn: seals rarest first, then group badges. */
-  let tray = $derived<TrayItem[]>([
-    ...ownSeals
-      .filter((entry) => !worn.includes(entry.seal.id))
-      .map((entry) => ({
-        key: entry.seal.id,
-        seal: entry.seal,
-        earnedAt: entry.own.earnedAt,
-        badge: null,
-        caption: sealMeaning(entry.seal, entry.own.earnedAt),
-        label: m.settings_profile_badges_button_wear_seal({
-          name: sealName(entry.seal, entry.own.earnedAt),
-        }),
-      })),
-    ...badges
-      .filter((own) => !worn.includes(own.groupId))
-      .map((own) => ({
-        key: own.groupId,
-        seal: null,
-        earnedAt: null,
-        badge: own.badge,
-        caption: own.groupName,
-        label: m.settings_profile_badges_button_wear({ tag: own.badge.tag, group: own.groupName }),
-      })),
-  ]);
+  /** Kinds in the order the collection shows them: reading first, where it began last. */
+  const SHELF_ORDER: readonly SealKind[] = [
+    "streak",
+    "days",
+    "sentences",
+    "perfect",
+    "followers",
+    "invited",
+    "years",
+    "joined",
+  ];
+
+  /** The seals not worn, a shelf a kind, each shelf in the order its seals are earned. */
+  let shelves = $derived<Shelf[]>(
+    SHELF_ORDER.flatMap((kind) => {
+      const onShelf = ownSeals
+        .filter((entry) => entry.seal.kind === kind && !worn.includes(entry.seal.id))
+        .sort((a, b) => (a.seal.count ?? 0) - (b.seal.count ?? 0))
+        .map((entry) => ({ seal: entry.seal, earnedAt: entry.own.earnedAt }));
+      return onShelf.length === 0 ? [] : [{ kind, seals: onShelf }];
+    }),
+  );
+  let groupShelf = $derived(badges.filter((own) => !worn.includes(own.groupId)));
+  let hasTray = $derived(shelves.length > 0 || groupShelf.length > 0);
   let isFull = $derived(worn.length >= BADGES_WORN_MAX);
   /** The slots left empty, drawn as outlines so the limit can be seen rather than read. */
   let emptySlots = $derived(Math.max(0, BADGES_WORN_MAX - worn.length));
@@ -129,40 +121,76 @@
         ></li>
       {/each}
     </ul>
-    {#if isFull && tray.length > 0}
+    {#if isFull && hasTray}
       <p class="text-xs text-muted-foreground">{m.settings_profile_badges_hint_full()}</p>
     {/if}
   </div>
 
-  {#if tray.length > 0}
-    <div class="flex flex-col gap-2">
+  {#if hasTray}
+    <!--
+      A shelf a kind, left to right in the order they are earned, so how far
+      along each path the reader is shows at a glance. Drawn still: the one
+      that moves is the one on the card.
+    -->
+    <div class="flex flex-col gap-4">
       <span class="text-sm font-medium">{m.settings_profile_badges_label_tray()}</span>
-      <!--
-        Seals and badges in one grid, each with what tells it apart underneath:
-        what a seal is for, which group a badge is from. Rarest seals first.
-      -->
-      <ul class="-mx-2 grid grid-cols-[repeat(auto-fill,minmax(8rem,1fr))] gap-1">
-        {#each tray as item (item.key)}
-          <li class="flex">
-            <button
-              type="button"
-              class="flex min-w-0 flex-1 flex-col items-start gap-2 rounded-lg px-2 pt-3 pb-2 text-left transition-colors hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent"
-              aria-label={item.label}
-              disabled={isFull}
-              onclick={() => {
-                onChange([...worn, item.key]);
-              }}
-            >
-              {#if item.seal !== null}
-                <SealPill seal={item.seal} earnedAt={item.earnedAt} isStatic={true} />
-              {:else if item.badge !== null}
-                <GroupBadge badge={item.badge} />
-              {/if}
-              <span class="line-clamp-2 w-full text-xs text-muted-foreground">{item.caption}</span>
-            </button>
-          </li>
-        {/each}
-      </ul>
+      {#each shelves as shelf (shelf.kind)}
+        <div class="flex flex-col gap-1">
+          <span class="text-xs text-muted-foreground">{sealKindName(shelf.kind)}</span>
+          <ul class="-mx-1 flex flex-wrap gap-x-1 gap-y-1">
+            {#each shelf.seals as entry (entry.seal.id)}
+              <li>
+                <button
+                  type="button"
+                  class="rounded-full px-1 pt-2 pb-1 transition-[background-color,opacity] hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent"
+                  aria-label={m.settings_profile_badges_button_wear_seal({
+                    name: sealName(entry.seal, entry.earnedAt),
+                  })}
+                  disabled={isFull}
+                  onclick={() => {
+                    onChange([...worn, entry.seal.id]);
+                  }}
+                >
+                  <SealPill
+                    seal={entry.seal}
+                    earnedAt={entry.earnedAt}
+                    isStatic={true}
+                    isCalm={true}
+                  />
+                </button>
+              </li>
+            {/each}
+          </ul>
+        </div>
+      {/each}
+      {#if groupShelf.length > 0}
+        <div class="flex flex-col gap-1">
+          <span class="text-xs text-muted-foreground"
+            >{m.settings_profile_badges_label_groups()}</span
+          >
+          <ul class="-mx-1 flex flex-wrap gap-x-1 gap-y-1">
+            {#each groupShelf as own (own.groupId)}
+              <li>
+                <button
+                  type="button"
+                  class="flex items-center gap-2 rounded-full px-1 py-1 pr-3 transition-[background-color,opacity] hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent"
+                  aria-label={m.settings_profile_badges_button_wear({
+                    tag: own.badge.tag,
+                    group: own.groupName,
+                  })}
+                  disabled={isFull}
+                  onclick={() => {
+                    onChange([...worn, own.groupId]);
+                  }}
+                >
+                  <GroupBadge badge={own.badge} />
+                  <span class="text-xs text-muted-foreground">{own.groupName}</span>
+                </button>
+              </li>
+            {/each}
+          </ul>
+        </div>
+      {/if}
     </div>
   {/if}
 </div>
