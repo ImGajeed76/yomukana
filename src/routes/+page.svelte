@@ -4,6 +4,9 @@
   import WelcomeDialog from "$lib/components/WelcomeDialog.svelte";
   import StreakCelebration from "$lib/components/streak/StreakCelebration.svelte";
   import StreakDialog from "$lib/components/streak/StreakDialog.svelte";
+  import SealDialog from "$lib/components/seals/SealDialog.svelte";
+  import { sealOf } from "$lib/sync/seal-rules";
+  import { seals } from "$lib/sync/seals-state.svelte";
   import StreakToday from "$lib/components/streak/StreakToday.svelte";
   import { Button } from "$lib/components/ui/button";
   import { m } from "$lib/paraglide/messages";
@@ -114,6 +117,28 @@
   // sentence rather than back to the summary it covered, which would want a
   // second Enter before typing works again.
   let isNextAfterStreak = false;
+
+  // A seal just earned is shown between sentences, never over one being
+  // typed, and never over another popup. Closing it moves on, as the streak
+  // popup does, since both cover the summary the reader would otherwise
+  // have to leave with a second Enter.
+  let isSealOpen = $state(false);
+  let newSeal = $state.raw<{ seal: string; earnedAt: number } | null>(null);
+  let newSealRules = $derived(newSeal === null ? null : sealOf(newSeal.seal));
+  let isNextAfterSeal = false;
+  $effect(() => {
+    if (seals.fresh.length === 0 || practice.summary === null) return;
+    if (isWelcoming || isExplainingScore || isStreakOpen || isSealOpen) return;
+    newSeal = seals.takeFresh();
+    if (newSeal === null) return;
+    isSealOpen = true;
+    isNextAfterSeal = true;
+  });
+  $effect(() => {
+    if (isSealOpen || !isNextAfterSeal) return;
+    isNextAfterSeal = false;
+    next();
+  });
   $effect(() => {
     if (isStreakOpen || !isNextAfterStreak) return;
     isNextAfterStreak = false;
@@ -140,7 +165,9 @@
     // A key pressed inside a dialog belongs to it. Checked by where the key
     // came from, not by whether the dialog is still open: the dialog closes on
     // this same Escape before it reaches here, and would read as a skip.
-    if (isWelcoming || isExplainingScore || isStreakOpen || isFromDialog(event)) return;
+    if (isWelcoming || isExplainingScore || isStreakOpen || isSealOpen || isFromDialog(event)) {
+      return;
+    }
     if (practice.summary !== null) {
       if (event.key === "Enter") next();
       return;
@@ -160,6 +187,9 @@
 <WelcomeDialog bind:open={isWelcoming} />
 <ScoreChangeDialog bind:open={isExplainingScore} />
 <StreakDialog bind:open={isStreakOpen} news={streakNews} streak={streak.value} />
+{#if newSeal !== null && newSealRules !== null}
+  <SealDialog bind:open={isSealOpen} seal={newSealRules} earnedAt={newSeal.earnedAt} isNew={true} />
+{/if}
 
 <!--
   This screen has one job and one thing on it. The sentence sits on the optical
@@ -185,7 +215,7 @@
         segments={practice.current.segments}
         tokens={practice.current.tokens}
         round={practice.round}
-        isPaused={isWelcoming || isExplainingScore || isStreakOpen}
+        isPaused={isWelcoming || isExplainingScore || isStreakOpen || isSealOpen}
         onFinished={(attempt: Attempt, revealed: ReadonlySet<number>) => {
           void finish(attempt, revealed);
         }}

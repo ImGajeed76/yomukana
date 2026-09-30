@@ -7,6 +7,7 @@
 
 import { isHiragana, isKatakana, toCodePoints } from "../japanese/text";
 import { CARD_COLORS, isCardColor, type CardColor } from "./profile-rules";
+import type { WornSeal } from "./seal-rules";
 
 /** A badge as it is shown. */
 export interface Badge {
@@ -14,6 +15,17 @@ export interface Badge {
   readonly emoji: string | null;
   readonly tag: string;
   readonly color: CardColor;
+}
+
+/**
+ * Something worn on a card: a group's badge, or a seal earned. Told apart by
+ * whether it names a seal, which keeps badges saved before seals existed
+ * readable as they are.
+ */
+export type Worn = Badge | WornSeal;
+
+export function isWornSeal(worn: Worn): worn is WornSeal {
+  return "seal" in worn;
 }
 
 /** How many badges a reader may wear at once. */

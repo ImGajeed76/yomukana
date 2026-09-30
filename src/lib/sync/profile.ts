@@ -4,7 +4,7 @@
 
 import { callApi, callApiSignedOut } from "./api";
 import type { Progress } from "../db";
-import type { Badge } from "./badge-rules";
+import type { Worn } from "./badge-rules";
 import { isCardColor, type CardColor } from "./profile-rules";
 
 export interface Profile {
@@ -20,7 +20,7 @@ export interface Profile {
    * The group badges they wear, in the order they chose. Missing from anything
    * kept on this device from before badges existed, which shows as none.
    */
-  readonly badges?: readonly Badge[];
+  readonly badges?: readonly Worn[];
   /** Days in their reading streak, while it is alive. Missing from a profile kept from before streaks. */
   readonly streak?: number;
 }

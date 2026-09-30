@@ -148,6 +148,20 @@
       "when": 1790754876324,
       "tag": "0020_group_members_invite",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1790760849537,
+      "tag": "0021_achievements",
+      "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1790760859905,
+      "tag": "0022_worn_seals",
+      "breakpoints": true
     }
   ]
 }

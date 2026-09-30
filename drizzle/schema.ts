@@ -334,30 +334,61 @@ export const groupMembers = pgTable(
 ).enableRLS();
 
 /**
- * The group badges a reader wears on their card, up to three, in the order
- * they chose. Tied to their membership, not just to the group: leaving a group
- * or being removed from it takes its badge off by the same cascade, so no rule
+ * Achievements a reader has earned, one row each, kept once earned. The API
+ * function awards them from what the server holds, see
+ * functions/api/achievements.ts and src/lib/sync/seal-rules.ts. Closed to the
+ * Data API like the group tables: nothing but the function may say a reader
+ * earned something.
+ */
+export const achievements = pgTable(
+  "achievements",
+  {
+    userId: text("user_id")
+      .notNull()
+      .references(() => profiles.userId, { onDelete: "cascade" }),
+    achievementId: text("achievement_id").notNull(),
+    earnedAt: timestamp("earned_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [primaryKey({ columns: [table.userId, table.achievementId] })],
+).enableRLS();
+
+/**
+ * What a reader wears on their card, up to three, in the order they chose:
+ * a group's badge or one of their achievements, each row one or the other.
+ * Tied to what makes it theirs, not just to the badge: leaving a group takes
+ * its badge off by the same cascade that removes the membership, so no rule
  * anywhere has to remember to.
  *
- * Closed to the Data API like the group tables. The following board reads the
- * badges through the `followed_badges` view instead, which shows only the
- * reader and the people they follow. See drizzle/migrations.
+ * Closed to the Data API like the group tables. The following board reads
+ * what is worn through the `followed_badges` view instead, which shows only
+ * the reader and the people they follow. See drizzle/migrations.
  */
 export const profileBadges = pgTable(
   "profile_badges",
   {
     userId: text("user_id").notNull(),
-    groupId: uuid("group_id").notNull(),
+    groupId: uuid("group_id"),
+    achievementId: text("achievement_id"),
     position: smallint("position").notNull(),
   },
   (table) => [
-    primaryKey({ columns: [table.userId, table.groupId] }),
-    uniqueIndex("profile_badges_position").on(table.userId, table.position),
+    primaryKey({ columns: [table.userId, table.position] }),
+    uniqueIndex("profile_badges_group").on(table.userId, table.groupId),
+    uniqueIndex("profile_badges_achievement").on(table.userId, table.achievementId),
     check("profile_badges_position_range", sql`${table.position} between 0 and 2`),
+    check(
+      "profile_badges_one_thing",
+      sql`(${table.groupId} is null) <> (${table.achievementId} is null)`,
+    ),
     foreignKey({
       columns: [table.groupId, table.userId],
       foreignColumns: [groupMembers.groupId, groupMembers.userId],
       name: "profile_badges_membership",
+    }).onDelete("cascade"),
+    foreignKey({
+      columns: [table.userId, table.achievementId],
+      foreignColumns: [achievements.userId, achievements.achievementId],
+      name: "profile_badges_achievement_earned",
     }).onDelete("cascade"),
   ],
 ).enableRLS();

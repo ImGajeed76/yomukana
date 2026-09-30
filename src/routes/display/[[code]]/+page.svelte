@@ -6,7 +6,7 @@
   import FlagCredit from "$lib/components/FlagCredit.svelte";
   import MadeBy from "$lib/components/MadeBy.svelte";
   import AutoScroll from "$lib/components/display/AutoScroll.svelte";
-  import GroupBadge from "$lib/components/badges/GroupBadge.svelte";
+  import WornBadge from "$lib/components/badges/WornBadge.svelte";
   import { groupProblemMessage } from "$lib/components/groups/problems";
   import { CARD_BACKGROUNDS } from "$lib/components/profile/colors";
   import { Button } from "$lib/components/ui/button";
@@ -292,7 +292,11 @@
               <span class="max-w-full shrink-0 truncate font-medium">{nameOf(entry)}</span>
               <!-- Only the first badge, as on every board row. -->
               {#if entry.badges?.[0]}
-                <GroupBadge badge={entry.badges[0]} class="display-badge self-center" />
+                <WornBadge
+                  worn={entry.badges[0]}
+                  class="display-badge self-center"
+                  sealClass="display-seal self-center"
+                />
               {/if}
               {#if entry.displayName !== null}
                 <span class="display-meta min-w-0 truncate text-muted-foreground"
@@ -372,6 +376,11 @@
 
   /* The badge, sized from the screen like everything else here. In em, so
      the pill's padding grows with its text. */
+  /* A seal sizes itself from its text size; the rest of it is its own. */
+  :global(.display-seal) {
+    font-size: calc(var(--line) * 0.55);
+  }
+
   :global(.display-badge) {
     font-size: calc(var(--line) * 0.55);
     gap: 0.35em;

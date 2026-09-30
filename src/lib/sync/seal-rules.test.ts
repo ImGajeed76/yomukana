@@ -1,13 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { readingDayIn, streakOf } from "../stats/streak";
-import {
-  allSeals,
-  fullYearsBetween,
-  isPlausibleAttempt,
-  sealOf,
-  sealsEarned,
-  type SealFacts,
-} from "./seal-rules";
+import { allSeals, fullYearsBetween, sealOf, sealsEarned, type SealFacts } from "./seal-rules";
 
 const DAY_MS = 86_400_000;
 const JOINED = Date.UTC(2026, 8, 30);
@@ -58,16 +51,6 @@ describe("earning seals", () => {
     expect(fullYearsBetween(JOINED, dayBefore)).toBe(0);
     expect(fullYearsBetween(JOINED, anniversary)).toBe(1);
     expect(sealsEarned(facts({ now: anniversary }))).toContain("years-1");
-  });
-});
-
-describe("plausible sentences", () => {
-  test("refuses a sentence typed faster than a person can", () => {
-    const now = Date.now();
-    expect(isPlausibleAttempt({ durationMs: 4000, keyCount: 20 }, now, now)).toBe(true);
-    expect(isPlausibleAttempt({ durationMs: 100, keyCount: 20 }, now, now)).toBe(false);
-    expect(isPlausibleAttempt({ durationMs: 4000, keyCount: 20 }, now + DAY_MS, now)).toBe(false);
-    expect(isPlausibleAttempt({}, now, now)).toBe(false);
   });
 });
 

@@ -1,6 +1,6 @@
 <script lang="ts">
   import { X } from "@lucide/svelte";
-  import GroupBadge from "$lib/components/badges/GroupBadge.svelte";
+  import WornBadge from "$lib/components/badges/WornBadge.svelte";
   import { Button } from "$lib/components/ui/button";
   import { ScrollArea } from "$lib/components/ui/scroll-area";
   import { nameOf, type RankedEntry } from "$lib/sync/board";
@@ -140,7 +140,7 @@
             >
             <!-- Only the first badge: a row has no room for three. The card shows them all. -->
             {#if entry.badges?.[0]}
-              <GroupBadge badge={entry.badges[0]} />
+              <WornBadge worn={entry.badges[0]} />
             {/if}
             {#if entry.displayName !== null}
               <span class="min-w-0 truncate text-xs text-muted-foreground">@{entry.username}</span>

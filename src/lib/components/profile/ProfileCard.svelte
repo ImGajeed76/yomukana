@@ -1,8 +1,8 @@
 <script lang="ts">
   import StreakFlame from "$lib/components/streak/StreakFlame.svelte";
   import type { Snippet } from "svelte";
-  import GroupBadge from "$lib/components/badges/GroupBadge.svelte";
-  import type { Badge } from "$lib/sync/badge-rules";
+  import WornBadge from "$lib/components/badges/WornBadge.svelte";
+  import type { Worn } from "$lib/sync/badge-rules";
   import { m } from "$lib/paraglide/messages";
   import type { CardColor } from "$lib/sync/profile-rules";
   import { CARD_BACKGROUNDS } from "./colors";
@@ -14,7 +14,7 @@
     /** The score to show, or null to leave it off, as a private profile does. */
     score: number | null;
     /** The group badges they wear, in their order. */
-    badges?: readonly Badge[];
+    badges?: readonly Worn[];
     /** Days in their reading streak. Left off at 0, when there is none to show. */
     streak?: number;
     /** Buttons under the name, like Follow. */
@@ -65,8 +65,8 @@
         <span class="truncate text-sm text-muted-foreground">@{username}</span>
         {#if badges.length > 0}
           <div class="mt-2 flex flex-wrap gap-1">
-            {#each badges as badge, index (index)}
-              <GroupBadge {badge} />
+            {#each badges as worn, index (index)}
+              <WornBadge {worn} />
             {/each}
           </div>
         {/if}

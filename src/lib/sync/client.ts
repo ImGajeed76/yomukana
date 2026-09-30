@@ -74,14 +74,17 @@ interface Database {
       friends: Table<{ follower_id: string; followee_id: string }, { followee_id: string }>;
     };
     Views: {
-      // The badges of the reader and the people they follow. Read only.
+      // What the reader and the people they follow wear: group badges, with
+      // emoji, tag and colour, and seals, with an id and when earned. Read only.
       followed_badges: {
         Row: {
           user_id: string;
           position: number;
           emoji: string | null;
-          tag: string;
-          color: string;
+          tag: string | null;
+          color: string | null;
+          seal: string | null;
+          earned_at: string | null;
         };
         Relationships: [];
       };

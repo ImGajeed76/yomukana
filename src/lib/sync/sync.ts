@@ -15,6 +15,7 @@ import {
 import { readerFrom, type ItemState } from "../srs";
 import { scoreOf } from "../stats/score";
 import { streak } from "../stats/streak-state.svelte";
+import { seals } from "./seals-state.svelte";
 import { loadTextShare } from "../stats/text-share";
 import { connect, type SyncClient } from "./client";
 import { publishScore, publishStreak } from "./friends";
@@ -241,6 +242,10 @@ export async function sync(progress: Progress): Promise<SyncOutcome> {
       publishStreak(streak.value),
       loadTextShare().then((share) => publishScore(scoreOf(progress.store, new Date(), share))),
     ]);
+
+    // The server works seals out from what was just sent, so it is asked
+    // after the push. Not awaited: a slow answer must not hold up the sync.
+    void seals.check();
 
     // The reader may have signed out or deleted everything while this ran.
     // Writing the old record back would sign them in again.

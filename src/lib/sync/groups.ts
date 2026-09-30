@@ -4,7 +4,7 @@
 
 import type { Progress } from "../db";
 import { callApi, callApiSignedOut } from "./api";
-import type { Badge } from "./badge-rules";
+import type { Badge, Worn } from "./badge-rules";
 import type { BoardEntry } from "./board";
 import type { InviteDays } from "./group-rules";
 import type { CardColor } from "./profile-rules";
@@ -23,7 +23,7 @@ export interface GroupMember {
    * The group badges they wear, in the order they chose. Missing from anything
    * kept on this device from before badges existed, which shows as none.
    */
-  readonly badges?: readonly Badge[];
+  readonly badges?: readonly Worn[];
 }
 
 export interface Invite {

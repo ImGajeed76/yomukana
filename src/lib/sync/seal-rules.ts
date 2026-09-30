@@ -254,19 +254,16 @@ export function allSeals(): Seal[] {
 }
 
 /**
- * Whether a sentence could have been typed by a person. A history written by
- * a script rather than read is the one thing the server can still catch:
- * nobody finishes before they started, or types faster than this.
+ * The fastest a person types, in milliseconds a key. A synced sentence typed
+ * faster than this, or finished in the future, was written by a script
+ * rather than read, and counts towards nothing. The one thing about a
+ * history the server can still catch; the function checks it in SQL.
  */
 export const FASTEST_KEY_MS = 40;
 
-export function isPlausibleAttempt(
-  record: { readonly durationMs?: unknown; readonly keyCount?: unknown },
-  finishedAt: number,
-  now: number,
-): boolean {
-  const { durationMs, keyCount } = record;
-  if (typeof durationMs !== "number" || typeof keyCount !== "number") return false;
-  if (keyCount <= 0 || finishedAt > now + 5 * 60_000) return false;
-  return durationMs >= keyCount * FASTEST_KEY_MS;
+/** A seal as worn: which one, and when it was earned, which 始 is named for. */
+export interface WornSeal {
+  readonly seal: string;
+  /** In epoch milliseconds. */
+  readonly earnedAt: number;
 }

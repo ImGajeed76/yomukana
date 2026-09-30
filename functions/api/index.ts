@@ -11,6 +11,7 @@
 // sends: a profile and a score, never a sentence or a keystroke.
 
 import { Hono } from "hono";
+import { achievements } from "./achievements";
 import { badges } from "./badges";
 import { boards } from "./boards";
 import { groups } from "./groups";
@@ -25,5 +26,6 @@ app.route("/", groups);
 app.route("/", scores);
 app.route("/", boards);
 app.route("/", badges);
+app.route("/", achievements);
 
 export default app;

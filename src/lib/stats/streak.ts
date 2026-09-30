@@ -146,7 +146,19 @@ export function streakOf(
     if (day > today) continue;
     counts.set(day, (counts.get(day) ?? 0) + 1);
   }
+  return streakOfDays(counts, today, now);
+}
 
+/**
+ * The streak from sentences already counted by day, as `readingDay` numbers.
+ * For the API function, which has Postgres count them by the reader's day
+ * rather than load every sentence of a long history.
+ */
+export function streakOfDays(
+  counts: ReadonlyMap<number, number>,
+  today: number,
+  now: number,
+): Streak {
   const days: StreakDay[] = [];
   let current = 0;
   let longest = 0;

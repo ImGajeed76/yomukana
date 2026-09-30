@@ -24,6 +24,7 @@ import {
   type TimedSegment,
 } from "../srs";
 import { scoreOf } from "./score";
+import { allSeals } from "../sync/seal-rules";
 import { streakOf, type Streak } from "./streak";
 import type { TextShare } from "./text-share";
 
@@ -242,4 +243,22 @@ export function demoStreak(now: Date): Streak {
     }
   }
   return streakOf(finishedAt, now.getTime());
+}
+
+/**
+ * Every seal there is, as if earned over the last few months, for `?demo` on
+ * the profile page: for trying each of them on the card. Nothing is worn.
+ */
+export function demoWearables(now: Date): {
+  badges: [];
+  seals: { seal: string; earnedAt: number; position: null }[];
+} {
+  return {
+    badges: [],
+    seals: allSeals().map((seal, index) => ({
+      seal: seal.id,
+      earnedAt: now.getTime() - index * 3 * MS_PER_DAY,
+      position: null,
+    })),
+  };
 }

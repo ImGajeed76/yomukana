@@ -7,7 +7,7 @@
 
 import type { Progress } from "../db";
 import type { Streak } from "../stats/streak";
-import { isBadgeColor, type Badge } from "./badge-rules";
+import { isBadgeColor, type Worn } from "./badge-rules";
 import type { BoardEntry } from "./board";
 import { callApi } from "./api";
 import { connect, type SyncClient } from "./client";
@@ -74,17 +74,23 @@ export async function loadBoard(): Promise<BoardEntry[] | null> {
     // people the profiles do: the reader and whoever they follow.
     const [rows, worn] = await Promise.all([
       client.from("profiles").select("user_id, username, display_name, score, scored_at"),
-      client.from("followed_badges").select("user_id, emoji, tag, color").order("position"),
+      client
+        .from("followed_badges")
+        .select("user_id, emoji, tag, color, seal, earned_at")
+        .order("position"),
     ]);
     if (rows.error !== null || userId === null) return null;
 
     // A board without badges is still a board, so a failed badge read only
     // leaves them off.
-    const badges = new Map<string, Badge[]>();
+    const badges = new Map<string, Worn[]>();
     for (const row of worn.data ?? []) {
-      if (!isBadgeColor(row.color)) continue;
       const list = badges.get(row.user_id) ?? [];
-      list.push({ emoji: row.emoji, tag: row.tag, color: row.color });
+      if (row.seal !== null && row.earned_at !== null) {
+        list.push({ seal: row.seal, earnedAt: Date.parse(row.earned_at) });
+      } else if (row.tag !== null && isBadgeColor(row.color)) {
+        list.push({ emoji: row.emoji, tag: row.tag, color: row.color });
+      }
       badges.set(row.user_id, list);
     }
 

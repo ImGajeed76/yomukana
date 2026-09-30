@@ -1,53 +1,90 @@
 <script lang="ts">
   import { Plus, X } from "@lucide/svelte";
   import GroupBadge from "./GroupBadge.svelte";
+  import WornBadge from "./WornBadge.svelte";
+  import SealPill from "$lib/components/seals/SealPill.svelte";
+  import { sealName } from "$lib/components/seals/seal-copy";
   import { m } from "$lib/paraglide/messages";
-  import { BADGES_WORN_MAX } from "$lib/sync/badge-rules";
-  import type { OwnBadge } from "$lib/sync/badges";
+  import { BADGES_WORN_MAX, type Worn } from "$lib/sync/badge-rules";
+  import type { OwnBadge, OwnSeal } from "$lib/sync/badges";
+  import { sealOf } from "$lib/sync/seal-rules";
 
   interface Props {
-    /** Every badge the reader could wear. */
-    available: readonly OwnBadge[];
-    /** Group ids of the badges worn, in the order they are shown. */
+    /** Every group badge the reader could wear. */
+    badges: readonly OwnBadge[];
+    /** Every seal the reader has earned. */
+    seals: readonly OwnSeal[];
+    /** What is worn, in the order shown: group ids for badges, seal ids for seals. */
     worn: readonly string[];
-    /** Called with the new order when a badge is put on or taken off. */
+    /** Called with the new order when something is put on or taken off. */
     onChange: (worn: readonly string[]) => void;
   }
 
-  let { available, worn, onChange }: Props = $props();
+  let { badges, seals, worn, onChange }: Props = $props();
 
-  let wornBadges = $derived(
-    worn.flatMap((id) => available.find((own) => own.groupId === id) ?? []),
+  interface Slot {
+    readonly key: string;
+    readonly worn: Worn;
+    /** What it is called, for taking it off. */
+    readonly label: string;
+  }
+
+  /** Each earned seal, with its rules looked up, rarest first. Unknown ids are left out. */
+  let ownSeals = $derived(
+    seals
+      .flatMap((own) => {
+        const seal = sealOf(own.seal);
+        return seal === null ? [] : [{ own, seal }];
+      })
+      .sort((a, b) => b.seal.tier - a.seal.tier || b.own.earnedAt - a.own.earnedAt),
   );
-  let tray = $derived(available.filter((own) => !worn.includes(own.groupId)));
+
+  let slots = $derived(
+    worn.flatMap((key): Slot[] => {
+      const badge = badges.find((own) => own.groupId === key);
+      if (badge !== undefined) return [{ key, worn: badge.badge, label: badge.badge.tag }];
+      const earned = ownSeals.find((entry) => entry.seal.id === key);
+      if (earned === undefined) return [];
+      return [
+        {
+          key,
+          worn: { seal: earned.seal.id, earnedAt: earned.own.earnedAt },
+          label: sealName(earned.seal, earned.own.earnedAt),
+        },
+      ];
+    }),
+  );
+  let badgeTray = $derived(badges.filter((own) => !worn.includes(own.groupId)));
+  let sealTray = $derived(ownSeals.filter((entry) => !worn.includes(entry.seal.id)));
   let isFull = $derived(worn.length >= BADGES_WORN_MAX);
   /** The slots left empty, drawn as outlines so the limit can be seen rather than read. */
   let emptySlots = $derived(Math.max(0, BADGES_WORN_MAX - worn.length));
 </script>
 
 <!--
-  Badges are put on and taken off, like clothes, not switched on: three slots
-  on the card, in order, and a tray of the rest. The first slot is the one a
-  board row shows, so the order is not decoration.
+  Badges and seals are put on and taken off, like clothes, not switched on:
+  three slots on the card, in order, and trays of the rest. The first slot is
+  the one a board row shows, so the order is not decoration. A worn seal is
+  still itself, opening its story when pressed, so taking it off is a mark of
+  its own beside it.
 -->
 <div class="flex flex-col gap-5">
   <div class="flex flex-col gap-2">
     <span class="text-sm font-medium">{m.settings_profile_badges_label_worn()}</span>
-    <ul class="flex flex-wrap items-center gap-2">
-      {#each wornBadges as own (own.groupId)}
-        <li>
+    <ul class="flex flex-wrap items-center gap-x-3 gap-y-2">
+      {#each slots as slot (slot.key)}
+        <li class="flex items-center gap-1">
+          <WornBadge worn={slot.worn} class="h-8 text-sm" sealClass="text-sm" />
           <button
             type="button"
-            class="group flex items-center gap-1 rounded-full focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
-            aria-label={m.settings_profile_badges_button_take_off({ tag: own.badge.tag })}
-            title={m.settings_profile_badges_button_take_off({ tag: own.badge.tag })}
+            class="flex size-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+            aria-label={m.settings_profile_badges_button_take_off({ tag: slot.label })}
+            title={m.settings_profile_badges_button_take_off({ tag: slot.label })}
             onclick={() => {
-              onChange(worn.filter((id) => id !== own.groupId));
+              onChange(worn.filter((key) => key !== slot.key));
             }}
           >
-            <GroupBadge badge={own.badge} class="h-8 gap-1.5 pr-2 text-sm">
-              <X class="size-3.5 opacity-60 transition-opacity group-hover:opacity-100" />
-            </GroupBadge>
+            <X class="size-3.5" />
           </button>
         </li>
       {/each}
@@ -58,13 +95,42 @@
         ></li>
       {/each}
     </ul>
+    {#if isFull && (badgeTray.length > 0 || sealTray.length > 0)}
+      <p class="text-xs text-muted-foreground">{m.settings_profile_badges_hint_full()}</p>
+    {/if}
   </div>
 
-  {#if tray.length > 0}
+  {#if sealTray.length > 0}
+    <div class="flex flex-col gap-2">
+      <span class="text-sm font-medium">{m.settings_profile_badges_label_seals()}</span>
+      <!-- Room above each row for the flames and crests that rise out of a seal. -->
+      <ul class="flex flex-wrap gap-x-2 gap-y-4 pt-2">
+        {#each sealTray as entry (entry.seal.id)}
+          <li>
+            <button
+              type="button"
+              class="rounded-full p-1 transition-[background-color,opacity] hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent"
+              aria-label={m.settings_profile_badges_button_wear_seal({
+                name: sealName(entry.seal, entry.own.earnedAt),
+              })}
+              disabled={isFull}
+              onclick={() => {
+                onChange([...worn, entry.seal.id]);
+              }}
+            >
+              <SealPill seal={entry.seal} earnedAt={entry.own.earnedAt} isStatic={true} />
+            </button>
+          </li>
+        {/each}
+      </ul>
+    </div>
+  {/if}
+
+  {#if badgeTray.length > 0}
     <div class="flex flex-col gap-2">
       <span class="text-sm font-medium">{m.settings_profile_badges_label_tray()}</span>
       <ul class="-mx-3 flex flex-col">
-        {#each tray as own (own.groupId)}
+        {#each badgeTray as own (own.groupId)}
           <li>
             <button
               type="button"
@@ -89,9 +155,6 @@
           </li>
         {/each}
       </ul>
-      {#if isFull}
-        <p class="text-xs text-muted-foreground">{m.settings_profile_badges_hint_full()}</p>
-      {/if}
     </div>
   {/if}
 </div>

@@ -23,12 +23,14 @@
     seal: Seal;
     /** When it was earned, in epoch milliseconds, or null where that is not known. */
     earnedAt: number | null;
+    /** Whether it was just earned, and is being shown for that. */
+    isNew?: boolean;
   }
 
   // `$bindable()` marks the prop as bindable, it is not a default. The rule
   // cannot tell a rune from a value.
   // eslint-disable-next-line @typescript-eslint/no-useless-default-assignment
-  let { open = $bindable(), seal, earnedAt }: Props = $props();
+  let { open = $bindable(), seal, earnedAt, isNew = false }: Props = $props();
 
   let name = $derived(sealName(seal, earnedAt));
   let poem = $derived(SEAL_POEMS[seal.kind]);
@@ -76,7 +78,9 @@
     <div class="mt-4 flex flex-col gap-3">
       <!-- Close sits by the rarity, clear of the art, which fills the top. -->
       <div class="flex items-center justify-between">
-        <span class="tier">{sealTierName(seal)}</span>
+        <span class="tier"
+          >{isNew ? `${m.seal_label_new()} · ${sealTierName(seal)}` : sealTierName(seal)}</span
+        >
         <Dialog.Close>
           {#snippet child({ props })}
             <Button {...props} variant="ghost" size="icon-sm" class="-mr-2">

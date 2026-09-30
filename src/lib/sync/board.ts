@@ -1,7 +1,7 @@
 // Ranking the friends board. Pure, so the rules for ties and for "how far
 // behind am I" can be pinned in tests.
 
-import type { Badge } from "./badge-rules";
+import type { Worn } from "./badge-rules";
 
 /** One line on the board. */
 export interface BoardEntry {
@@ -18,7 +18,7 @@ export interface BoardEntry {
    * The group badges they wear, in the order they chose. Missing from anything
    * kept on this device from before badges existed, which shows as none.
    */
-  readonly badges?: readonly Badge[];
+  readonly badges?: readonly Worn[];
 }
 
 /** What a line on the board is called: the display name if there is one. */

@@ -12,9 +12,15 @@
     earnedAt?: number | null;
     /** Its size, as a text size utility. Worn on a card it is text-xs, like a group badge. */
     class?: ClassValue;
+    /**
+     * Whether it is drawn only, not something to press: inside a row that is
+     * itself a button, such as the wear tray, where a button in a button is
+     * not allowed.
+     */
+    isStatic?: boolean;
   }
 
-  let { seal, earnedAt = null, class: className = "text-xs" }: Props = $props();
+  let { seal, earnedAt = null, class: className = "text-xs", isStatic = false }: Props = $props();
 
   let name = $derived(sealName(seal, earnedAt));
   let meaning = $derived(sealMeaning(seal, earnedAt));
@@ -34,25 +40,29 @@
   light winding round it, and glints. Opened, it tells its story: see
   SealDialog.
 -->
-<button
-  type="button"
+<svelte:element
+  this={isStatic ? "span" : "button"}
+  type={isStatic ? undefined : "button"}
+  role={isStatic ? "img" : undefined}
   class={["seal", className]}
   data-tier={seal.tier}
   data-seal-look={seal.look}
   aria-label={`${name}: ${meaning}`}
   bind:clientWidth={width}
   bind:clientHeight={height}
-  onclick={() => {
-    isOpen = true;
-  }}
+  onclick={isStatic
+    ? undefined
+    : () => {
+        isOpen = true;
+      }}
 >
   {#if width > 0}<SealArt {seal} {width} {height} />{/if}
   <SealKanji kanji={seal.kanji} tier={seal.tier} />
   <span class="seal-rule" aria-hidden="true"></span>
   <span class="seal-name" aria-hidden="true">{name}</span>
-</button>
+</svelte:element>
 
-<SealDialog bind:open={isOpen} {seal} {earnedAt} />
+{#if !isStatic}<SealDialog bind:open={isOpen} {seal} {earnedAt} />{/if}
 
 <style>
   .seal {

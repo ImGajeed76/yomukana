@@ -14,7 +14,8 @@
   import { Progress } from "$lib/db";
   import { m } from "$lib/paraglide/messages";
   import { streak } from "$lib/stats/streak-state.svelte";
-  import { loadTextShare, scoreOf } from "$lib/stats";
+  import { page } from "$app/state";
+  import { demoWearables, loadTextShare, scoreOf } from "$lib/stats";
   import {
     rememberProfile,
     showOwnProfile,
@@ -23,7 +24,7 @@
     type ProfileChanges,
     type ProfileProblem,
   } from "$lib/sync/profile";
-  import type { Badge } from "$lib/sync/badge-rules";
+  import type { Worn } from "$lib/sync/badge-rules";
   import { CARD_COLORS, DISPLAY_NAME_MAX } from "$lib/sync/profile-rules";
   import { sync } from "$lib/sync/sync";
 
@@ -127,6 +128,12 @@
       isCopied = false;
     }, 1500);
   }
+
+  /**
+   * `?demo` in dev only: every seal there is in the chooser, to try each on
+   * the card. Nothing chosen is saved. See stats/demo.ts.
+   */
+  let isDemo = $derived(import.meta.env.DEV && page.url.searchParams.has("demo"));
 </script>
 
 {#if !isLoaded}
@@ -269,7 +276,8 @@
     </section>
 
     <BadgeChooser
-      onChange={(badges: readonly Badge[]) => {
+      demo={isDemo ? demoWearables(new Date()) : null}
+      onChange={(badges: readonly Worn[]) => {
         if (profile !== null) void keep({ ...profile, badges });
       }}
     />
