@@ -1,13 +1,13 @@
 <script lang="ts">
-  import { Plus, X } from "@lucide/svelte";
+  import { X } from "@lucide/svelte";
   import GroupBadge from "./GroupBadge.svelte";
   import WornBadge from "./WornBadge.svelte";
   import SealPill from "$lib/components/seals/SealPill.svelte";
-  import { sealName } from "$lib/components/seals/seal-copy";
+  import { sealMeaning, sealName } from "$lib/components/seals/seal-copy";
   import { m } from "$lib/paraglide/messages";
-  import { BADGES_WORN_MAX, type Worn } from "$lib/sync/badge-rules";
+  import { BADGES_WORN_MAX, type Badge, type Worn } from "$lib/sync/badge-rules";
   import type { OwnBadge, OwnSeal } from "$lib/sync/badges";
-  import { sealOf } from "$lib/sync/seal-rules";
+  import { sealOf, type Seal } from "$lib/sync/seal-rules";
 
   interface Props {
     /** Every group badge the reader could wear. */
@@ -54,8 +54,42 @@
       ];
     }),
   );
-  let badgeTray = $derived(badges.filter((own) => !worn.includes(own.groupId)));
-  let sealTray = $derived(ownSeals.filter((entry) => !worn.includes(entry.seal.id)));
+  interface TrayItem {
+    readonly key: string;
+    readonly seal: Seal | null;
+    readonly earnedAt: number | null;
+    readonly badge: Badge | null;
+    /** What tells it apart: what a seal is for, which group a badge is from. */
+    readonly caption: string;
+    /** Read out for putting it on. */
+    readonly label: string;
+  }
+
+  /** Everything not worn: seals rarest first, then group badges. */
+  let tray = $derived<TrayItem[]>([
+    ...ownSeals
+      .filter((entry) => !worn.includes(entry.seal.id))
+      .map((entry) => ({
+        key: entry.seal.id,
+        seal: entry.seal,
+        earnedAt: entry.own.earnedAt,
+        badge: null,
+        caption: sealMeaning(entry.seal, entry.own.earnedAt),
+        label: m.settings_profile_badges_button_wear_seal({
+          name: sealName(entry.seal, entry.own.earnedAt),
+        }),
+      })),
+    ...badges
+      .filter((own) => !worn.includes(own.groupId))
+      .map((own) => ({
+        key: own.groupId,
+        seal: null,
+        earnedAt: null,
+        badge: own.badge,
+        caption: own.groupName,
+        label: m.settings_profile_badges_button_wear({ tag: own.badge.tag, group: own.groupName }),
+      })),
+  ]);
   let isFull = $derived(worn.length >= BADGES_WORN_MAX);
   /** The slots left empty, drawn as outlines so the limit can be seen rather than read. */
   let emptySlots = $derived(Math.max(0, BADGES_WORN_MAX - worn.length));
@@ -63,7 +97,7 @@
 
 <!--
   Badges and seals are put on and taken off, like clothes, not switched on:
-  three slots on the card, in order, and trays of the rest. The first slot is
+  three slots on the card, in order, and a tray of the rest. The first slot is
   the one a board row shows, so the order is not decoration. A worn seal is
   still itself, opening its story when pressed, so taking it off is a mark of
   its own beside it.
@@ -95,62 +129,36 @@
         ></li>
       {/each}
     </ul>
-    {#if isFull && (badgeTray.length > 0 || sealTray.length > 0)}
+    {#if isFull && tray.length > 0}
       <p class="text-xs text-muted-foreground">{m.settings_profile_badges_hint_full()}</p>
     {/if}
   </div>
 
-  {#if sealTray.length > 0}
-    <div class="flex flex-col gap-2">
-      <span class="text-sm font-medium">{m.settings_profile_badges_label_seals()}</span>
-      <!-- Room above each row for the flames and crests that rise out of a seal. -->
-      <ul class="flex flex-wrap gap-x-2 gap-y-4 pt-2">
-        {#each sealTray as entry (entry.seal.id)}
-          <li>
-            <button
-              type="button"
-              class="rounded-full p-1 transition-[background-color,opacity] hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent"
-              aria-label={m.settings_profile_badges_button_wear_seal({
-                name: sealName(entry.seal, entry.own.earnedAt),
-              })}
-              disabled={isFull}
-              onclick={() => {
-                onChange([...worn, entry.seal.id]);
-              }}
-            >
-              <SealPill seal={entry.seal} earnedAt={entry.own.earnedAt} isStatic={true} />
-            </button>
-          </li>
-        {/each}
-      </ul>
-    </div>
-  {/if}
-
-  {#if badgeTray.length > 0}
+  {#if tray.length > 0}
     <div class="flex flex-col gap-2">
       <span class="text-sm font-medium">{m.settings_profile_badges_label_tray()}</span>
-      <ul class="-mx-3 flex flex-col">
-        {#each badgeTray as own (own.groupId)}
-          <li>
+      <!--
+        Seals and badges in one grid, each with what tells it apart underneath:
+        what a seal is for, which group a badge is from. Rarest seals first.
+      -->
+      <ul class="-mx-2 grid grid-cols-[repeat(auto-fill,minmax(8rem,1fr))] gap-1">
+        {#each tray as item (item.key)}
+          <li class="flex">
             <button
               type="button"
-              class="group flex h-11 w-full items-center gap-3 rounded-md px-3 text-left transition-colors hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent"
-              aria-label={m.settings_profile_badges_button_wear({
-                tag: own.badge.tag,
-                group: own.groupName,
-              })}
+              class="flex min-w-0 flex-1 flex-col items-start gap-2 rounded-lg px-2 pt-3 pb-2 text-left transition-colors hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent"
+              aria-label={item.label}
               disabled={isFull}
               onclick={() => {
-                onChange([...worn, own.groupId]);
+                onChange([...worn, item.key]);
               }}
             >
-              <GroupBadge badge={own.badge} />
-              <span class="min-w-0 flex-1 truncate text-sm text-muted-foreground"
-                >{own.groupName}</span
-              >
-              <Plus
-                class="size-4 shrink-0 text-muted-foreground transition-colors group-hover:text-foreground"
-              />
+              {#if item.seal !== null}
+                <SealPill seal={item.seal} earnedAt={item.earnedAt} isStatic={true} />
+              {:else if item.badge !== null}
+                <GroupBadge badge={item.badge} />
+              {/if}
+              <span class="line-clamp-2 w-full text-xs text-muted-foreground">{item.caption}</span>
             </button>
           </li>
         {/each}
