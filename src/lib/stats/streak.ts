@@ -100,12 +100,49 @@ export function dayStart(day: number): number {
   ).getTime();
 }
 
-/** The streak as of `now`, from when every finished sentence was finished. */
-export function streakOf(finishedAt: readonly number[], now: number): Streak {
-  const today = readingDay(now);
+/** Where a quarter of an hour falls: every time zone's offset is a multiple of one. */
+const QUARTER_HOUR_MS = 900_000;
+
+/**
+ * `readingDay` for a reader somewhere else, by their IANA time zone name. For
+ * the API function, which runs in UTC and works streaks out for achievements.
+ *
+ * Asking Intl for every sentence of a long history is slow, and the answer is
+ * the same for a whole quarter of an hour, so it is asked once per quarter.
+ */
+export function readingDayIn(timeZone: string): (at: number) => number {
+  const format = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    year: "numeric",
+    month: "numeric",
+    day: "numeric",
+  });
+  const known = new Map<number, number>();
+  return (at) => {
+    const quarter = Math.floor((at - DAY_STARTS_AT_HOUR * HOUR_MS) / QUARTER_HOUR_MS);
+    const cached = known.get(quarter);
+    if (cached !== undefined) return cached;
+    const parts = format.formatToParts(quarter * QUARTER_HOUR_MS);
+    const part = (type: string): number => Number(parts.find((each) => each.type === type)?.value);
+    const day = Math.floor(Date.UTC(part("year"), part("month") - 1, part("day")) / DAY_MS);
+    known.set(quarter, day);
+    return day;
+  };
+}
+
+/**
+ * The streak as of `now`, from when every finished sentence was finished.
+ * Days are the reader's own unless `dayOf` says whose they are.
+ */
+export function streakOf(
+  finishedAt: readonly number[],
+  now: number,
+  dayOf: (at: number) => number = readingDay,
+): Streak {
+  const today = dayOf(now);
   const counts = new Map<number, number>();
   for (const at of finishedAt) {
-    const day = readingDay(at);
+    const day = dayOf(at);
     if (day > today) continue;
     counts.set(day, (counts.get(day) ?? 0) + 1);
   }

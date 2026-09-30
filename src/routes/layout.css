@@ -15,6 +15,8 @@
    bold. Like the rest, sliced, so only a reader who needs them downloads them. */
 @import "@fontsource/noto-sans-jp/japanese-500.css";
 @import "@fontsource/noto-sans-jp/japanese-600.css";
+/* Brush calligraphy, for the kanji on achievement seals and nothing else. */
+@import "@fontsource/yuji-syuku/japanese-400.css";
 
 @custom-variant dark (&:is(.dark *));
 /* A phone or tablet: the same test the typing pane uses to switch to its field. */
@@ -74,6 +76,47 @@
   --streak-foreground: oklch(1 0 0);
   /* The hot heart of the flame. */
   --streak-core: oklch(0.86 0.16 85);
+  /* Achievement seals: the paper light falls on, and twelve palettes, each a
+     body, an ink for the kanji and name on it, and a glow. Solid pills, so
+     they hold one lightness in both themes rather than flipping like the
+     badge tints. See src/lib/sync/seal-rules.ts for which seal wears which. */
+  --seal-paper: oklch(0.98 0.01 80);
+  --seal-silver: oklch(0.87 0.01 260);
+  --seal-silver-ink: oklch(0.3 0.02 260);
+  --seal-silver-glow: oklch(0.87 0.01 260);
+  --seal-jade: oklch(0.52 0.12 165);
+  --seal-jade-ink: oklch(0.97 0.03 165);
+  --seal-jade-glow: oklch(0.7 0.14 165);
+  --seal-azure: oklch(0.52 0.16 252);
+  --seal-azure-ink: oklch(0.97 0.02 252);
+  --seal-azure-glow: oklch(0.68 0.17 245);
+  --seal-violet: oklch(0.48 0.2 300);
+  --seal-violet-ink: oklch(0.96 0.03 300);
+  --seal-violet-glow: oklch(0.66 0.21 305);
+  --seal-crimson: oklch(0.47 0.18 25);
+  --seal-crimson-ink: oklch(0.95 0.04 60);
+  --seal-crimson-glow: oklch(0.63 0.21 30);
+  --seal-ember: oklch(0.68 0.17 55);
+  --seal-ember-ink: oklch(0.27 0.07 40);
+  --seal-ember-glow: oklch(0.75 0.17 60);
+  --seal-sakura: oklch(0.8 0.09 355);
+  --seal-sakura-ink: oklch(0.35 0.11 355);
+  --seal-sakura-glow: oklch(0.8 0.12 355);
+  --seal-ice: oklch(0.88 0.06 215);
+  --seal-ice-ink: oklch(0.32 0.08 240);
+  --seal-ice-glow: oklch(0.85 0.1 215);
+  --seal-gold: oklch(0.22 0.035 70);
+  --seal-gold-ink: oklch(0.84 0.14 84);
+  --seal-gold-glow: oklch(0.82 0.15 84);
+  --seal-obsidian: oklch(0.2 0.03 290);
+  --seal-obsidian-ink: oklch(0.72 0.19 35);
+  --seal-obsidian-glow: oklch(0.66 0.21 30);
+  --seal-tide: oklch(0.5 0.09 200);
+  --seal-tide-ink: oklch(0.97 0.03 195);
+  --seal-tide-glow: oklch(0.76 0.12 195);
+  --seal-abyss: oklch(0.21 0.05 250);
+  --seal-abyss-ink: oklch(0.84 0.11 205);
+  --seal-abyss-glow: oklch(0.7 0.14 220);
   /* A streak freeze: icy, so a saved day never reads as a read one. */
   --freeze: oklch(0.58 0.12 230);
   --secondary: oklch(0.967 0.001 286.375);
@@ -141,6 +184,43 @@
   --streak: oklch(0.74 0.17 55);
   --streak-foreground: oklch(1 0 0);
   --streak-core: oklch(0.9 0.14 90);
+  --seal-paper: oklch(0.98 0.01 80);
+  --seal-silver: oklch(0.87 0.01 260);
+  --seal-silver-ink: oklch(0.3 0.02 260);
+  --seal-silver-glow: oklch(0.87 0.01 260);
+  --seal-jade: oklch(0.52 0.12 165);
+  --seal-jade-ink: oklch(0.97 0.03 165);
+  --seal-jade-glow: oklch(0.7 0.14 165);
+  --seal-azure: oklch(0.52 0.16 252);
+  --seal-azure-ink: oklch(0.97 0.02 252);
+  --seal-azure-glow: oklch(0.68 0.17 245);
+  --seal-violet: oklch(0.48 0.2 300);
+  --seal-violet-ink: oklch(0.96 0.03 300);
+  --seal-violet-glow: oklch(0.66 0.21 305);
+  --seal-crimson: oklch(0.47 0.18 25);
+  --seal-crimson-ink: oklch(0.95 0.04 60);
+  --seal-crimson-glow: oklch(0.63 0.21 30);
+  --seal-ember: oklch(0.68 0.17 55);
+  --seal-ember-ink: oklch(0.27 0.07 40);
+  --seal-ember-glow: oklch(0.75 0.17 60);
+  --seal-sakura: oklch(0.8 0.09 355);
+  --seal-sakura-ink: oklch(0.35 0.11 355);
+  --seal-sakura-glow: oklch(0.8 0.12 355);
+  --seal-ice: oklch(0.88 0.06 215);
+  --seal-ice-ink: oklch(0.32 0.08 240);
+  --seal-ice-glow: oklch(0.85 0.1 215);
+  --seal-gold: oklch(0.22 0.035 70);
+  --seal-gold-ink: oklch(0.84 0.14 84);
+  --seal-gold-glow: oklch(0.82 0.15 84);
+  --seal-obsidian: oklch(0.2 0.03 290);
+  --seal-obsidian-ink: oklch(0.72 0.19 35);
+  --seal-obsidian-glow: oklch(0.66 0.21 30);
+  --seal-tide: oklch(0.5 0.09 200);
+  --seal-tide-ink: oklch(0.97 0.03 195);
+  --seal-tide-glow: oklch(0.76 0.12 195);
+  --seal-abyss: oklch(0.21 0.05 250);
+  --seal-abyss-ink: oklch(0.84 0.11 205);
+  --seal-abyss-glow: oklch(0.7 0.14 220);
   --freeze: oklch(0.78 0.1 225);
   --secondary: oklch(0.274 0.006 286.033);
   --secondary-foreground: oklch(0.985 0 0);
@@ -196,6 +276,43 @@
   --color-streak: var(--streak);
   --color-streak-foreground: var(--streak-foreground);
   --color-streak-core: var(--streak-core);
+  --color-seal-paper: var(--seal-paper);
+  --color-seal-silver: var(--seal-silver);
+  --color-seal-silver-ink: var(--seal-silver-ink);
+  --color-seal-silver-glow: var(--seal-silver-glow);
+  --color-seal-jade: var(--seal-jade);
+  --color-seal-jade-ink: var(--seal-jade-ink);
+  --color-seal-jade-glow: var(--seal-jade-glow);
+  --color-seal-azure: var(--seal-azure);
+  --color-seal-azure-ink: var(--seal-azure-ink);
+  --color-seal-azure-glow: var(--seal-azure-glow);
+  --color-seal-violet: var(--seal-violet);
+  --color-seal-violet-ink: var(--seal-violet-ink);
+  --color-seal-violet-glow: var(--seal-violet-glow);
+  --color-seal-crimson: var(--seal-crimson);
+  --color-seal-crimson-ink: var(--seal-crimson-ink);
+  --color-seal-crimson-glow: var(--seal-crimson-glow);
+  --color-seal-ember: var(--seal-ember);
+  --color-seal-ember-ink: var(--seal-ember-ink);
+  --color-seal-ember-glow: var(--seal-ember-glow);
+  --color-seal-sakura: var(--seal-sakura);
+  --color-seal-sakura-ink: var(--seal-sakura-ink);
+  --color-seal-sakura-glow: var(--seal-sakura-glow);
+  --color-seal-ice: var(--seal-ice);
+  --color-seal-ice-ink: var(--seal-ice-ink);
+  --color-seal-ice-glow: var(--seal-ice-glow);
+  --color-seal-gold: var(--seal-gold);
+  --color-seal-gold-ink: var(--seal-gold-ink);
+  --color-seal-gold-glow: var(--seal-gold-glow);
+  --color-seal-obsidian: var(--seal-obsidian);
+  --color-seal-obsidian-ink: var(--seal-obsidian-ink);
+  --color-seal-obsidian-glow: var(--seal-obsidian-glow);
+  --color-seal-tide: var(--seal-tide);
+  --color-seal-tide-ink: var(--seal-tide-ink);
+  --color-seal-tide-glow: var(--seal-tide-glow);
+  --color-seal-abyss: var(--seal-abyss);
+  --color-seal-abyss-ink: var(--seal-abyss-ink);
+  --color-seal-abyss-glow: var(--seal-abyss-glow);
   --color-freeze: var(--freeze);
   --color-profile-foreground: var(--profile-foreground);
   --color-qr-dark: var(--qr-dark);
@@ -249,6 +366,8 @@
 	   is visible as a bug rather than silently degrading the thing being measured.
 	   See CLAUDE.md 7.3. */
   --font-japanese: "Noto Sans JP", "Geist Variable", sans-serif;
+  /* Brush calligraphy for seal kanji, falling back to the gothic if it has not loaded. */
+  --font-seal: "Yuji Syuku", "Noto Sans JP", serif;
 }
 
 @layer base {
@@ -312,4 +431,78 @@
 :lang(ja) {
   word-break: auto-phrase;
   text-wrap: pretty;
+}
+
+/*
+ * Achievement seal palettes, as the variables a seal and its dialog are drawn
+ * with: a body, an ink for what is on it, a glow, and the colour its scene is
+ * painted in, which is the glow unless the body is too pale for it to show.
+ * Keyed on data-seal-look so the pill and the dialog share them.
+ */
+[data-seal-look] {
+  --scene: var(--glow);
+}
+[data-seal-look="silver"] {
+  --body: var(--seal-silver);
+  --ink: var(--seal-silver-ink);
+  --glow: var(--seal-silver-glow);
+  --scene: var(--seal-silver-ink);
+}
+[data-seal-look="jade"] {
+  --body: var(--seal-jade);
+  --ink: var(--seal-jade-ink);
+  --glow: var(--seal-jade-glow);
+}
+[data-seal-look="azure"] {
+  --body: var(--seal-azure);
+  --ink: var(--seal-azure-ink);
+  --glow: var(--seal-azure-glow);
+}
+[data-seal-look="violet"] {
+  --body: var(--seal-violet);
+  --ink: var(--seal-violet-ink);
+  --glow: var(--seal-violet-glow);
+}
+[data-seal-look="crimson"] {
+  --body: var(--seal-crimson);
+  --ink: var(--seal-crimson-ink);
+  --glow: var(--seal-crimson-glow);
+}
+[data-seal-look="ember"] {
+  --body: var(--seal-ember);
+  --ink: var(--seal-ember-ink);
+  --glow: var(--seal-ember-glow);
+  --scene: var(--seal-crimson);
+}
+[data-seal-look="sakura"] {
+  --body: var(--seal-sakura);
+  --ink: var(--seal-sakura-ink);
+  --glow: var(--seal-sakura-glow);
+  --scene: var(--seal-paper);
+}
+[data-seal-look="ice"] {
+  --body: var(--seal-ice);
+  --ink: var(--seal-ice-ink);
+  --glow: var(--seal-ice-glow);
+  --scene: var(--seal-paper);
+}
+[data-seal-look="gold"] {
+  --body: var(--seal-gold);
+  --ink: var(--seal-gold-ink);
+  --glow: var(--seal-gold-glow);
+}
+[data-seal-look="obsidian"] {
+  --body: var(--seal-obsidian);
+  --ink: var(--seal-obsidian-ink);
+  --glow: var(--seal-obsidian-glow);
+}
+[data-seal-look="tide"] {
+  --body: var(--seal-tide);
+  --ink: var(--seal-tide-ink);
+  --glow: var(--seal-tide-glow);
+}
+[data-seal-look="abyss"] {
+  --body: var(--seal-abyss);
+  --ink: var(--seal-abyss-ink);
+  --glow: var(--seal-abyss-glow);
 }
