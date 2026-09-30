@@ -5,9 +5,15 @@
   import * as Dialog from "$lib/components/ui/dialog";
   import { Input } from "$lib/components/ui/input";
   import { Label } from "$lib/components/ui/label";
+  import { Switch } from "$lib/components/ui/switch";
   import { m } from "$lib/paraglide/messages";
   import { GROUP_NAME_MAX } from "$lib/sync/group-rules";
-  import { deleteGroup, renameGroup, type GroupProblem } from "$lib/sync/groups";
+  import {
+    deleteGroup,
+    renameGroup,
+    setMembersCanInvite,
+    type GroupProblem,
+  } from "$lib/sync/groups";
   import { groupProblemMessage } from "./problems";
 
   interface Props {
@@ -15,6 +21,9 @@
     open: boolean;
     groupId: string;
     groupName: string;
+    /** Whether members other than the admin may share the invite. */
+    membersCanInvite: boolean;
+    onMembersCanInviteChange: (membersCanInvite: boolean) => void;
     onRenamed: (name: string) => void;
     onDeleted: () => void;
   }
@@ -26,15 +35,19 @@
     open = $bindable(),
     groupId,
     groupName,
+    membersCanInvite,
+    onMembersCanInviteChange,
     onRenamed,
     onDeleted,
   }: Props = $props();
 
   let name = $state("");
   /** The change on its way to the server, if any, so its own button shows the wait. */
-  let pending = $state<"rename" | "delete" | null>(null);
+  let pending = $state<"rename" | "invite" | "delete" | null>(null);
   let isBusy = $derived(pending !== null);
   let problem = $state<GroupProblem | null>(null);
+  /** The switch as shown. Snaps back to the group's own setting if saving it fails. */
+  let isMembersInviteOn = $state(false);
   /** Whether the dialog is asking to confirm the delete, in place of the settings. */
   let isConfirmingDelete = $state(false);
 
@@ -43,6 +56,7 @@
   $effect(() => {
     if (!open) return;
     name = groupName;
+    isMembersInviteOn = membersCanInvite;
     problem = null;
     isConfirmingDelete = false;
   });
@@ -62,6 +76,15 @@
   async function rename(): Promise<void> {
     const renamed = await attempt("rename", () => renameGroup(groupId, name));
     if (renamed !== undefined) onRenamed(renamed.name);
+  }
+
+  async function allowMembersToInvite(isAllowed: boolean): Promise<void> {
+    const changed = await attempt("invite", () => setMembersCanInvite(groupId, isAllowed));
+    if (changed === undefined) {
+      isMembersInviteOn = membersCanInvite;
+      return;
+    }
+    onMembersCanInviteChange(changed.membersCanInvite);
   }
 
   async function remove(): Promise<void> {
@@ -136,6 +159,27 @@
           </Button>
         </div>
       </form>
+
+      <!-- Saved as soon as it is switched, like a switch anywhere else. -->
+      <div class="flex items-start justify-between gap-4">
+        <div class="flex flex-col gap-1">
+          <Label for="group-members-invite">
+            {m.leaderboards_groups_settings_label_members_invite()}
+          </Label>
+          <span id="group-members-invite-hint" class="text-sm text-balance text-muted-foreground">
+            {m.leaderboards_groups_settings_hint_members_invite()}
+          </span>
+        </div>
+        <Switch
+          id="group-members-invite"
+          bind:checked={isMembersInviteOn}
+          disabled={isBusy}
+          aria-describedby="group-members-invite-hint"
+          onCheckedChange={(checked: boolean) => {
+            void allowMembersToInvite(checked);
+          }}
+        />
+      </div>
 
       {#if problem !== null}
         <StatusLine message={groupProblemMessage(problem)} isError={true} />

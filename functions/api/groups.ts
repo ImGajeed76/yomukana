@@ -2,7 +2,7 @@
 //
 // Everything about a group goes through here, because every part of it is a
 // rule about who may do what: only members see the board, only the admin
-// invites and removes, an invite stops working when it expires. The tables
+// removes, and invites unless they let members invite too, an invite stops working when it expires. The tables
 // are closed to the Data API entirely. See drizzle/schema.ts.
 
 import { Hono, type Context } from "hono";
@@ -39,6 +39,7 @@ interface GroupRow {
   invite_code: string | null;
   invite_expires_at: Date | null;
   display_code: string | null;
+  members_can_invite: boolean;
   badge_emoji: string | null;
   badge_tag: string | null;
   badge_color: CardColor | null;
@@ -183,7 +184,8 @@ groups.post("/groups", async (c) => {
 
 /**
  * One group's board, for its members. The admin also gets the invite and
- * display links, which only they can share or change.
+ * display links, and the invite goes to every member when the admin lets
+ * members invite.
  */
 groups.get("/groups/:id", async (c) => {
   const userId = await readerOf(c.req.raw);
@@ -206,7 +208,8 @@ groups.get("/groups/:id", async (c) => {
     role,
     badge: badgeOf(row),
     members: members.map((member) => lineOf(member, userId, badges)),
-    invite: isAdmin ? inviteOf(row) : null,
+    membersCanInvite: row.members_can_invite,
+    invite: isAdmin || row.members_can_invite ? inviteOf(row) : null,
     displayCode: isAdmin ? row.display_code : null,
   });
 });
@@ -232,6 +235,38 @@ groups.patch("/groups/:id", async (c) => {
   return c.json({ name });
 });
 
+/** Admin only: whether members may invite too. */
+groups.patch("/groups/:id/settings", async (c) => {
+  const admin = await adminOf(c);
+  if (admin instanceof Response) return admin;
+  const membersCanInvite = (await bodyOf(c)).membersCanInvite;
+  if (typeof membersCanInvite !== "boolean") return refuse(c, "invalid");
+  await pool.query("update groups set members_can_invite = $1 where group_id = $2", [
+    membersCanInvite,
+    admin.groupId,
+  ]);
+  return c.json({ membersCanInvite });
+});
+
+/**
+ * Who may make an invite: the admin, or any member once the admin lets
+ * members invite. What each of them may do with it is up to the route.
+ */
+async function inviterOf(c: Context): Promise<{ groupId: string; isAdmin: boolean } | Response> {
+  const userId = await readerOf(c.req.raw);
+  if (userId === null) return refuse(c, "unauthorized");
+  const groupId = c.req.param("id") ?? "";
+  const role = await roleIn(groupId, userId);
+  if (role === null) return refuse(c, "not-found");
+  if (role === "admin") return { groupId, isAdmin: true };
+  const group = await pool.query<{ members_can_invite: boolean }>(
+    "select members_can_invite from groups where group_id = $1",
+    [groupId],
+  );
+  if (group.rows[0]?.members_can_invite !== true) return refuse(c, "forbidden");
+  return { groupId, isAdmin: false };
+}
+
 groups.delete("/groups/:id", async (c) => {
   const admin = await adminOf(c);
   if (admin instanceof Response) return admin;
@@ -246,11 +281,31 @@ groups.delete("/groups/:id", async (c) => {
  * does not also cut short a link the admin just set to last a month.
  */
 groups.post("/groups/:id/invite", async (c) => {
-  const admin = await adminOf(c);
-  if (admin instanceof Response) return admin;
+  const inviter = await inviterOf(c);
+  if (inviter instanceof Response) return inviter;
   const days = (await bodyOf(c)).days;
   if (days !== undefined && !isInviteDays(days)) return refuse(c, "invalid");
   const code = randomCode(INVITE_CODE_LENGTH);
+
+  // A member only makes a link when none is working. Replacing one would
+  // break a link someone else already sent round, and that is the admin's
+  // call. Asked twice at once, the second gets the link the first made.
+  if (!inviter.isAdmin) {
+    const made = await pool.query<GroupRow>(
+      `update groups set invite_code = $1,
+         invite_expires_at = now() + make_interval(days => $2::int)
+       where group_id = $3 and (invite_code is null or invite_expires_at <= now())
+       returning *`,
+      [code, DEFAULT_INVITE_DAYS, inviter.groupId],
+    );
+    const current =
+      made.rows[0] ??
+      (await pool.query<GroupRow>("select * from groups where group_id = $1", [inviter.groupId]))
+        .rows[0];
+    const invite = current === undefined ? null : inviteOf(current);
+    return invite === null ? refuse(c, "not-found") : c.json(invite);
+  }
+
   const updated = await pool.query<{ invite_expires_at: Date }>(
     `update groups set invite_code = $1,
        invite_expires_at = case
@@ -259,7 +314,7 @@ groups.post("/groups/:id/invite", async (c) => {
        end
      where group_id = $4
      returning invite_expires_at`,
-    [code, days ?? null, DEFAULT_INVITE_DAYS, admin.groupId],
+    [code, days ?? null, DEFAULT_INVITE_DAYS, inviter.groupId],
   );
   const expiresAt = updated.rows[0]?.invite_expires_at;
   if (expiresAt === undefined) return refuse(c, "not-found");

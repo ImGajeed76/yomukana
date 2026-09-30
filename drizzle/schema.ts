@@ -272,6 +272,10 @@ export const groups = pgTable(
     // Shows the board, read-only and without signing in, on a screen in a
     // classroom. Null until the admin makes one.
     displayCode: text("display_code"),
+    // Whether members other than the admin may share the invite, and make one
+    // when none is working. Changing, replacing and stopping it stay the
+    // admin's.
+    membersCanInvite: boolean("members_can_invite").notNull().default(false),
     // The group's badge, which members can wear on their card: a tag of 2 to
     // 4 characters in a card colour, and an emoji from the app's own list if
     // the admin wants one. No tag, no badge. The function checks the emoji and
@@ -304,7 +308,7 @@ export const groups = pgTable(
 
 /**
  * Who is in a group. The reader who made it is its admin, who can rename it,
- * invite, remove members and delete it. Everyone else is a member.
+ * invite, remove members and delete it, and let members invite too. Everyone else is a member.
  *
  * When a reader deletes their account the rows go with their profile, and a
  * trigger makes sure a group left without an admin gets one, or goes if it

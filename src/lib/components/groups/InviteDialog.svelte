@@ -24,6 +24,12 @@
     open: boolean;
     groupId: string;
     groupName: string;
+    /**
+     * Whether the reader is the admin. A member who may invite shares the link
+     * and makes one when none works. Changing, replacing and stopping it are
+     * the admin's.
+     */
+    isAdmin: boolean;
     /** The invite while it works, or null. */
     invite: Invite | null;
     /** Called with the invite as it is now, or null once it is turned off. */
@@ -33,7 +39,7 @@
   // `$bindable()` marks the prop as bindable, it is not a default. The rule
   // cannot tell a rune from a value.
   // eslint-disable-next-line @typescript-eslint/no-useless-default-assignment
-  let { open = $bindable(), groupId, groupName, invite, onChange }: Props = $props();
+  let { open = $bindable(), groupId, groupName, isAdmin, invite, onChange }: Props = $props();
 
   /**
    * The change on its way to the server, if any. Each shows its wait where it
@@ -146,7 +152,9 @@
           {#if pending === "on"}
             <Spinner aria-label={m.common_status_loading()} />
           {/if}
-          {m.leaderboards_groups_invite_button_on()}
+          {isAdmin
+            ? m.leaderboards_groups_invite_button_on()
+            : m.leaderboards_groups_invite_button_make()}
         </Button>
       </div>
     {:else}
@@ -210,30 +218,32 @@
               <Spinner aria-label={m.common_status_loading()} />
             {/if}
           </span>
-          <Popover.Root bind:open={isChoosingEnd}>
-            <Popover.Trigger>
-              {#snippet child({ props })}
-                <Button {...props} variant="ghost" size="sm" class="-mr-3" disabled={isBusy}>
-                  {m.leaderboards_groups_invite_button_change()}
-                </Button>
-              {/snippet}
-            </Popover.Trigger>
-            <Popover.Content class="flex w-auto flex-col gap-1 p-2" align="end">
-              <!-- The same link, lasting longer or shorter. Nothing already sent stops working. -->
-              {#each durations as option (option.days)}
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  class="justify-start"
-                  onclick={() => {
-                    void moveEnd(option.days);
-                  }}
-                >
-                  {m.leaderboards_groups_invite_option_from_now({ duration: option.label })}
-                </Button>
-              {/each}
-            </Popover.Content>
-          </Popover.Root>
+          {#if isAdmin}
+            <Popover.Root bind:open={isChoosingEnd}>
+              <Popover.Trigger>
+                {#snippet child({ props })}
+                  <Button {...props} variant="ghost" size="sm" class="-mr-3" disabled={isBusy}>
+                    {m.leaderboards_groups_invite_button_change()}
+                  </Button>
+                {/snippet}
+              </Popover.Trigger>
+              <Popover.Content class="flex w-auto flex-col gap-1 p-2" align="end">
+                <!-- The same link, lasting longer or shorter. Nothing already sent stops working. -->
+                {#each durations as option (option.days)}
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    class="justify-start"
+                    onclick={() => {
+                      void moveEnd(option.days);
+                    }}
+                  >
+                    {m.leaderboards_groups_invite_option_from_now({ duration: option.label })}
+                  </Button>
+                {/each}
+              </Popover.Content>
+            </Popover.Root>
+          {/if}
         </div>
       </div>
     {/if}
@@ -242,7 +252,7 @@
       <StatusLine message={groupProblemMessage(problem)} isError={true} />
     {/if}
 
-    {#if invite !== null}
+    {#if invite !== null && isAdmin}
       <!--
         The two things an admin does only when something went wrong: the link
         reached people it should not have, or the group is complete.

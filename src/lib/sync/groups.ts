@@ -39,7 +39,12 @@ export interface Group {
   /** The badge members can wear, or null. Missing from a group kept from before badges existed. */
   readonly badge?: Badge | null;
   readonly members: readonly GroupMember[];
-  /** The invite while it works. Only the admin is sent it. */
+  /**
+   * Whether members other than the admin may share the invite. Missing from a
+   * group kept from before members could invite.
+   */
+  readonly membersCanInvite?: boolean;
+  /** The invite while it works. Sent to the admin, and to members who may invite. */
   readonly invite: Invite | null;
   /** The display link's code. Only the admin is sent it. */
   readonly displayCode: string | null;
@@ -105,6 +110,16 @@ export async function renameGroup(id: string, name: string): Promise<Result<{ na
   return resultOf(await callApi(`/groups/${id}`, { method: "PATCH", ...send({ name }) }));
 }
 
+/** Admin only: lets members share the invite, or stops them. */
+export async function setMembersCanInvite(
+  id: string,
+  membersCanInvite: boolean,
+): Promise<Result<{ membersCanInvite: boolean }>> {
+  return resultOf(
+    await callApi(`/groups/${id}/settings`, { method: "PATCH", ...send({ membersCanInvite }) }),
+  );
+}
+
 export async function deleteGroup(id: string): Promise<Result<undefined>> {
   return resultOf(await callApi(`/groups/${id}`, { method: "DELETE" }));
 }
@@ -119,7 +134,10 @@ export async function removeMember(id: string, username: string): Promise<Result
   );
 }
 
-/** A new invite link lasting `days`. The old link stops working. */
+/**
+ * A new invite link lasting `days`. The old link stops working. A member who
+ * may invite gets the working link back instead, if there is one.
+ */
 export async function makeInvite(id: string, days: InviteDays): Promise<Result<Invite>> {
   return resultOf(await callApi(`/groups/${id}/invite`, { method: "POST", ...send({ days }) }));
 }

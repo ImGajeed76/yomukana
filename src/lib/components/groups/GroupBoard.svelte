@@ -82,11 +82,13 @@
       const kept = await lastShownGroup(progress, id);
       if (kept !== null && id === groupId) group = kept;
       await refresh(id);
-      if (isInviting && group?.role === "admin") isInviteOpen = true;
+      if (isInviting && canInvite) isInviteOpen = true;
     })();
   });
 
   let isAdmin = $derived(group?.role === "admin");
+  /** Whether the reader may share the invite: the admin, or anyone once the admin allows it. */
+  let canInvite = $derived(isAdmin || group?.membersCanInvite === true);
   let isBadgeOpen = $state(false);
   /** The reader's own name on this board, for the badge preview. */
   let ownName = $derived.by(() => {
@@ -229,6 +231,18 @@
             <Settings2 class="size-4" />
           </Button>
         {:else}
+          {#if canInvite}
+            <Button
+              variant="ghost"
+              size="sm"
+              onclick={() => {
+                isInviteOpen = true;
+              }}
+            >
+              <UserPlus class="size-4" />
+              {m.leaderboards_groups_button_invite()}
+            </Button>
+          {/if}
           <Button
             variant="ghost"
             size="sm"
@@ -273,16 +287,20 @@
   {/if}
 </section>
 
-{#if group !== null && isAdmin}
+{#if group !== null && canInvite}
   <InviteDialog
     bind:open={isInviteOpen}
     {groupId}
     groupName={group.name}
+    {isAdmin}
     invite={group.invite}
     onChange={(invite: Invite | null) => {
       if (group !== null) group = { ...group, invite };
     }}
   />
+{/if}
+
+{#if group !== null && isAdmin}
   <ScreenDialog
     bind:open={isScreenOpen}
     {groupId}
@@ -308,6 +326,10 @@
     bind:open={isSettingsOpen}
     {groupId}
     groupName={group.name}
+    membersCanInvite={group.membersCanInvite === true}
+    onMembersCanInviteChange={(membersCanInvite: boolean) => {
+      if (group !== null) group = { ...group, membersCanInvite };
+    }}
     onRenamed={(name: string) => {
       if (group !== null) group = { ...group, name };
       onRenamed(name);
