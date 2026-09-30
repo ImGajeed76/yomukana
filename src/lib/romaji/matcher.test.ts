@@ -228,6 +228,22 @@ describe("spelling systems", () => {
   });
 });
 
+describe("moraic n before punctuation", () => {
+  test("takes a bare n when a comma or full stop follows", () => {
+    // The comma is stepped over, so the reader never types the key that would
+    // settle ん in an IME. A vowel after it is the next word, not な-row.
+    expect(accepts("もちろん、いい", "mochironii")).toBe(true);
+    expect(accepts("うーん。いい", "u-nii")).toBe(true);
+    expect(accepts("ほん、おもしろい", "honomoshiroi")).toBe(true);
+    expect(accepts("もちろん、いい", "mochironnii")).toBe(true);
+  });
+
+  test("still reads n and a vowel together with nothing between them", () => {
+    expect(accepts("きんようび", "kinyoubi")).toBe(false);
+    expect(accepts("きんようび", "kinnyoubi")).toBe(true);
+  });
+});
+
 describe("sokuon spellings", () => {
   test("takes the Hepburn t before ち and ちゃ", () => {
     // 抹茶 is matcha. Nobody writes maccha, and rejecting it scored the reader
@@ -242,5 +258,19 @@ describe("sokuon spellings", () => {
   test("still refuses a doubling that does not match what follows", () => {
     expect(accepts("がっこう", "gatkou")).toBe(false);
     expect(accepts("いった", "icta")).toBe(false);
+  });
+
+  test("puts a wrong doubling on the sokuon, not on the mora after it", () => {
+    // A reader typed スカッシュ as suka, c, shu. The c was taken, because しゅ
+    // can be spelled ci plus lyu, and then shu was refused. The mistake was
+    // the c, so the c is what gets refused, and shu still goes through.
+    const typed = type("スカッシュ", "sukacsshu");
+    expect(typed.rejected).toEqual(["c"]);
+    expect(typed.state.isComplete).toBe(true);
+    expect(accepts("スカッシュ", "sukasshu")).toBe(true);
+    // Only the doubling is gone. しゅ itself can still be typed in parts.
+    expect(accepts("しゅ", "cilyu")).toBe(true);
+    // し alone doubles its c, the way an IME reads cci.
+    expect(accepts("まっし", "macci")).toBe(true);
   });
 });

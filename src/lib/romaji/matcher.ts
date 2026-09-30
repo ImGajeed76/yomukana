@@ -96,9 +96,15 @@ function expand(segments: readonly Segment[], index: number, follow: Follow): Ex
   const segment = segments[cursor];
   if (segment === undefined) return { paths: [], isComplete: true };
 
+  // Punctuation in between ends what the spelling before it asked of the next
+  // one. In an IME the reader would type that comma, and it would settle a
+  // bare `n` as ん, so もちろん、いい is `mochiron` then `ii`. Here the comma is
+  // stepped over for them, and refusing the `i` would blame them for a key the
+  // app told them not to press.
+  const isSeparated = cursor > index;
   const paths: Path[] = [];
   for (const spelling of segment.spellings) {
-    if (!follow(spelling)) continue;
+    if (!isSeparated && !follow(spelling)) continue;
     paths.push({ segment: cursor, spelling, position: 0 });
   }
   return { paths, isComplete: false };

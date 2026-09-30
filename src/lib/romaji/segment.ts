@@ -153,11 +153,30 @@ function split(text: string): RawSegment[] {
   return segments;
 }
 
+/**
+ * Whether a spelling of a two-kana mora types its kana one at a time, the big
+ * one and then the small one by its `l` or `x` form: `cilyu` for しゅ, as `ci`
+ * and `lyu`. A whole spelling of such a mora never has an `l` or `x` after its
+ * first letter, and one of these always does.
+ *
+ * Such spellings are accepted for the mora itself, but not for doubling before
+ * it. Nobody types っしゅ as `ccilyu`, and an IME does not read it that way:
+ * after `c` it waits for `ch`. Letting their first letters double would take a
+ * wrong `c` on スカッシュ, then refuse the reader's `shu` for it, putting the
+ * mistake on the mora after the one they got wrong.
+ */
+function isSpelledInParts(segment: RawSegment, spelling: string): boolean {
+  if (toCodePoints(segment.kana).length < 2) return false;
+  const rest = spelling.slice(1);
+  return rest.includes("l") || rest.includes("x");
+}
+
 /** The single letters a sokuon may be typed as, given what follows it. */
 function doubledConsonants(next: RawSegment | undefined): string[] {
   if (next === undefined) return [];
   const initials = new Set<string>();
   for (const spelling of next.spellings) {
+    if (isSpelledInParts(next, spelling)) continue;
     const initial = spelling[0];
     // A doubled vowel is a different mora, not a sokuon, and っん is not a sound.
     if (initial === undefined || VOWELS.has(initial) || initial === "n") continue;
