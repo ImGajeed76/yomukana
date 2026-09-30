@@ -31,6 +31,8 @@
     onFinished?: (attempt: Attempt, revealed: ReadonlySet<number>) => void;
     /** Leaves the sentence without scoring it. */
     onSkip?: () => void;
+    /** Moves on once the sentence is finished. Offered here on touch only, see below. */
+    onNext?: () => void;
     /**
      * Whether something is open over the sentence. Keys then belong to that,
      * not to the exercise. The clock starts on the first key the exercise
@@ -39,7 +41,7 @@
     isPaused?: boolean;
   }
 
-  let { segments, tokens, round, onFinished, onSkip, isPaused = false }: Props = $props();
+  let { segments, tokens, round, onFinished, onSkip, onNext, isPaused = false }: Props = $props();
 
   // Wrong keys against the current segment before the accepted spellings appear.
   // Two is enough to tell a slip from not knowing how to spell the mora.
@@ -434,8 +436,24 @@
       A phone keyboard has no Escape, so on touch the way out is a button, and
       it is always there: a reader on a train who cannot read a sentence should
       not have to get stuck on it twice before being offered a way past.
+
+      Once the sentence is read, the same place offers the next one. The
+      summary below it runs under the keyboard on most phones, and so did its
+      button, while this spot is always in view. The keyboard's own Next key
+      does the same, and the button's label matches it.
     -->
-    {#if isTouch}
+    {#if isTouch && attempt.finishedAt !== null}
+      <Button
+        size="sm"
+        class="ml-auto"
+        onpointerdown={keepKeyboard}
+        onclick={() => {
+          onNext?.();
+        }}
+      >
+        {m.session_summary_button_next()}
+      </Button>
+    {:else if isTouch}
       <Button
         variant="ghost"
         size="sm"

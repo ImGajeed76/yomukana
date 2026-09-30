@@ -192,6 +192,7 @@
         onSkip={() => {
           practice.skip();
         }}
+        onNext={next}
       />
 
       <!--
@@ -273,7 +274,8 @@
             </dl>
           {/if}
 
-          <div class="flex items-center gap-3">
+          <!-- On touch the button is up by the sentence instead, see TypingPane. -->
+          <div class="flex items-center gap-3 touch:hidden">
             <span class="text-xs text-muted-foreground">{m.session_summary_hint_enter()}</span>
             <Button onclick={next}>{m.session_summary_button_next()}</Button>
           </div>

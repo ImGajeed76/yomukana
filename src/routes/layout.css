@@ -17,6 +17,8 @@
 @import "@fontsource/noto-sans-jp/japanese-600.css";
 
 @custom-variant dark (&:is(.dark *));
+/* A phone or tablet: the same test the typing pane uses to switch to its field. */
+@custom-variant touch (@media (hover: none) and (pointer: coarse));
 @plugin "@tailwindcss/forms";
 @plugin "@tailwindcss/typography";
 
