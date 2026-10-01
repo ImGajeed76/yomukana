@@ -1,5 +1,10 @@
 <script lang="ts">
+  import { Bell, Check } from "@lucide/svelte";
+  import StatusLine from "$lib/components/StatusLine.svelte";
   import StreakFlame from "$lib/components/streak/StreakFlame.svelte";
+  import { Spinner } from "$lib/components/ui/spinner";
+  import { dismissPrompt } from "$lib/prompts";
+  import { turnOnPush } from "$lib/sync/push";
   import IceDrop from "./IceDrop.svelte";
   import StreakWeek from "./StreakWeek.svelte";
   import { Button } from "$lib/components/ui/button";
@@ -13,12 +18,26 @@
     news: StreakNews | null;
     /** The streak now, for the week row. */
     streak: Streak | null;
+    /**
+     * Whether to offer the daily reminder here: on a first streak, for a
+     * signed-in reader whose browser can take pushes and has not said yes.
+     */
+    offersReminders?: boolean;
   }
 
   // `$bindable()` marks the prop as bindable, it is not a default. The rule
   // cannot tell a rune from a value.
   // eslint-disable-next-line @typescript-eslint/no-useless-default-assignment
-  let { open = $bindable(), news, streak }: Props = $props();
+  let { open = $bindable(), news, streak, offersReminders = false }: Props = $props();
+
+  let reminders = $state<"idle" | "turning-on" | "on" | "denied">("idle");
+
+  async function turnOnReminders(): Promise<void> {
+    reminders = "turning-on";
+    const outcome = await turnOnPush();
+    reminders = outcome === "on" ? "on" : outcome === "denied" ? "denied" : "idle";
+    if (outcome === "on") dismissPrompt("notifications");
+  }
 
   /** The icon, title and line for what happened. A freeze leads only when it is all there is. */
   let content = $derived.by(() => {
@@ -94,8 +113,38 @@
       {#if streak !== null && !content.isFreeze}
         <div class="flex justify-center"><StreakWeek {streak} /></div>
       {/if}
+      <!--
+        On a first streak, the moment the reader has something to keep: one
+        tap to have it kept, ahead of moving on.
+      -->
+      {#if offersReminders}
+        {#if reminders === "on"}
+          <p class="flex items-center justify-center gap-2 text-sm font-medium" role="status">
+            <Check class="size-4 text-streak" />{m.prompt_notify_status_on()}
+          </p>
+        {:else}
+          <Button
+            class="w-full"
+            disabled={reminders === "turning-on"}
+            onclick={() => {
+              void turnOnReminders();
+            }}
+          >
+            {#if reminders === "turning-on"}
+              <Spinner aria-label={m.common_status_loading()} />
+            {:else}
+              <Bell class="size-4" />
+            {/if}
+            {m.prompt_notify_button()}
+          </Button>
+        {/if}
+        {#if reminders === "denied"}
+          <StatusLine message={m.settings_notifications_error_denied()} isError={true} />
+        {/if}
+      {/if}
       <Button
         class="w-full"
+        variant={offersReminders && reminders !== "on" ? "outline" : "default"}
         onclick={() => {
           open = false;
         }}

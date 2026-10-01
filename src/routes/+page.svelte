@@ -16,9 +16,15 @@
   import { streak } from "$lib/stats/streak-state.svelte";
   import { page } from "$app/state";
   import InstallDialog from "$lib/components/prompts/InstallDialog.svelte";
+  import NotifyDialog from "$lib/components/prompts/NotifyDialog.svelte";
   import NudgeDialog from "$lib/components/prompts/NudgeDialog.svelte";
   import SignUpDialog from "$lib/components/prompts/SignUpDialog.svelte";
-  import { loadNudgeable, type Nudgeable } from "$lib/sync/push";
+  import {
+    currentSubscription,
+    isPushSupported,
+    loadNudgeable,
+    type Nudgeable,
+  } from "$lib/sync/push";
   import { Progress } from "$lib/db";
   import { install } from "$lib/install.svelte";
   import {
@@ -172,10 +178,24 @@
   let isSignedIn: boolean | null = null;
   let isNextAfterAsk = false;
 
+  /**
+   * Whether the streak reminder may be offered: signed in, a browser that can
+   * take pushes, not on here yet, and not turned down.
+   */
+  let isReminderOfferDue = $state(false);
+  /** The dev preview's own say, which the check above cannot overwrite. */
+  let isReminderOfferForced = $state(false);
+
   $effect(() => {
-    void new Progress().syncState().then((state) => {
+    void (async () => {
+      const state = await new Progress().syncState();
       isSignedIn = state.account !== null;
-    });
+      isReminderOfferDue =
+        isSignedIn &&
+        isPushSupported() &&
+        isPromptDue("notifications", Date.now()) &&
+        (await currentSubscription()) === null;
+    })();
   });
 
   /** Which ask is due now, if any. */
@@ -184,6 +204,11 @@
     const days = streak.value?.days ?? [];
     const sentences = days.reduce((total, day) => total + day.sentences, 0);
     const daysRead = days.filter((day) => day.sentences > 0).length;
+    // On a goal day, the reminder first: it is what keeps the streak. A first
+    // streak offers it in its own popup instead.
+    if (isReminderOfferDue && streak.moment?.isGoalReached === true && !streak.moment.isStarted) {
+      return "notifications";
+    }
     if (
       isSignedIn === false &&
       sentences >= SIGN_UP_AFTER_SENTENCES &&
@@ -251,6 +276,25 @@
     next();
   });
 
+  // `?prompt=first-streak` in dev: the first-streak popup with the reminder
+  // offer, as a signed-in reader whose browser can take pushes would see it.
+  $effect(() => {
+    if (!import.meta.env.DEV || page.url.searchParams.get("prompt") !== "first-streak") return;
+    streakNews = {
+      kind: "moment",
+      moment: {
+        streak: 1,
+        isGoalReached: true,
+        isStarted: true,
+        isWeek: false,
+        isFreezeEarned: false,
+        freezes: 1,
+      },
+    };
+    isReminderOfferForced = true;
+    isStreakOpen = true;
+  });
+
   // `?prompt=nudge` in dev: the dialog at once, with made-up friends.
   $effect(() => {
     if (!import.meta.env.DEV || page.url.searchParams.get("prompt") !== "nudge") return;
@@ -313,7 +357,14 @@
 
 <WelcomeDialog bind:open={isWelcoming} />
 <ScoreChangeDialog bind:open={isExplainingScore} />
-<StreakDialog bind:open={isStreakOpen} news={streakNews} streak={streak.value} />
+<StreakDialog
+  bind:open={isStreakOpen}
+  news={streakNews}
+  streak={streak.value}
+  offersReminders={(isReminderOfferDue || isReminderOfferForced) &&
+    streakNews?.kind === "moment" &&
+    streakNews.moment.isStarted}
+/>
 {#if newSeal !== null && newSealRules !== null}
   <SealDialog bind:open={isSealOpen} seal={newSealRules} earnedAt={newSeal.earnedAt} isNew={true} />
 {/if}
@@ -322,6 +373,8 @@
   <SignUpDialog bind:open={isAskOpen} />
 {:else if asking === "install"}
   <InstallDialog bind:open={isAskOpen} />
+{:else if asking === "notifications"}
+  <NotifyDialog bind:open={isAskOpen} />
 {/if}
 
 <!--
