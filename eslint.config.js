@@ -93,6 +93,9 @@ export default ts.config(
       "@typescript-eslint/no-unsafe-return": "off",
       "@typescript-eslint/no-confusing-void-expression": "off",
       "@typescript-eslint/no-unnecessary-condition": "off",
+      "@typescript-eslint/no-empty-function": "off",
+      "@typescript-eslint/consistent-type-definitions": "off",
+      "@typescript-eslint/explicit-function-return-type": "off",
     },
   },
   {

@@ -14,6 +14,18 @@
   import type { Attempt } from "$lib/session";
   import { freezeSaveToTell, isBigMoment, type StreakNews } from "$lib/stats/streak";
   import { streak } from "$lib/stats/streak-state.svelte";
+  import { page } from "$app/state";
+  import InstallDialog from "$lib/components/prompts/InstallDialog.svelte";
+  import SignUpDialog from "$lib/components/prompts/SignUpDialog.svelte";
+  import { Progress } from "$lib/db";
+  import { install } from "$lib/install.svelte";
+  import {
+    forcedPrompt,
+    INSTALL_AFTER_DAYS,
+    isPromptDue,
+    SIGN_UP_AFTER_SENTENCES,
+    type PromptKind,
+  } from "$lib/prompts";
 
   const practice = new Practice();
 
@@ -139,6 +151,65 @@
     isNextAfterSeal = false;
     next();
   });
+
+  // Asking to sign up, then to install: last in line behind every other
+  // popup, between sentences, and one ask a visit at most, so a reader is
+  // never asked twice in a row. See $lib/prompts for when each is due.
+  let asking = $state<PromptKind | null>(null);
+  let isAskOpen = $state(false);
+  let hasAsked = false;
+  let isSignedIn: boolean | null = null;
+  let isNextAfterAsk = false;
+
+  $effect(() => {
+    void new Progress().syncState().then((state) => {
+      isSignedIn = state.account !== null;
+    });
+  });
+
+  /** Which ask is due now, if any. */
+  function dueAsk(): PromptKind | null {
+    const now = Date.now();
+    const days = streak.value?.days ?? [];
+    const sentences = days.reduce((total, day) => total + day.sentences, 0);
+    const daysRead = days.filter((day) => day.sentences > 0).length;
+    if (
+      isSignedIn === false &&
+      sentences >= SIGN_UP_AFTER_SENTENCES &&
+      isPromptDue("sign-up", now)
+    ) {
+      return "sign-up";
+    }
+    if (install.route !== "none" && daysRead >= INSTALL_AFTER_DAYS && isPromptDue("install", now)) {
+      return "install";
+    }
+    return null;
+  }
+
+  $effect(() => {
+    if (practice.summary === null || hasAsked) return;
+    if (isWelcoming || isExplainingScore || isStreakOpen || isSealOpen) return;
+    const kind = dueAsk();
+    if (kind === null) return;
+    hasAsked = true;
+    asking = kind;
+    isAskOpen = true;
+    isNextAfterAsk = true;
+  });
+  $effect(() => {
+    if (isAskOpen || !isNextAfterAsk) return;
+    isNextAfterAsk = false;
+    next();
+  });
+
+  // `?prompt=sign-up` or `?prompt=install` in dev: that ask at once, for looking at it.
+  $effect(() => {
+    const forced = forcedPrompt(page.url);
+    if (forced === null) return;
+    hasAsked = true;
+    asking = forced;
+    isAskOpen = true;
+  });
   $effect(() => {
     if (isStreakOpen || !isNextAfterStreak) return;
     isNextAfterStreak = false;
@@ -165,7 +236,14 @@
     // A key pressed inside a dialog belongs to it. Checked by where the key
     // came from, not by whether the dialog is still open: the dialog closes on
     // this same Escape before it reaches here, and would read as a skip.
-    if (isWelcoming || isExplainingScore || isStreakOpen || isSealOpen || isFromDialog(event)) {
+    if (
+      isWelcoming ||
+      isExplainingScore ||
+      isStreakOpen ||
+      isSealOpen ||
+      isAskOpen ||
+      isFromDialog(event)
+    ) {
       return;
     }
     if (practice.summary !== null) {
@@ -189,6 +267,11 @@
 <StreakDialog bind:open={isStreakOpen} news={streakNews} streak={streak.value} />
 {#if newSeal !== null && newSealRules !== null}
   <SealDialog bind:open={isSealOpen} seal={newSealRules} earnedAt={newSeal.earnedAt} isNew={true} />
+{/if}
+{#if asking === "sign-up"}
+  <SignUpDialog bind:open={isAskOpen} />
+{:else if asking === "install"}
+  <InstallDialog bind:open={isAskOpen} />
 {/if}
 
 <!--
@@ -215,7 +298,7 @@
         segments={practice.current.segments}
         tokens={practice.current.tokens}
         round={practice.round}
-        isPaused={isWelcoming || isExplainingScore || isStreakOpen || isSealOpen}
+        isPaused={isWelcoming || isExplainingScore || isStreakOpen || isSealOpen || isAskOpen}
         onFinished={(attempt: Attempt, revealed: ReadonlySet<number>) => {
           void finish(attempt, revealed);
         }}
