@@ -1,9 +1,5 @@
 <script lang="ts">
   import { goto } from "$app/navigation";
-  import BoardList from "$lib/components/BoardList.svelte";
-  import ProfileCard from "$lib/components/profile/ProfileCard.svelte";
-  import SealPill from "$lib/components/seals/SealPill.svelte";
-  import StreakFlame from "$lib/components/streak/StreakFlame.svelte";
   import { Button } from "$lib/components/ui/button";
   import * as Carousel from "$lib/components/ui/carousel";
   import type { CarouselAPI } from "$lib/components/ui/carousel/context";
@@ -12,10 +8,7 @@
   import { Label } from "$lib/components/ui/label";
   import { m } from "$lib/paraglide/messages";
   import { dismissPrompt, snoozePrompt } from "$lib/prompts";
-  import { demoBoard } from "$lib/stats";
-  import type { Badge } from "$lib/sync/badge-rules";
-  import { rankBoard } from "$lib/sync/board";
-  import { sealOf, type Seal } from "$lib/sync/seal-rules";
+  import SignUpSlide, { type SignUpSlideKey } from "./SignUpSlide.svelte";
 
   interface Props {
     /** Whether the dialog is showing. */
@@ -26,6 +19,14 @@
   // cannot tell a rune from a value.
   // eslint-disable-next-line @typescript-eslint/no-useless-default-assignment
   let { open = $bindable() }: Props = $props();
+
+  /** The carousel's width on a desktop, in pixels: the size it is drawn for. */
+  const STAGE_WIDTH = 416;
+  let stageWidth = $state(STAGE_WIDTH);
+  let stageZoom = $derived(Math.min(1, stageWidth / STAGE_WIDTH));
+
+  /** How long each slide stays before the next comes forward. */
+  const ADVANCE_MS = 5000;
 
   let isNever = $state(false);
   let api = $state<CarouselAPI | undefined>(undefined);
@@ -42,24 +43,23 @@
     };
   });
 
-  // What the slides show: made up, and drawn with the app's own parts, so a
-  // reader sees the real thing rather than a picture of it.
-  const SCORE = 1240;
-  const now = new Date();
-  const friends = rankBoard(demoBoard(SCORE, now).slice(0, 4), SCORE);
-  const CLASS_BADGE: Badge = { emoji: "🌸", tag: "3B", color: "pink" };
-  const classmates = rankBoard(
-    demoBoard(SCORE, now)
-      .slice(0, 4)
-      .map((entry) => ({ ...entry, badges: [CLASS_BADGE] })),
-    SCORE,
-  );
-  const seals = ["streak-500", "perfect-10000", "days-1000"].flatMap((id): Seal[] => {
-    const seal = sealOf(id);
-    return seal === null ? [] : [seal];
+  /** Whether the reader is pointing at or working the carousel, which holds it still. */
+  let isHeld = $state(false);
+
+  // On to the next slide every few seconds, round and round, unless the
+  // reader is busy with it or has asked for less motion.
+  $effect(() => {
+    if (api === undefined || !open || isHeld) return;
+    if (matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const timer = setInterval(() => {
+      api?.scrollNext();
+    }, ADVANCE_MS);
+    return () => {
+      clearInterval(timer);
+    };
   });
 
-  const SLIDES = [
+  const SLIDES: readonly { key: SignUpSlideKey; title: () => string; text: () => string }[] = [
     { key: "sync", title: m.prompt_signup_sync_title, text: m.prompt_signup_sync_description },
     {
       key: "friends",
@@ -73,7 +73,8 @@
     },
     { key: "seals", title: m.prompt_signup_seals_title, text: m.prompt_signup_seals_description },
     { key: "card", title: m.prompt_signup_card_title, text: m.prompt_signup_card_description },
-  ] as const;
+  ];
+  let shown = $derived(SLIDES[selected] ?? SLIDES[0]);
 
   /** Closing in any way but signing up: not now, or never, as the box says. */
   function decline(): void {
@@ -107,70 +108,59 @@
   <Dialog.Content class="gap-5 sm:max-w-[448px]">
     <Dialog.Title class="sr-only">{m.prompt_signup_title()}</Dialog.Title>
 
-    <Carousel.Root setApi={(next: CarouselAPI | undefined) => (api = next)} class="-mx-2 min-w-0">
-      <Carousel.Content>
-        {#each SLIDES as slide (slide.key)}
-          <Carousel.Item class="flex flex-col gap-4 px-2">
-            <!-- The picture: the app itself, made up and not to be pressed. -->
-            <div
-              class="pointer-events-none relative flex h-52 items-center justify-center overflow-hidden rounded-2xl bg-muted/50 p-4 select-none"
-              aria-hidden="true"
-              inert
-            >
-              {#if slide.key === "sync"}
-                <div class="relative">
-                  <div
-                    class="flex h-28 w-48 flex-col items-center justify-center gap-1 rounded-lg border-2 border-border bg-background"
-                  >
-                    <span class="flex items-center gap-1 text-2xl font-semibold tabular-nums">
-                      <StreakFlame class="size-6" />23
-                    </span>
-                    <span class="text-xs text-muted-foreground">{m.streak_day_streak()}</span>
-                  </div>
-                  <div class="mx-auto h-2 w-56 -translate-x-4 rounded-b-md bg-border"></div>
-                  <div
-                    class="absolute -right-8 -bottom-4 flex h-28 w-16 flex-col items-center justify-center gap-1 rounded-xl border-2 border-border bg-background"
-                  >
-                    <span class="flex items-center gap-0.5 text-base font-semibold tabular-nums">
-                      <StreakFlame class="size-4" />23
-                    </span>
-                  </div>
-                </div>
-              {:else if slide.key === "friends"}
-                <div class="w-full scale-90">
-                  <BoardList ranked={friends} describe={() => ""} />
-                </div>
-              {:else if slide.key === "groups"}
-                <div class="w-full scale-90">
-                  <BoardList ranked={classmates} describe={() => ""} />
-                </div>
-              {:else if slide.key === "seals"}
-                <div class="flex flex-col items-center gap-5 pt-2">
-                  {#each seals as seal (seal.id)}
-                    <SealPill {seal} class="text-sm" isStatic={true} />
-                  {/each}
-                </div>
-              {:else}
-                <div class="w-full scale-90">
-                  <ProfileCard
-                    username="quiet-tanuki-42"
-                    displayName="Aiko"
-                    cardColor="violet"
-                    score={SCORE}
-                    streak={23}
-                    badges={[{ seal: "streak-500", earnedAt: now.getTime() }, CLASS_BADGE]}
-                  />
-                </div>
-              {/if}
-            </div>
-            <div class="flex flex-col gap-1 text-center">
-              <h2 class="text-lg leading-snug font-semibold">{slide.title()}</h2>
-              <p class="text-sm text-balance text-muted-foreground">{slide.text()}</p>
-            </div>
-          </Carousel.Item>
-        {/each}
-      </Carousel.Content>
-    </Carousel.Root>
+    <!--
+      The pictures either side wait smaller and dimmed, and step forward,
+      when pressed or in their turn, as the one in front steps back. The words under them are not
+      part of the slide, so they never shrink with it.
+    -->
+    <!--
+      Laid out at the width it has on a desktop and shrunk whole to fit a
+      narrower screen, so a phone sees the same carousel, only smaller.
+    -->
+    <div class="-mx-2 min-w-0" bind:clientWidth={stageWidth}>
+      <Carousel.Root
+        setApi={(next: CarouselAPI | undefined) => (api = next)}
+        opts={{ loop: true, align: "center" }}
+        style={`width: ${String(STAGE_WIDTH)}px; zoom: ${String(stageZoom)}`}
+        onpointerenter={() => (isHeld = true)}
+        onpointerleave={() => (isHeld = false)}
+        onfocusin={() => (isHeld = true)}
+        onfocusout={() => (isHeld = false)}
+      >
+        <Carousel.Content class="-ml-3">
+          {#each SLIDES as slide, index (slide.key)}
+            <Carousel.Item class="basis-[76%] pl-3">
+              <!--
+              A slide at the side is a way to it for a pointer: pressed, it
+              comes forward. Out of the Tab order, since the dots below already
+              take a keyboard to every slide and carry the focus ring.
+            -->
+              <button
+                type="button"
+                class={[
+                  "block w-full rounded-2xl text-left transition-[scale,opacity] duration-300 ease-[cubic-bezier(0.34,1.56,0.64,1)] outline-none motion-reduce:transition-none",
+                  selected === index
+                    ? "scale-100 cursor-default opacity-100"
+                    : "scale-90 opacity-50",
+                ]}
+                aria-label={m.prompt_label_slide({ number: String(index + 1) })}
+                tabindex={-1}
+                onclick={() => {
+                  api?.scrollTo(index);
+                }}
+              >
+                <SignUpSlide slide={slide.key} />
+              </button>
+            </Carousel.Item>
+          {/each}
+        </Carousel.Content>
+      </Carousel.Root>
+    </div>
+
+    <div class="flex min-h-[4.5rem] flex-col gap-1 text-center" aria-live="polite">
+      <h2 class="text-lg leading-snug font-semibold">{shown?.title()}</h2>
+      <p class="text-sm text-balance text-muted-foreground">{shown?.text()}</p>
+    </div>
 
     <!-- Where in the slides the reader is, and a way to any of them. -->
     <div class="flex justify-center gap-1">
