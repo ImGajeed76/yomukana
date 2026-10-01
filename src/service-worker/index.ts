@@ -126,3 +126,44 @@ worker.addEventListener("fetch", (event) => {
     event.respondWith(cacheFirst(request, APP_CACHE));
   }
 });
+
+// Push notifications: a reminder, or a nudge from a friend, sent by the API
+// function to a reader who turned them on. The message is the notification,
+// already in their language; there is nothing to fetch to show it.
+interface PushMessage {
+  readonly title?: string;
+  readonly body?: string;
+  readonly tag?: string;
+  readonly url?: string;
+}
+
+worker.addEventListener("push", (event) => {
+  const message = (event.data?.json() ?? {}) as PushMessage;
+  event.waitUntil(
+    worker.registration.showNotification(message.title ?? "yomukana", {
+      body: message.body,
+      // One of each kind at a time: a new reminder replaces yesterday's.
+      tag: message.tag,
+      icon: "/icons/icon-192.png",
+      data: { url: message.url ?? "/" },
+    }),
+  );
+});
+
+// Pressed: to the app, the open tab if there is one, a new one if not.
+worker.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const data = event.notification.data as { url?: string } | null;
+  const url = new URL(data?.url ?? "/", worker.location.origin).href;
+  event.waitUntil(
+    (async () => {
+      const windows = await worker.clients.matchAll({ type: "window", includeUncontrolled: true });
+      const open = windows.find((client) => new URL(client.url).origin === worker.location.origin);
+      if (open !== undefined) {
+        await open.focus();
+        return;
+      }
+      await worker.clients.openWindow(url);
+    })(),
+  );
+});

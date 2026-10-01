@@ -16,7 +16,9 @@
   import { streak } from "$lib/stats/streak-state.svelte";
   import { page } from "$app/state";
   import InstallDialog from "$lib/components/prompts/InstallDialog.svelte";
+  import NudgeDialog from "$lib/components/prompts/NudgeDialog.svelte";
   import SignUpDialog from "$lib/components/prompts/SignUpDialog.svelte";
+  import { loadNudgeable, type Nudgeable } from "$lib/sync/push";
   import { Progress } from "$lib/db";
   import { install } from "$lib/install.svelte";
   import {
@@ -28,6 +30,13 @@
   } from "$lib/prompts";
 
   const practice = new Practice();
+
+  /** Friends for `?prompt=nudge` in dev: made up, and never really nudged. */
+  const DEMO_NUDGEABLE: readonly Nudgeable[] = [
+    { username: "calm-mimizuku-18", displayName: "Aiko", cardColor: "violet", streak: 41 },
+    { username: "swift-kitsune-71", displayName: null, cardColor: "orange", streak: 12 },
+    { username: "sleepy-neko-55", displayName: "Ren", cardColor: "teal", streak: 6 },
+  ];
 
   // IndexedDB only exists in the browser, so the prerendered page starts from an
   // empty model and the reader's own history replaces it on hydration.
@@ -141,6 +150,8 @@
   $effect(() => {
     if (seals.fresh.length === 0 || practice.summary === null) return;
     if (isWelcoming || isExplainingScore || isStreakOpen || isSealOpen) return;
+    // A nudge is for this moment only; a seal can wait for the next summary.
+    if (isNudgeOpen || nudgeFriends.length > 0) return;
     newSeal = seals.takeFresh();
     if (newSeal === null) return;
     isSealOpen = true;
@@ -189,6 +200,7 @@
   $effect(() => {
     if (practice.summary === null || hasAsked) return;
     if (isWelcoming || isExplainingScore || isStreakOpen || isSealOpen) return;
+    if (isNudgeOpen || nudgeFriends.length > 0) return;
     const kind = dueAsk();
     if (kind === null) return;
     hasAsked = true;
@@ -213,11 +225,47 @@
   $effect(() => {
     if (isStreakOpen || !isNextAfterStreak) return;
     isNextAfterStreak = false;
+    // Friends to nudge come next, over the same summary, and they move on.
+    if (nudgeFriends.length === 0) next();
+  });
+
+  // Right after the reader's own goal, while they are ahead: friends whose
+  // streak is still at risk today, to nudge. Asked for on the sentence that
+  // reached the goal, shown once any streak popup has had its turn.
+  let nudgeFriends = $state.raw<readonly Nudgeable[]>([]);
+  let nudgeShown = $state.raw<readonly Nudgeable[]>([]);
+  let isNudgeOpen = $state(false);
+  let isNudgeDemo = $state(false);
+  let isNextAfterNudge = false;
+  $effect(() => {
+    if (nudgeFriends.length === 0 || practice.summary === null) return;
+    if (isWelcoming || isExplainingScore || isStreakOpen || isSealOpen || isNudgeOpen) return;
+    nudgeShown = nudgeFriends;
+    nudgeFriends = [];
+    isNudgeOpen = true;
+    isNextAfterNudge = true;
+  });
+  $effect(() => {
+    if (isNudgeOpen || !isNextAfterNudge) return;
+    isNextAfterNudge = false;
     next();
+  });
+
+  // `?prompt=nudge` in dev: the dialog at once, with made-up friends.
+  $effect(() => {
+    if (!import.meta.env.DEV || page.url.searchParams.get("prompt") !== "nudge") return;
+    nudgeShown = DEMO_NUDGEABLE;
+    isNudgeDemo = true;
+    isNudgeOpen = true;
   });
 
   async function finish(attempt: Attempt, revealed: ReadonlySet<number>): Promise<void> {
     await practice.finish(attempt, revealed);
+    // The goal just reached: who could do with a nudge. Between sentences,
+    // so the short wait for it is never felt while typing.
+    if (streak.moment?.isGoalReached === true && isSignedIn === true) {
+      nudgeFriends = await loadNudgeable();
+    }
     // Day one, a week, a freeze: worth a popup. An ordinary goal day is
     // celebrated in the summary instead, since it comes every day.
     const moment = streak.moment;
@@ -242,6 +290,7 @@
       isStreakOpen ||
       isSealOpen ||
       isAskOpen ||
+      isNudgeOpen ||
       isFromDialog(event)
     ) {
       return;
@@ -268,6 +317,7 @@
 {#if newSeal !== null && newSealRules !== null}
   <SealDialog bind:open={isSealOpen} seal={newSealRules} earnedAt={newSeal.earnedAt} isNew={true} />
 {/if}
+<NudgeDialog bind:open={isNudgeOpen} friends={nudgeShown} isDemo={isNudgeDemo} />
 {#if asking === "sign-up"}
   <SignUpDialog bind:open={isAskOpen} />
 {:else if asking === "install"}
@@ -298,7 +348,12 @@
         segments={practice.current.segments}
         tokens={practice.current.tokens}
         round={practice.round}
-        isPaused={isWelcoming || isExplainingScore || isStreakOpen || isSealOpen || isAskOpen}
+        isPaused={isWelcoming ||
+          isExplainingScore ||
+          isStreakOpen ||
+          isSealOpen ||
+          isNudgeOpen ||
+          isAskOpen}
         onFinished={(attempt: Attempt, revealed: ReadonlySet<number>) => {
           void finish(attempt, revealed);
         }}

@@ -18,6 +18,7 @@ import { sql } from "drizzle-orm";
 import { authenticatedRole, authUid, crudPolicy } from "drizzle-orm/neon";
 import {
   check,
+  date,
   doublePrecision,
   foreignKey,
   index,
@@ -390,5 +391,74 @@ export const profileBadges = pgTable(
       foreignColumns: [achievements.userId, achievements.achievementId],
       name: "profile_badges_achievement_earned",
     }).onDelete("cascade"),
+  ],
+).enableRLS();
+
+/**
+ * Where to send a reader's push notifications: one row a device that said
+ * yes, as the browser describes it. The endpoint is the push service's
+ * address for that device, so it is the key; a device that subscribes again
+ * replaces its row. Closed to the Data API: only the function sends pushes.
+ */
+export const pushSubscriptions = pgTable(
+  "push_subscriptions",
+  {
+    endpoint: text("endpoint").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => profiles.userId, { onDelete: "cascade" }),
+    p256dh: text("p256dh").notNull(),
+    auth: text("auth").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [index("push_subscriptions_by_reader").on(table.userId)],
+).enableRLS();
+
+/**
+ * What a reader wants to be told, and when. Kept on the server because the
+ * server is what sends: the reminder at their time in their time zone, in
+ * their language, and only once a day, which `remindedOn` keeps count of.
+ */
+export const notificationSettings = pgTable(
+  "notification_settings",
+  {
+    userId: text("user_id")
+      .primaryKey()
+      .references(() => profiles.userId, { onDelete: "cascade" }),
+    timeZone: text("time_zone").notNull().default("UTC"),
+    locale: text("locale").notNull().default("en"),
+    isReminderOn: boolean("is_reminder_on").notNull().default(true),
+    // Minutes after midnight, local time. 19:00 unless they move it.
+    reminderMinute: smallint("reminder_minute").notNull().default(1140),
+    canBeNudged: boolean("can_be_nudged").notNull().default(true),
+    showsNudges: boolean("shows_nudges").notNull().default(true),
+    // The reading day, local, of the last reminder sent.
+    remindedOn: date("reminded_on"),
+  },
+  (table) => [
+    check("notification_settings_minute", sql`${table.reminderMinute} between 0 and 1439`),
+    check("notification_settings_locale", sql`${table.locale} in ('en', 'de', 'ja')`),
+  ],
+).enableRLS();
+
+/**
+ * Nudges sent, one a day from one reader to another at most, which the key
+ * itself holds to. The day is the receiver's reading day.
+ */
+export const nudges = pgTable(
+  "nudges",
+  {
+    fromUserId: text("from_user_id")
+      .notNull()
+      .references(() => profiles.userId, { onDelete: "cascade" }),
+    toUserId: text("to_user_id")
+      .notNull()
+      .references(() => profiles.userId, { onDelete: "cascade" }),
+    day: date("day").notNull(),
+    sentAt: timestamp("sent_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.fromUserId, table.toUserId, table.day] }),
+    index("nudges_to").on(table.toUserId, table.day),
   ],
 ).enableRLS();

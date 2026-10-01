@@ -1,5 +1,6 @@
 <script lang="ts">
   import InstallSettings from "$lib/components/InstallSettings.svelte";
+  import NotificationSettings from "$lib/components/NotificationSettings.svelte";
   import { install } from "$lib/install.svelte";
   import { m } from "$lib/paraglide/messages";
 </script>
@@ -16,3 +17,5 @@
 {:else}
   <InstallSettings />
 {/if}
+
+<NotificationSettings />
