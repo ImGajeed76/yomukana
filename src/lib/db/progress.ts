@@ -201,8 +201,12 @@ export class Progress {
     };
   }
 
-  /** Where syncing left off on this device. */
+  /** Where syncing left off on this device, and who is signed in on it. */
   async syncState(): Promise<SyncRecord> {
+    // Opens the database itself, as finishTimes does: pages ask who is
+    // signed in without loading the reader's items, and a closed database
+    // would answer "nobody" for a reader who is.
+    this.#db ??= await openProgressDb();
     if (this.#db === null) return NEVER_SYNCED;
     return (await this.#db.get("meta", SYNC_KEY)) ?? NEVER_SYNCED;
   }
