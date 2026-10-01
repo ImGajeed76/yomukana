@@ -30,12 +30,12 @@
   // eslint-disable-next-line @typescript-eslint/no-useless-default-assignment
   let { open = $bindable(), news, streak, offersReminders = false }: Props = $props();
 
-  let reminders = $state<"idle" | "turning-on" | "on" | "denied">("idle");
+  let reminders = $state<"idle" | "turning-on" | "on" | "denied" | "service">("idle");
 
   async function turnOnReminders(): Promise<void> {
     reminders = "turning-on";
     const outcome = await turnOnPush();
-    reminders = outcome === "on" ? "on" : outcome === "denied" ? "denied" : "idle";
+    reminders = outcome === "failed" ? "idle" : outcome;
     if (outcome === "on") dismissPrompt("notifications");
   }
 
@@ -140,6 +140,8 @@
         {/if}
         {#if reminders === "denied"}
           <StatusLine message={m.settings_notifications_error_denied()} isError={true} />
+        {:else if reminders === "service"}
+          <StatusLine message={m.settings_notifications_error_service()} isError={true} />
         {/if}
       {/if}
       <Button

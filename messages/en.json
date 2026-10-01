@@ -433,6 +433,7 @@
   "settings_notifications_button_on": "Turn on",
   "settings_notifications_description": "A reminder when your streak is waiting, and nudges from friends.",
   "settings_notifications_error_denied": "Notifications are blocked for this site in your browser settings.",
+  "settings_notifications_error_service": "This browser's push service is off. In Brave, turn on \"Use Google services for push messaging\" in its privacy settings.",
   "settings_notifications_hint_install": "On iPhone and iPad, install yomukana first.",
   "settings_notifications_label_nudged": "Friends can nudge me",
   "settings_notifications_label_reminder": "Streak reminder",

@@ -433,6 +433,7 @@
   "settings_notifications_button_on": "Einschalten",
   "settings_notifications_description": "Eine Erinnerung, wenn deine Serie wartet, und Stupser von Freunden.",
   "settings_notifications_error_denied": "Benachrichtigungen sind für diese Seite in den Browser-Einstellungen blockiert.",
+  "settings_notifications_error_service": "Der Push-Dienst dieses Browsers ist aus. In Brave schaltest du ihn in den Datenschutz-Einstellungen unter \"Google-Dienste für Push-Nachrichten verwenden\" ein.",
   "settings_notifications_hint_install": "Auf iPhone und iPad zuerst yomukana installieren.",
   "settings_notifications_label_nudged": "Freunde dürfen mich anstupsen",
   "settings_notifications_label_reminder": "Serien-Erinnerung",

@@ -433,6 +433,7 @@
   "settings_notifications_button_on": "オンにする",
   "settings_notifications_description": "連続記録が途切れそうなときのお知らせと、友だちからのひと押し。",
   "settings_notifications_error_denied": "ブラウザの設定でこのサイトの通知がブロックされています。",
+  "settings_notifications_error_service": "このブラウザのプッシュサービスがオフになっています。Braveでは、プライバシー設定の「プッシュメッセージにGoogleのサービスを使用する」をオンにしてください。",
   "settings_notifications_hint_install": "iPhoneとiPadでは、先にyomukanaをインストールしてください。",
   "settings_notifications_label_nudged": "友だちからのひと押しを受け取る",
   "settings_notifications_label_reminder": "連続記録のリマインダー",

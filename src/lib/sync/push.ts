@@ -45,7 +45,11 @@ function keyBytes(key: string): Uint8Array<ArrayBuffer> {
   return bytes;
 }
 
-export type TurnOnOutcome = "on" | "denied" | "failed";
+/**
+ * How turning on went: on; permission refused; the browser's own push service
+ * refused (Brave has it off by default); or the server could not be reached.
+ */
+export type TurnOnOutcome = "on" | "denied" | "service" | "failed";
 
 /**
  * Asks the browser for permission, subscribes this device, and tells the
@@ -61,16 +65,18 @@ export async function turnOnPush(): Promise<TurnOnOutcome> {
   const { publicKey } = (await keyResponse.json()) as { publicKey: string };
 
   const registration = await navigator.serviceWorker.ready;
-  // The push service can refuse, or be unreachable. Nothing on this side can
-  // prevent either, so it is caught and said as a failure.
+  // The browser's push service can refuse, be switched off, or be
+  // unreachable. Nothing on this side can prevent any of them, so it is
+  // caught, logged for whoever is looking, and told to the reader.
   let subscription: PushSubscription;
   try {
     subscription = await registration.pushManager.subscribe({
       userVisibleOnly: true,
       applicationServerKey: keyBytes(publicKey),
     });
-  } catch {
-    return "failed";
+  } catch (error) {
+    console.warn("push subscription refused by the browser", error);
+    return "service";
   }
 
   const saved = await callApi("/push/subscription", {

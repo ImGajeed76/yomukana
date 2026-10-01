@@ -22,7 +22,7 @@
   let isOnHere = $state(false);
   let settings = $state.raw<NotificationSettings | null>(null);
   let pending = $state<"on" | "off" | null>(null);
-  let problem = $state<"denied" | "failed" | null>(null);
+  let problem = $state<"denied" | "service" | "failed" | null>(null);
 
   // Signed in, and on here? Both need the browser, so both are asked here.
   $effect(() => {
@@ -179,6 +179,8 @@
 
     {#if problem === "denied"}
       <StatusLine message={m.settings_notifications_error_denied()} isError={true} />
+    {:else if problem === "service"}
+      <StatusLine message={m.settings_notifications_error_service()} isError={true} />
     {:else if problem === "failed"}
       <StatusLine message={m.settings_profile_badges_error_save()} isError={true} />
     {/if}

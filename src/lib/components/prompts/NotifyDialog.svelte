@@ -23,7 +23,7 @@
 
   let isNever = $state(false);
   let isTurningOn = $state(false);
-  let isDenied = $state(false);
+  let problem = $state<"denied" | "service" | "failed" | null>(null);
 
   function decline(): void {
     if (isNever) dismissPrompt("notifications");
@@ -34,7 +34,7 @@
     isTurningOn = true;
     const outcome = await turnOnPush();
     isTurningOn = false;
-    isDenied = outcome === "denied";
+    problem = outcome === "on" ? null : outcome;
     if (outcome !== "on") return;
     dismissPrompt("notifications");
     open = false;
@@ -75,8 +75,12 @@
       {m.prompt_notify_button()}
     </Button>
 
-    {#if isDenied}
+    {#if problem === "denied"}
       <StatusLine message={m.settings_notifications_error_denied()} isError={true} />
+    {:else if problem === "service"}
+      <StatusLine message={m.settings_notifications_error_service()} isError={true} />
+    {:else if problem === "failed"}
+      <StatusLine message={m.settings_profile_badges_error_save()} isError={true} />
     {/if}
 
     <div class="flex w-full items-center justify-between gap-4">
