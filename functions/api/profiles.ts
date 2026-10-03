@@ -2,7 +2,7 @@
 
 import { Hono } from "hono";
 import { toCodePoints } from "../../src/lib/japanese/text";
-import type { Badge } from "../../src/lib/sync/badge-rules";
+import type { Worn } from "../../src/lib/sync/badge-rules";
 import { DISPLAY_NAME_MAX, isCardColor, type CardColor } from "../../src/lib/sync/profile-rules";
 import { isValidUsername, normaliseUsername, randomUsername } from "../../src/lib/sync/username";
 import { readerOf } from "./auth";
@@ -27,7 +27,7 @@ export interface ProfileRow {
 }
 
 /** A profile as the app sees it, with the badges it wears. */
-export function profileOf(row: ProfileRow, badges: readonly Badge[]): Record<string, unknown> {
+export function profileOf(row: ProfileRow, badges: readonly Worn[]): Record<string, unknown> {
   return {
     username: row.username,
     displayName: row.display_name,

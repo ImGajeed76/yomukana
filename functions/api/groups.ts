@@ -13,6 +13,7 @@ import {
   isBadgeColor,
   isBadgeEmoji,
   type Badge,
+  type Worn,
 } from "../../src/lib/sync/badge-rules";
 import {
   DEFAULT_INVITE_DAYS,
@@ -74,7 +75,7 @@ function badgeOf(group: GroupRow): Badge | null {
 function lineOf(
   row: MemberRow,
   viewer: string | null,
-  badges: ReadonlyMap<string, Badge[]>,
+  badges: ReadonlyMap<string, Worn[]>,
 ): Record<string, unknown> {
   return {
     username: row.username,
