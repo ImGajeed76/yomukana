@@ -264,6 +264,9 @@ export const friends = pgTable(
   },
   (table) => [
     primaryKey({ columns: [table.followerId, table.followeeId] }),
+    // The key leads with the follower. Followers counts, the "follow each
+    // other" check for nudges and deleting a profile look up the other way.
+    index("friends_by_followee").on(table.followeeId),
     check("friends_not_self", sql`${table.followerId} <> ${table.followeeId}`),
     ownRowsOnly(table.followerId),
   ],

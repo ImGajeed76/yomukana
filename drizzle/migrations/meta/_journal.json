@@ -183,6 +183,13 @@
       "when": 1790996784802,
       "tag": "0025_score_refusals",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1790997168130,
+      "tag": "0026_advisor_fixes",
+      "breakpoints": true
     }
   ]
 }
