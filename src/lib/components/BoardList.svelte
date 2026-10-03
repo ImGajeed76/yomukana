@@ -122,7 +122,13 @@
         data-you={entry.isYou || undefined}
         class={["group flex items-center gap-2 rounded-md px-3 py-2", entry.isYou && "bg-muted"]}
       >
-        <span class="w-5 shrink-0 text-sm text-muted-foreground tabular-nums">{entry.rank}</span>
+        <!--
+          No place for nothing read: a row of people at 0 all "sharing 4th"
+          ranks what has not started yet. The column stays, so names line up.
+        -->
+        <span class="w-5 shrink-0 text-sm text-muted-foreground tabular-nums"
+          >{entry.score > 0 ? entry.rank : ""}</span
+        >
         <div class="flex min-w-0 flex-1 flex-col">
           <!--
             The name opens their profile. The row stays a row, so the remove

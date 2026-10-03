@@ -53,6 +53,7 @@
       isClearing = false;
       return;
     }
+    // Signing out also deletes this device's marathon tracks.
     if (account !== null) await signOut(progress);
     await progress.clear();
     account = null;

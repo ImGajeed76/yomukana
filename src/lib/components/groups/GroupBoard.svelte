@@ -17,14 +17,16 @@
     lastShownGroup,
     leaveGroup,
     loadGroup,
+    makeDisplayLink,
     rememberGroup,
     removeMember,
+    stopDisplayLink,
     type Group,
     type GroupProblem,
     type Invite,
   } from "$lib/sync/groups";
   import GroupSettingsDialog from "./GroupSettingsDialog.svelte";
-  import ScreenDialog from "./ScreenDialog.svelte";
+  import ScreenDialog from "$lib/components/ScreenDialog.svelte";
   import InviteDialog from "./InviteDialog.svelte";
   import { groupProblemMessage } from "./problems";
 
@@ -303,9 +305,16 @@
 {#if group !== null && isAdmin}
   <ScreenDialog
     bind:open={isScreenOpen}
-    {groupId}
-    groupName={group.name}
+    name={group.name}
     displayCode={group.displayCode}
+    makeLink={async () => {
+      const result = await makeDisplayLink(groupId);
+      return "problem" in result ? { problem: groupProblemMessage(result.problem) } : result.value;
+    }}
+    stopLink={async () => {
+      const result = await stopDisplayLink(groupId);
+      return "problem" in result ? groupProblemMessage(result.problem) : null;
+    }}
     onChange={(displayCode: string | null) => {
       if (group !== null) group = { ...group, displayCode };
     }}

@@ -50,10 +50,14 @@ function isTimeZone(value: unknown): value is string {
 const TODAY_IN = (zone: string): string =>
   `((now() at time zone ${zone}) - interval '4 hours')::date`;
 
-/** Sentences a reader finished on their reading day today. */
+/** Sentences a reader finished on their reading day today, in marathons too. */
 const READ_TODAY = (user: string, zone: string): string =>
-  `(select count(*) from attempts a where a.user_id = ${user}
-     and ((a.finished_at at time zone ${zone}) - interval '4 hours')::date = ${TODAY_IN(zone)})`;
+  `(select count(*) from (
+       select finished_at from attempts where user_id = ${user}
+       union all
+       select finished_at from marathon_attempts where user_id = ${user}
+     ) a
+     where ((a.finished_at at time zone ${zone}) - interval '4 hours')::date = ${TODAY_IN(zone)})`;
 
 interface SubscriptionRow {
   endpoint: string;

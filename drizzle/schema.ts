@@ -245,6 +245,8 @@ export const scoreRefusals = pgTable(
       .notNull()
       .references(() => profiles.userId, { onDelete: "cascade" }),
     score: doublePrecision("score").notNull(),
+    // The marathon the score was for, or null for the reader's own score.
+    marathonId: uuid("marathon_id").references(() => marathons.marathonId, { onDelete: "cascade" }),
     refusedAt: timestamp("refused_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [index("score_refusals_by_reader").on(table.userId, table.refusedAt)],
@@ -482,3 +484,231 @@ export const nudges = pgTable(
     index("nudges_to").on(table.toUserId, table.day),
   ],
 ).enableRLS();
+
+/**
+ * A marathon: a reading race with a start and an end. Everyone running starts
+ * again from nothing on a track of their own (the marathon_ progress tables
+ * below), and places are decided by the score at the end. Made by any
+ * signed-in reader, who is its admin; joined through an invite, as a runner
+ * or to watch. Rules: src/lib/sync/marathon-rules.ts.
+ *
+ * Like groups, only the API function reads or writes marathons and their
+ * members. Row-level security is on with no policy, so the Data API sees
+ * nothing here. See functions/api/marathons.ts.
+ */
+export const marathons = pgTable(
+  "marathons",
+  {
+    marathonId: uuid("marathon_id").primaryKey().defaultRandom(),
+    name: text("name").notNull(),
+    startsAt: timestamp("starts_at", { withTimezone: true }).notNull(),
+    endsAt: timestamp("ends_at", { withTimezone: true }).notNull(),
+    // Whether people may still start running once it has begun. Anyone may
+    // watch until it is deleted.
+    allowsLateEntry: boolean("allows_late_entry").notNull().default(true),
+    // Minutes after the end before the results are final, while devices that
+    // were offline catch up. One of RESULTS_DELAY_MINUTES.
+    resultsDelayMinutes: smallint("results_delay_minutes").notNull().default(60),
+    // Joins the marathon for as long as it exists. Null when the admin has
+    // turned it off.
+    inviteCode: text("invite_code"),
+    // Shows the board, read-only and without signing in, on a screen.
+    displayCode: text("display_code"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("marathons_invite_code").on(table.inviteCode),
+    uniqueIndex("marathons_display_code").on(table.displayCode),
+    check("marathons_name_length", sql`char_length(${table.name}) between 1 and 40`),
+    check("marathons_ends_after_start", sql`${table.endsAt} > ${table.startsAt}`),
+    check("marathons_results_delay", sql`${table.resultsDelayMinutes} in (0, 15, 60, 360, 1440)`),
+  ],
+).enableRLS();
+
+/**
+ * Who is in a marathon, running or watching. `entered_at` says which: when
+ * they started running, or null for someone who only watches. A watcher may
+ * start running later while the marathon lets them.
+ *
+ * The score is kept here rather than on the profile, because a runner's
+ * marathon score has nothing to do with their own. Two numbers, both worked
+ * out on their device at each sync: the score then, and what it will be at
+ * the end if they read nothing more, which is what places are decided by.
+ * The best accepted score and when are what the next one is judged against,
+ * as for the profile's. See functions/api/score-check.ts.
+ */
+export const marathonMembers = pgTable(
+  "marathon_members",
+  {
+    marathonId: uuid("marathon_id")
+      .notNull()
+      .references(() => marathons.marathonId, { onDelete: "cascade" }),
+    userId: text("user_id")
+      .notNull()
+      .references(() => profiles.userId, { onDelete: "cascade" }),
+    isAdmin: boolean("is_admin").notNull().default(false),
+    joinedAt: timestamp("joined_at", { withTimezone: true }).notNull().defaultNow(),
+    enteredAt: timestamp("entered_at", { withTimezone: true }),
+    score: doublePrecision("score").notNull().default(0),
+    endScore: doublePrecision("end_score").notNull().default(0),
+    scoredAt: timestamp("scored_at", { withTimezone: true }),
+    peakScore: doublePrecision("peak_score").notNull().default(0),
+    peakAt: timestamp("peak_at", { withTimezone: true }),
+  },
+  (table) => [
+    primaryKey({ columns: [table.marathonId, table.userId] }),
+    index("marathon_members_by_reader").on(table.userId),
+    check("marathon_members_end_score", sql`${table.endScore} <= ${table.score}`),
+  ],
+).enableRLS();
+
+/**
+ * Marathon scores the API function accepted, by its own clock, like
+ * score_submissions for the reader's own score. Gone with the membership.
+ */
+export const marathonScoreSubmissions = pgTable(
+  "marathon_score_submissions",
+  {
+    marathonId: uuid("marathon_id").notNull(),
+    userId: text("user_id").notNull(),
+    score: doublePrecision("score").notNull(),
+    acceptedAt: timestamp("accepted_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("marathon_score_submissions_by_runner").on(
+      table.marathonId,
+      table.userId,
+      table.acceptedAt,
+    ),
+    foreignKey({
+      columns: [table.marathonId, table.userId],
+      foreignColumns: [marathonMembers.marathonId, marathonMembers.userId],
+      name: "marathon_score_submissions_member",
+    }).onDelete("cascade"),
+  ],
+).enableRLS();
+
+/**
+ * Row-level rules for a marathon's progress: a reader sees and deletes only
+ * their own rows, and writes them only while they are running in the
+ * marathon, with `at` inside the race when the row has a moment of its own.
+ * `marathon_open_for` is in drizzle/migrations/0027_marathons.sql.
+ */
+function marathonTrackPolicies(
+  userId: Parameters<typeof authUid>[0],
+  marathonId: Parameters<typeof authUid>[0],
+  at: Parameters<typeof authUid>[0] | null,
+) {
+  const isOpen =
+    at === null
+      ? sql`marathon_open_for(${marathonId}, null)`
+      : sql`marathon_open_for(${marathonId}, ${at})`;
+  const isOwn = sql`(select auth.user_id()) = ${userId}`;
+  return [
+    pgPolicy("marathon_track_select", { for: "select", to: authenticatedRole, using: isOwn }),
+    pgPolicy("marathon_track_delete", { for: "delete", to: authenticatedRole, using: isOwn }),
+    pgPolicy("marathon_track_insert", {
+      for: "insert",
+      to: authenticatedRole,
+      withCheck: sql`${isOwn} and ${isOpen}`,
+    }),
+    pgPolicy("marathon_track_update", {
+      for: "update",
+      to: authenticatedRole,
+      using: isOwn,
+      withCheck: sql`${isOwn} and ${isOpen}`,
+    }),
+  ];
+}
+
+/** A runner's item in one marathon, as `items` is for their own reading. */
+export const marathonItems = pgTable(
+  "marathon_items",
+  {
+    userId: owner(),
+    marathonId: uuid("marathon_id").notNull(),
+    itemId: text("item_id").notNull(),
+    state: jsonb("state").notNull(),
+    reviewedAt: timestamp("reviewed_at", { withTimezone: true }).notNull(),
+    updatedAt: changedAt(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.userId, table.marathonId, table.itemId] }),
+    index("marathon_items_changed").on(table.userId, table.marathonId, table.updatedAt),
+    foreignKey({
+      columns: [table.marathonId, table.userId],
+      foreignColumns: [marathonMembers.marathonId, marathonMembers.userId],
+      name: "marathon_items_member",
+    }).onDelete("cascade"),
+    ...marathonTrackPolicies(table.userId, table.marathonId, table.reviewedAt),
+  ],
+);
+
+/** A runner's finished sentence in one marathon, as `attempts` is for their own reading. */
+export const marathonAttempts = pgTable(
+  "marathon_attempts",
+  {
+    userId: owner(),
+    marathonId: uuid("marathon_id").notNull(),
+    attemptId: text("attempt_id").notNull(),
+    record: jsonb("record").notNull(),
+    finishedAt: timestamp("finished_at", { withTimezone: true }).notNull(),
+    updatedAt: changedAt(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.userId, table.marathonId, table.attemptId] }),
+    index("marathon_attempts_changed").on(table.userId, table.marathonId, table.updatedAt),
+    // Seals and reminders count a reader's sentences by day across every track.
+    index("marathon_attempts_by_reader").on(table.userId, table.finishedAt),
+    foreignKey({
+      columns: [table.marathonId, table.userId],
+      foreignColumns: [marathonMembers.marathonId, marathonMembers.userId],
+      name: "marathon_attempts_member",
+    }).onDelete("cascade"),
+    ...marathonTrackPolicies(table.userId, table.marathonId, table.finishedAt),
+  ],
+);
+
+/**
+ * A runner's typing model in one marathon. Copied from their own when they
+ * start running: it is about their hands, not their Japanese, and grading
+ * against a guess for the first sentences would favour fast typists.
+ */
+export const marathonReaders = pgTable(
+  "marathon_readers",
+  {
+    userId: owner(),
+    marathonId: uuid("marathon_id").notNull(),
+    model: jsonb("model").notNull(),
+    updatedAt: changedAt(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.userId, table.marathonId] }),
+    foreignKey({
+      columns: [table.marathonId, table.userId],
+      foreignColumns: [marathonMembers.marathonId, marathonMembers.userId],
+      name: "marathon_readers_member",
+    }).onDelete("cascade"),
+    ...marathonTrackPolicies(table.userId, table.marathonId, null),
+  ],
+);
+
+/** A runner's band and recently read sentences in one marathon. */
+export const marathonSessions = pgTable(
+  "marathon_sessions",
+  {
+    userId: owner(),
+    marathonId: uuid("marathon_id").notNull(),
+    record: jsonb("record").notNull(),
+    updatedAt: changedAt(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.userId, table.marathonId] }),
+    foreignKey({
+      columns: [table.marathonId, table.userId],
+      foreignColumns: [marathonMembers.marathonId, marathonMembers.userId],
+      name: "marathon_sessions_member",
+    }).onDelete("cascade"),
+    ...marathonTrackPolicies(table.userId, table.marathonId, null),
+  ],
+);

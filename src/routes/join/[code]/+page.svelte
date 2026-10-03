@@ -15,11 +15,15 @@
     type InvitePreview,
   } from "$lib/sync/groups";
   import { sync } from "$lib/sync/sync";
+  import MarathonJoin from "$lib/components/marathons/MarathonJoin.svelte";
+  import { previewMarathonInvite, type MarathonInvite } from "$lib/sync/marathons";
 
   const progress = new Progress();
 
   let code = $derived(page.params.code ?? "");
   let preview = $state.raw<InvitePreview | null>(null);
+  /** The marathon the code leads to, when it is a marathon's rather than a group's. */
+  let marathon = $state.raw<MarathonInvite | null>(null);
   /** Why the invite cannot be used, or null while it can. */
   let problem = $state<GroupProblem | null>(null);
   let isSignedIn = $state(false);
@@ -30,9 +34,21 @@
     void (async () => {
       await progress.load();
       isSignedIn = (await progress.syncState()).account !== null;
+      // One kind of link for groups and marathons, so students learn one
+      // thing. A code that is not a group's may be a marathon's.
       const result = await previewInvite(invite, isSignedIn);
-      if ("problem" in result) problem = result.problem;
-      else preview = result.value;
+      if ("value" in result) {
+        preview = result.value;
+        return;
+      }
+      if (result.problem === "not-found") {
+        const found = await previewMarathonInvite(invite, isSignedIn);
+        if ("value" in found) {
+          marathon = found.value;
+          return;
+        }
+      }
+      problem = result.problem;
     })();
   });
 
@@ -56,13 +72,15 @@
 </script>
 
 <!--
-  Where a scanned invite lands. Says what the group is before anyone joins,
+  Where a scanned invite lands, for a group or a marathon. Says what the group is before anyone joins,
   so nobody joins a board by accident, and asks a visitor with no account to
   sign in first.
 -->
 <main class="flex w-full flex-1 flex-col items-center">
   <div class="flex w-full max-w-[448px] flex-col gap-6">
-    {#if problem === "expired" || problem === "not-found"}
+    {#if marathon !== null}
+      <MarathonJoin {progress} {code} invite={marathon} {isSignedIn} />
+    {:else if problem === "expired" || problem === "not-found"}
       <div class="flex flex-col items-center gap-2 py-12 text-center">
         <Clock class="size-6 text-muted-foreground" />
         <h1 class="text-lg leading-snug font-medium">{m.leaderboards_groups_join_gone_title()}</h1>

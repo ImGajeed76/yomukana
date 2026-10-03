@@ -22,7 +22,10 @@
   } from "$lib/japanese/chart";
   import { page } from "$app/state";
   import { Progress, type AttemptRecord } from "$lib/db";
-  import { sync } from "$lib/sync/sync";
+  import { OWN_TRACK, sync, type Track } from "$lib/sync/sync";
+  import TrackTabs from "$lib/components/marathons/TrackTabs.svelte";
+  import { tracks } from "$lib/session/tracks.svelte";
+  import { openTrack } from "$lib/sync/marathons";
   import StreakPanel from "$lib/components/streak/StreakPanel.svelte";
   import { m } from "$lib/paraglide/messages";
   import { streak } from "$lib/stats/streak-state.svelte";
@@ -52,8 +55,6 @@
   // The combinations split the same way: eleven rows and the marks, six and six.
   const COMBINATION_SPLIT = 6;
 
-  const progress = new Progress();
-
   // Raw, not proxied. `$state` deep-proxies every object it is handed and makes
   // a signal for every property read off it. A reader with a few months behind
   // them has thousands of stored objects, every one of which would be wrapped,
@@ -80,31 +81,56 @@
   let isDemo = $derived(import.meta.env.DEV && page.url.searchParams.has("demo"));
   let shownStreak = $derived(isDemo ? demoStreak(new Date()) : streak.value);
 
+  /**
+   * Whose stats are on show: the reader's own, or a marathon they run in.
+   * Its own choice, starting from where the practice page reads: looking at
+   * a marathon's numbers must not move where the next sentence counts.
+   */
+  let viewed = $state<string | null | undefined>(undefined);
+
   $effect(() => {
+    void (async () => {
+      await tracks.load();
+      viewed = tracks.selected;
+      void tracks.refresh();
+    })();
+  });
+
+  $effect(() => {
+    const id = viewed;
+    if (id === undefined) return;
     void (async () => {
       const share = await loadTextShare();
       if (isDemo) {
         const demo = demoProgress(new Date(), share);
         store = demo.store;
         attempts = demo.attempts;
-      } else {
-        store = await progress.load();
-        attempts = await progress.recentAttempts(ATTEMPT_WINDOW);
+        totals = totalsOf(attempts);
+        score = scoreOf(store, new Date(), share);
+        isLoaded = true;
+        return;
       }
 
-      totals = totalsOf(attempts);
-      score = scoreOf(store, new Date(), share);
-      isLoaded = true;
-
-      // Shown first, synced second: the page draws from what this device has,
-      // then redraws if another device added to it.
-      if (isDemo) return;
-      if ((await sync(progress)) === "synced") {
+      const marathon = tracks.running.find((each) => each.id === id);
+      const progress = marathon === undefined ? new Progress() : await openTrack(marathon.id);
+      const track: Track =
+        marathon === undefined
+          ? OWN_TRACK
+          : { kind: "marathon", id: marathon.id, endsAt: marathon.endsAt };
+      const show = async (): Promise<void> => {
+        if (id !== viewed) return;
         store = progress.store;
         attempts = await progress.recentAttempts(ATTEMPT_WINDOW);
         totals = totalsOf(attempts);
         score = scoreOf(store, new Date(), share);
-      }
+        isLoaded = true;
+      };
+
+      // Shown first, synced second: the page draws from what this device has,
+      // then redraws if another device added to it.
+      await progress.load();
+      await show();
+      if ((await sync(progress, track)) === "synced") await show();
     })();
   });
 
@@ -178,6 +204,21 @@
     <h1 class="text-3xl leading-tight font-semibold tracking-tight">{m.stats_page_title()}</h1>
     <p class="text-sm text-muted-foreground">{m.stats_page_description()}</p>
   </div>
+
+  {#if tracks.running.length > 0 && !isDemo}
+    <!--
+      Closer to the cards than the page's sections are to each other: the
+      tabs belong to what is under them. 40px less 24, 16px.
+    -->
+    <TrackTabs
+      class="-mb-6"
+      running={tracks.running}
+      selected={viewed ?? null}
+      onSelect={(id: string | null) => {
+        viewed = id;
+      }}
+    />
+  {/if}
 
   {#if isLoaded && totals.sentences === 0}
     <!--

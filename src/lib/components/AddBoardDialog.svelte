@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { ChevronRight } from "@lucide/svelte";
   import { goto } from "$app/navigation";
   import { Button } from "$lib/components/ui/button";
   import { Spinner } from "$lib/components/ui/spinner";
@@ -8,13 +9,14 @@
   import { m } from "$lib/paraglide/messages";
   import { GROUP_NAME_MAX, JOIN_PATH, inviteCodeIn } from "$lib/sync/group-rules";
   import { createGroup, type GroupProblem } from "$lib/sync/groups";
-  import { groupProblemMessage } from "./problems";
+  import { groupProblemMessage } from "./groups/problems";
+  import CreateMarathonForm from "./marathons/CreateMarathonForm.svelte";
 
   interface Props {
     /** Whether the dialog is showing. */
     open: boolean;
-    /** Called with the new group's id once it exists. */
-    onCreated: (id: string) => void;
+    /** Called with a new group's or marathon's id once it exists. */
+    onCreated: (made: { kind: "group" | "marathon"; id: string }) => void;
   }
 
   // `$bindable()` marks the prop as bindable, it is not a default. The rule
@@ -22,8 +24,11 @@
   // eslint-disable-next-line @typescript-eslint/no-useless-default-assignment
   let { open = $bindable(), onCreated }: Props = $props();
 
-  /** Joining is what most readers come here for, so it is what opens first. */
-  let isCreating = $state(false);
+  /**
+   * Joining is what most readers come here for, so it is what opens first.
+   * Making something new asks what first: a group or a marathon.
+   */
+  let step = $state<"join" | "choose" | "group" | "marathon">("join");
   let code = $state("");
   let isCodeWrong = $state(false);
   let name = $state("");
@@ -32,7 +37,7 @@
 
   $effect(() => {
     if (!open) return;
-    isCreating = false;
+    step = "join";
     code = "";
     isCodeWrong = false;
     name = "";
@@ -60,18 +65,18 @@
       return;
     }
     open = false;
-    onCreated(result.value.id);
+    onCreated({ kind: "group", id: result.value.id });
   }
 </script>
 
 <!--
-  Joining a group by its code, for a reader on a laptop who cannot scan the
-  one on the board, or making a new one. A student joins, a teacher makes one,
-  and there are more students.
+  Joining a group or a marathon by its code, for a reader on a laptop who
+  cannot scan the one on the board, or making a new one. A student joins, a
+  teacher makes one, and there are more students.
 -->
 <Dialog.Root bind:open>
-  <Dialog.Content class="sm:max-w-[448px]">
-    {#if !isCreating}
+  <Dialog.Content class="max-h-svh overflow-y-auto sm:max-w-[448px]">
+    {#if step === "join"}
       <form
         class="flex flex-col gap-5"
         onsubmit={(event) => {
@@ -107,7 +112,7 @@
             variant="ghost"
             class="-ml-3"
             onclick={() => {
-              isCreating = true;
+              step = "choose";
             }}
           >
             {m.leaderboards_groups_join_button_create()}
@@ -117,6 +122,49 @@
           </Button>
         </Dialog.Footer>
       </form>
+    {:else if step === "choose"}
+      <div class="flex flex-col gap-5">
+        <Dialog.Header>
+          <Dialog.Title>{m.leaderboards_create_title()}</Dialog.Title>
+        </Dialog.Header>
+        <div class="-mx-3 flex flex-col gap-1">
+          {#each [{ kind: "group", label: m.leaderboards_create_group_label(), description: m.leaderboards_create_group_description() }, { kind: "marathon", label: m.leaderboards_create_marathon_label(), description: m.leaderboards_create_marathon_description() }] as const as option (option.kind)}
+            <button
+              type="button"
+              class="flex items-center justify-between gap-4 rounded-md px-3 py-3 text-left transition-colors hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+              onclick={() => {
+                step = option.kind;
+              }}
+            >
+              <span class="flex min-w-0 flex-col gap-1">
+                <span class="text-sm font-medium">{option.label}</span>
+                <span class="text-sm text-muted-foreground">{option.description}</span>
+              </span>
+              <ChevronRight class="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+            </button>
+          {/each}
+        </div>
+        <Dialog.Footer>
+          <Button
+            variant="ghost"
+            onclick={() => {
+              step = "join";
+            }}
+          >
+            {m.common_button_back()}
+          </Button>
+        </Dialog.Footer>
+      </div>
+    {:else if step === "marathon"}
+      <CreateMarathonForm
+        onBack={() => {
+          step = "choose";
+        }}
+        onCreated={(id: string) => {
+          open = false;
+          onCreated({ kind: "marathon", id });
+        }}
+      />
     {:else}
       <form
         class="flex flex-col gap-5"
@@ -154,7 +202,7 @@
             variant="ghost"
             disabled={isSaving}
             onclick={() => {
-              isCreating = false;
+              step = "choose";
             }}
           >
             {m.common_button_back()}

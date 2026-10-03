@@ -15,6 +15,8 @@ import { achievements } from "./achievements";
 import { badges } from "./badges";
 import { boards } from "./boards";
 import { groups } from "./groups";
+import { marathonScores } from "./marathon-scores";
+import { marathons } from "./marathons";
 import { notifications } from "./notifications";
 import { profiles } from "./profiles";
 import { scores } from "./scores";
@@ -29,5 +31,7 @@ app.route("/", boards);
 app.route("/", badges);
 app.route("/", achievements);
 app.route("/", notifications);
+app.route("/", marathons);
+app.route("/", marathonScores);
 
 export default app;

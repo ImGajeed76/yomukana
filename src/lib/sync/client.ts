@@ -40,7 +40,7 @@ interface Table<Row, Insert> {
 /**
  * The tables in drizzle/schema.ts, typed for the client.
  *
- * Written out by hand rather than generated, because there are four of them and
+ * Written out by hand rather than generated, because there are few of them and
  * the columns that matter are JSON the app already has types for. Reads come
  * back as `unknown` JSON and go through the same revive step as anything else
  * that crossed a wire.
@@ -58,6 +58,24 @@ interface Database {
       >;
       readers: Table<{ model: unknown }, { model: ReaderModel }>;
       sessions: Table<{ record: SessionRecord }, { record: SessionRecord }>;
+      // A marathon's track: the same four, one set per marathon, written
+      // only while the reader is running in it. See drizzle/schema.ts.
+      marathon_items: Table<
+        { marathon_id: string; item_id: string; state: unknown; reviewed_at: string },
+        { marathon_id: string; item_id: string; state: ItemState; reviewed_at: string }
+      >;
+      marathon_attempts: Table<
+        { marathon_id: string; attempt_id: string; record: AttemptRecord; finished_at: string },
+        { marathon_id: string; attempt_id: string; record: AttemptRecord; finished_at: string }
+      >;
+      marathon_readers: Table<
+        { marathon_id: string; model: unknown },
+        { marathon_id: string; model: ReaderModel }
+      >;
+      marathon_sessions: Table<
+        { marathon_id: string; record: SessionRecord },
+        { marathon_id: string; record: SessionRecord }
+      >;
       // Written only through the API function, which checks names and
       // scores first. The Data API may read, and delete the reader's own.
       profiles: Table<

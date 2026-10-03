@@ -35,7 +35,7 @@ import {
 import { scoreOf } from "../stats/score";
 import { streak } from "../stats/streak-state.svelte";
 import { loadTextShare, type TextShare } from "../stats/text-share";
-import { sync } from "../sync/sync";
+import { OWN_TRACK, sync, type Track } from "../sync/sync";
 import {
   measuredLatency,
   summarise,
@@ -92,7 +92,8 @@ function easeRatio(timed: readonly TimedSegment[], baselineMs: number): number {
 }
 
 export class Practice {
-  readonly #progress = new Progress();
+  readonly #progress: Progress;
+  readonly #track: Track;
   readonly #corpus = new Corpus();
   /** How much of real text each item is, for the score. Null until it has arrived. */
   #textShare: TextShare | null = null;
@@ -149,6 +150,15 @@ export class Practice {
    */
   #band = 0;
   #isCorpusReady = false;
+
+  /**
+   * The reader's own reading, or a marathon's track: a Progress opened on its
+   * database (see openTrack in sync/marathons.ts) and the marathon it is for.
+   */
+  constructor(progress: Progress = new Progress(), track: Track = OWN_TRACK) {
+    this.#progress = progress;
+    this.#track = track;
+  }
 
   /** The sync in flight, so a second one queues behind it rather than racing it. */
   #syncing: Promise<void> = Promise.resolve();
@@ -231,10 +241,20 @@ export class Practice {
    */
   #sync(): void {
     this.#syncing = this.#syncing.then(async () => {
-      if ((await sync(this.#progress)) !== "synced") return;
+      if ((await sync(this.#progress, this.#track)) !== "synced") return;
       // Where the reader is may have moved on another device.
       this.#restore(await this.#progress.session());
     });
+  }
+
+  /** Whether this reads a marathon's track and the marathon has ended. */
+  isOver(): boolean {
+    return this.#track.kind === "marathon" && Date.now() >= this.#track.endsAt;
+  }
+
+  /** Resolves once every sync started so far has finished: the score has gone out. */
+  whenSynced(): Promise<void> {
+    return this.#syncing;
   }
 
   /** Puts the reader back where they left off. */
@@ -345,6 +365,10 @@ export class Practice {
 
     const current = this.current;
     if (current === null) return;
+    // A marathon's sentence finished after its end does not count, and is
+    // not kept: the server turns away anything read after the end, and a
+    // track holding a row it refuses could never sync again.
+    if (this.isOver()) return;
 
     const timed: TimedSegment[] = usableTimings(attempt).map((timing) => ({
       segment: timing.segment,

@@ -5,7 +5,7 @@
 // between sentences, never on the way from a key to the screen: the practice
 // page hands a finished sentence over once it has been saved.
 
-import { Progress } from "../db";
+import { Progress, marathonDatabaseName, marathonDatabases } from "../db";
 import { momentOf, streakOf, type Streak, type StreakMoment } from "./streak";
 
 /** Where this browser remembers the newest freeze save it already told the reader about. */
@@ -24,7 +24,20 @@ class StreakState {
    * It is only the index's keys, a few milliseconds even for years of reading.
    */
   async load(): Promise<void> {
-    this.#times = await new Progress().finishTimes();
+    // Sentences read in a marathon count too: reading is reading.
+    const tracks = [
+      new Progress(),
+      ...(await marathonDatabases()).map((id) => new Progress(marathonDatabaseName(id))),
+    ];
+    const times = await Promise.all(
+      tracks.map(async (track, index) => {
+        const finished = await track.finishTimes();
+        // Marathon tracks are put down again, so none of them is held open.
+        if (index > 0) track.close();
+        return finished;
+      }),
+    );
+    this.#times = times.flat().sort((a, b) => a - b);
     this.refresh();
   }
 

@@ -11,6 +11,15 @@
   import { Button } from "$lib/components/ui/button";
   import { m } from "$lib/paraglide/messages";
   import { Practice } from "$lib/session/practice.svelte";
+  import { tracks } from "$lib/session/tracks.svelte";
+  import TrackTabs from "$lib/components/marathons/TrackTabs.svelte";
+  import { openTrack, type MarathonSummary } from "$lib/sync/marathons";
+  import { Flag, Medal, Trophy } from "@lucide/svelte";
+  import { goto } from "$app/navigation";
+  import MarathonMomentDialog from "$lib/components/marathons/MarathonMomentDialog.svelte";
+  import { formatWhen, placeWord } from "$lib/components/marathons/format";
+  import { marathonStatus, resultsAt } from "$lib/sync/marathon-rules";
+  import { marathonMoments, type PodiumMoment } from "$lib/session/marathon-moments.svelte";
   import type { Attempt } from "$lib/session";
   import { freezeSaveToTell, isBigMoment, type StreakNews } from "$lib/stats/streak";
   import { streak } from "$lib/stats/streak-state.svelte";
@@ -35,7 +44,9 @@
     type PromptKind,
   } from "$lib/prompts";
 
-  const practice = new Practice();
+  // Raw, and replaced whole when the reader switches track: each track has
+  // its own store, its own sentence and its own sync. See CLAUDE.md 1.8.
+  let practice = $state.raw(new Practice());
 
   /** Friends for `?prompt=nudge` in dev: made up, and never really nudged. */
   const DEMO_NUDGEABLE: readonly Nudgeable[] = [
@@ -45,10 +56,43 @@
   ];
 
   // IndexedDB only exists in the browser, so the prerendered page starts from an
-  // empty model and the reader's own history replaces it on hydration.
+  // empty model and the reader's own history replaces it on hydration. Which
+  // track comes first: the one chosen last time, if it is still on.
   $effect(() => {
-    void practice.load();
+    void (async () => {
+      await tracks.load();
+      void tracks.refresh();
+    })();
   });
+
+  /** The track the practice on screen reads, once one has been started. */
+  let shownTrack: string | null | undefined = undefined;
+
+  // Starts reading on whichever track is chosen, and again whenever that
+  // changes: a tab, or a marathon that ended under the reader.
+  $effect(() => {
+    const id = tracks.selected;
+    if (!tracks.isReady || id === shownTrack) return;
+    shownTrack = id;
+    void startTrack(id);
+  });
+
+  /** Reads on a marathon's track, or the reader's own with null. */
+  async function startTrack(id: string | null): Promise<void> {
+    const marathon = tracks.running.find((each) => each.id === id);
+    const next =
+      marathon === undefined
+        ? new Practice()
+        : new Practice(await openTrack(marathon.id), {
+            kind: "marathon",
+            id: marathon.id,
+            endsAt: marathon.endsAt,
+          });
+    // Another switch may have come in while the track opened.
+    if (id !== tracks.selected) return;
+    practice = next;
+    await next.load();
+  }
 
   /** Where the first-visit welcome remembers it was closed. */
   const WELCOMED_KEY = "yomukana:welcomed";
@@ -155,7 +199,7 @@
   let isNextAfterSeal = false;
   $effect(() => {
     if (seals.fresh.length === 0 || practice.summary === null) return;
-    if (isWelcoming || isExplainingScore || isStreakOpen || isSealOpen) return;
+    if (isWelcoming || isExplainingScore || isStreakOpen || isSealOpen || isMomentOpen) return;
     // A nudge is for this moment only; a seal can wait for the next summary.
     if (isNudgeOpen || nudgeFriends.length > 0) return;
     newSeal = seals.takeFresh();
@@ -224,7 +268,7 @@
 
   $effect(() => {
     if (practice.summary === null || hasAsked) return;
-    if (isWelcoming || isExplainingScore || isStreakOpen || isSealOpen) return;
+    if (isWelcoming || isExplainingScore || isStreakOpen || isSealOpen || isMomentOpen) return;
     if (isNudgeOpen || nudgeFriends.length > 0) return;
     const kind = dueAsk();
     if (kind === null) return;
@@ -303,8 +347,118 @@
     isNudgeOpen = true;
   });
 
+  // A marathon's moments: it started, you reached the top three, it is over.
+  // Start and results come when the page opens, after the welcome and the
+  // streak's news; a place in the top three comes over the summary of the
+  // sentence that reached it, and moves on when closed, as the others do.
+  type MarathonMoment =
+    | { readonly kind: "started" | "finished" | "over"; readonly marathon: MarathonSummary }
+    | ({ readonly kind: "podium" } & PodiumMoment);
+  let marathonMoment = $state.raw<MarathonMoment | null>(null);
+  let isMomentOpen = $state(false);
+  let isNextAfterMoment = false;
+
+  // `?prompt=marathon-started`, `-podium`, `-over`, `-over-final` or
+  // `-results` in dev: that marathon popup at once, about a made-up race,
+  // for looking at it. Its buttons lead nowhere real.
+  $effect(() => {
+    if (!import.meta.env.DEV) return;
+    const asked = page.url.searchParams.get("prompt");
+    const now = Date.now();
+    const demo = (endsAt: number, resultsDelay: number): MarathonSummary => ({
+      id: "demo",
+      name: "Spring Marathon",
+      startsAt: endsAt - 30 * 86_400_000,
+      endsAt,
+      allowsLateEntry: true,
+      resultsDelay,
+      isAdmin: false,
+      isRunning: true,
+      runnerCount: 23,
+      place: 3,
+    });
+    if (asked === "marathon-started") {
+      marathonMoment = { kind: "started", marathon: demo(now + 86_400_000, 60) };
+    } else if (asked === "marathon-podium") {
+      marathonMoment = {
+        kind: "podium",
+        place: 2,
+        marathon: "Spring Marathon",
+        passed: ["Kenji", "Mia", "Lukas"],
+      };
+    } else if (asked === "marathon-over") {
+      marathonMoment = { kind: "over", marathon: demo(now - 1000, 60) };
+    } else if (asked === "marathon-over-final") {
+      marathonMoment = { kind: "over", marathon: demo(now - 1000, 0) };
+    } else if (asked === "marathon-results") {
+      marathonMoment = { kind: "finished", marathon: demo(now - 3_600_000, 0) };
+    } else {
+      return;
+    }
+    isMomentOpen = true;
+  });
+
+  $effect(() => {
+    if (!practice.isLoaded || !tracks.isReady || isMomentOpen) return;
+    if (isWelcoming || isExplainingScore || isStreakOpen || isSealOpen || isAskOpen) return;
+    const finished = marathonMoments.finishedToTell(tracks.finished);
+    if (finished !== null) {
+      marathonMoments.rememberFinishTold(finished.id);
+      marathonMoment = { kind: "finished", marathon: finished };
+      isMomentOpen = true;
+      return;
+    }
+    const started = marathonMoments.startedToTell(tracks.running, tracks.selected);
+    if (started !== null) {
+      marathonMoments.rememberStartTold(started.id);
+      marathonMoment = { kind: "started", marathon: started };
+      isMomentOpen = true;
+    }
+  });
+
+  $effect(() => {
+    const podium = marathonMoments.podium;
+    if (podium === null || practice.summary === null || isMomentOpen) return;
+    if (isWelcoming || isExplainingScore || isStreakOpen || isSealOpen || isNudgeOpen) return;
+    marathonMoments.podium = null;
+    marathonMoment = { kind: "podium", ...podium };
+    isMomentOpen = true;
+    isNextAfterMoment = true;
+  });
+  $effect(() => {
+    if (isMomentOpen || !isNextAfterMoment) return;
+    isNextAfterMoment = false;
+    next();
+  });
+
   async function finish(attempt: Attempt, revealed: ReadonlySet<number>): Promise<void> {
     await practice.finish(attempt, revealed);
+    const marathon = tracks.current;
+    // The race ended while this sentence was being read: it does not count
+    // (see Practice.finish), and the reader is told now, while they look up,
+    // rather than finding the tab gone on the next sentence. Closing moves
+    // on, back to their own reading. When the results are final already,
+    // this is the results popup too, so that one is not shown again.
+    if (marathon !== null && practice.isOver()) {
+      if (marathonStatus(marathon, Date.now()) === "finished") {
+        marathonMoments.rememberFinishTold(marathon.id);
+      }
+      marathonMoment = { kind: "over", marathon };
+      isMomentOpen = true;
+      isNextAfterMoment = true;
+      return;
+    }
+    // In a marathon: where the reader stands now, once the score has gone
+    // out. Not awaited, so the summary is there at once and the place joins
+    // it a moment later, in a slot already kept for it.
+    if (marathon !== null) {
+      const reading = practice;
+      void (async () => {
+        await reading.whenSynced();
+        await marathonMoments.afterSentence(marathon);
+        if (marathonMoments.place !== null) tracks.setPlace(marathon.id, marathonMoments.place);
+      })();
+    }
     // The goal just reached: who could do with a nudge. Between sentences,
     // so the short wait for it is never felt while typing.
     if (streak.moment?.isGoalReached === true && isSignedIn === true) {
@@ -320,6 +474,10 @@
   }
 
   function next(): void {
+    // A marathon that ended while the reader was in it loses its tab here,
+    // between sentences, and reading goes back to their own track.
+    tracks.recheck();
+    marathonMoments.clear();
     streak.clearMoment();
     practice.next();
   }
@@ -335,6 +493,7 @@
       isSealOpen ||
       isAskOpen ||
       isNudgeOpen ||
+      isMomentOpen ||
       isFromDialog(event)
     ) {
       return;
@@ -368,6 +527,80 @@
 {#if newSeal !== null && newSealRules !== null}
   <SealDialog bind:open={isSealOpen} seal={newSealRules} earnedAt={newSeal.earnedAt} isNew={true} />
 {/if}
+{#if marathonMoment !== null}
+  {@const shown = marathonMoment}
+  {#if shown.kind === "started"}
+    <MarathonMomentDialog
+      bind:open={isMomentOpen}
+      icon={Flag}
+      title={m.marathon_started_title({ name: shown.marathon.name })}
+      description={m.marathon_started_description()}
+      action={m.marathon_started_button()}
+      secondary={m.marathon_started_later()}
+      onAction={() => {
+        tracks.select(shown.marathon.id);
+      }}
+    />
+  {:else if shown.kind === "finished"}
+    <MarathonMomentDialog
+      bind:open={isMomentOpen}
+      icon={Medal}
+      title={m.marathon_results_title({ name: shown.marathon.name })}
+      description={shown.marathon.place === null
+        ? ""
+        : m.marathon_results_description({
+            place: placeWord(shown.marathon.place),
+            count: String(shown.marathon.runnerCount),
+          })}
+      action={m.marathon_results_button()}
+      onAction={() => {
+        void goto(`/leaderboards?board=marathon:${shown.marathon.id}`);
+      }}
+    />
+  {:else if shown.kind === "over"}
+    {@const place = shown.marathon.place}
+    <MarathonMomentDialog
+      bind:open={isMomentOpen}
+      icon={Medal}
+      title={m.marathon_results_title({ name: shown.marathon.name })}
+      description={place === null
+        ? ""
+        : marathonStatus(shown.marathon, Date.now()) === "finished"
+          ? m.marathon_results_description({
+              place: placeWord(place),
+              count: String(shown.marathon.runnerCount),
+            })
+          : m.marathon_over_description_counting({
+              place: placeWord(place),
+              when: formatWhen(resultsAt(shown.marathon)),
+            })}
+      action={m.marathon_over_button_board()}
+      secondary={m.marathon_over_button_back()}
+      onAction={() => {
+        void goto(`/leaderboards?board=marathon:${shown.marathon.id}`);
+      }}
+    />
+  {:else if shown.kind === "podium"}
+    <MarathonMomentDialog
+      bind:open={isMomentOpen}
+      icon={Trophy}
+      title={shown.place === 1
+        ? m.marathon_podium_title_lead()
+        : m.marathon_podium_title_place({ place: placeWord(shown.place) })}
+      description={shown.passed.length > 1
+        ? m.marathon_podium_description_many({
+            name: shown.passed[0] ?? "",
+            count: String(shown.passed.length - 1),
+            marathon: shown.marathon,
+          })
+        : m.marathon_podium_description_one({
+            name: shown.passed[0] ?? "",
+            marathon: shown.marathon,
+          })}
+      action={m.marathon_podium_button()}
+    />
+  {/if}
+{/if}
 <NudgeDialog bind:open={isNudgeOpen} friends={nudgeShown} isDemo={isNudgeDemo} />
 {#if asking === "sign-up"}
   <SignUpDialog bind:open={isAskOpen} />
@@ -391,30 +624,43 @@
 -->
 <main class="flex w-full flex-1 flex-col md:justify-center">
   <div class="mx-auto flex w-full max-w-[896px] flex-col gap-8">
+    {#if tracks.running.length > 0}
+      <TrackTabs
+        class="-mx-3"
+        running={tracks.running}
+        selected={tracks.selected}
+        onSelect={(id: string | null) => {
+          tracks.select(id);
+        }}
+      />
+    {/if}
     {#if practice.current}
       <!--
         Not rebuilt per sentence. It resets on the round instead, because
         rebuilding it would take the phone keyboard's field with it and close
         the keyboard between every sentence.
       -->
-      <TypingPane
-        segments={practice.current.segments}
-        tokens={practice.current.tokens}
-        round={practice.round}
-        isPaused={isWelcoming ||
-          isExplainingScore ||
-          isStreakOpen ||
-          isSealOpen ||
-          isNudgeOpen ||
-          isAskOpen}
-        onFinished={(attempt: Attempt, revealed: ReadonlySet<number>) => {
-          void finish(attempt, revealed);
-        }}
-        onSkip={() => {
-          practice.skip();
-        }}
-        onNext={next}
-      />
+      {#key practice}
+        <TypingPane
+          segments={practice.current.segments}
+          tokens={practice.current.tokens}
+          round={practice.round}
+          isPaused={isWelcoming ||
+            isExplainingScore ||
+            isStreakOpen ||
+            isSealOpen ||
+            isNudgeOpen ||
+            isAskOpen ||
+            isMomentOpen}
+          onFinished={(attempt: Attempt, revealed: ReadonlySet<number>) => {
+            void finish(attempt, revealed);
+          }}
+          onSkip={() => {
+            practice.skip();
+          }}
+          onNext={next}
+        />
+      {/key}
 
       <!--
         Said once, plainly, where it matters: a reader in a private window should
@@ -489,6 +735,30 @@
                 <dt class="text-xs text-muted-foreground">{m.session_summary_label_errors()}</dt>
                 <dd class="text-2xl font-semibold tabular-nums">{summary?.errors ?? 0}</dd>
               </div>
+              {#if tracks.current !== null}
+                <!--
+                  The place takes its slot at once, blank, so its number
+                  arriving a moment later moves nothing. Whom the sentence
+                  passed replaces the label rather than adding a line.
+                -->
+                <div class="flex max-w-56 flex-col gap-1">
+                  <dt class="truncate text-xs text-muted-foreground">
+                    {#if marathonMoments.passed.length === 1}
+                      {m.marathon_place_passed_one({ name: marathonMoments.passed[0] ?? "" })}
+                    {:else if marathonMoments.passed.length > 1}
+                      {m.marathon_place_passed_many({
+                        name: marathonMoments.passed[0] ?? "",
+                        count: String(marathonMoments.passed.length - 1),
+                      })}
+                    {:else}
+                      {m.marathon_place_label()}
+                    {/if}
+                  </dt>
+                  <dd class="text-2xl font-semibold tabular-nums">
+                    {marathonMoments.place === null ? "\u00a0" : placeWord(marathonMoments.place)}
+                  </dd>
+                </div>
+              {/if}
               {#if streak.value !== null}
                 <StreakToday streak={streak.value} />
               {/if}

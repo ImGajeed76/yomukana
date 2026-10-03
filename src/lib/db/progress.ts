@@ -12,7 +12,9 @@ import {
   type ItemStore,
   type ReaderModel,
 } from "../srs";
+import { deleteDB } from "idb";
 import {
+  DATABASE_NAME,
   READER_KEY,
   SESSION_KEY,
   SYNC_KEY,
@@ -94,6 +96,12 @@ export interface ProgressExport {
 export class Progress {
   #db: ProgressDb | null = null;
   #store: ItemStore = EMPTY_STORE;
+  readonly #name: string;
+
+  /** The reader's own progress, or a marathon's track given its database's name. */
+  constructor(databaseName: string = DATABASE_NAME) {
+    this.#name = databaseName;
+  }
 
   /** Whether writes will survive the tab closing. */
   get isPersistent(): boolean {
@@ -105,7 +113,7 @@ export class Progress {
   }
 
   async load(): Promise<ItemStore> {
-    this.#db = await openProgressDb();
+    this.#db = await openProgressDb(this.#name);
     if (this.#db === null) return this.#store;
 
     const [items, reader] = await Promise.all([
@@ -143,6 +151,51 @@ export class Progress {
     await transaction.done;
   }
 
+  /**
+   * Starts this track's typing model from `reader` if it has none yet. A
+   * marathon starts from the reader's own: how fast their hands are says
+   * nothing about their Japanese, and grading against a guess for the first
+   * sentences would hand fast typists a head start.
+   */
+  async adoptReader(reader: ReaderModel): Promise<void> {
+    this.#db ??= await openProgressDb(this.#name);
+    if (this.#db === null) return;
+    const transaction = this.#db.transaction("reader", "readwrite");
+    if ((await transaction.store.get(READER_KEY)) === undefined) {
+      await transaction.store.put(reader, READER_KEY);
+    }
+    await transaction.done;
+  }
+
+  /** The typing model as stored, without loading every item. */
+  async storedReader(): Promise<ReaderModel> {
+    this.#db ??= await openProgressDb(this.#name);
+    return readerFrom(await this.#db?.get("reader", READER_KEY));
+  }
+
+  /** Lets go of the database, for a track read once and put down, like the streak does. */
+  close(): void {
+    this.#db?.close();
+    this.#db = null;
+  }
+
+  /**
+   * Deletes this database whole. Only for a marathon's track, whose synced
+   * copy stays on the server for as long as the marathon does: when it is
+   * over, or the reader left it or signed out.
+   */
+  async destroy(): Promise<void> {
+    this.#db?.close();
+    this.#db = null;
+    this.#store = EMPTY_STORE;
+    // Refused only when storage is blocked, and then there is nothing to delete.
+    try {
+      await deleteDB(this.#name);
+    } catch (error) {
+      console.warn("could not delete a marathon's track", error);
+    }
+  }
+
   /** Where the reader left off, or nothing if they have not been here before. */
   async session(): Promise<SessionRecord | null> {
     if (this.#db === null) return null;
@@ -177,7 +230,7 @@ export class Progress {
   async finishTimes(): Promise<number[]> {
     // Opens the database itself: the streak is read on every page, including
     // ones that never load the reader's items.
-    this.#db ??= await openProgressDb();
+    this.#db ??= await openProgressDb(this.#name);
     if (this.#db === null) return [];
     const times: number[] = [];
     let cursor = await this.#db.transaction("attempts").store.index("by-finished").openKeyCursor();
@@ -206,7 +259,7 @@ export class Progress {
     // Opens the database itself, as finishTimes does: pages ask who is
     // signed in without loading the reader's items, and a closed database
     // would answer "nobody" for a reader who is.
-    this.#db ??= await openProgressDb();
+    this.#db ??= await openProgressDb(this.#name);
     if (this.#db === null) return NEVER_SYNCED;
     return (await this.#db.get("meta", SYNC_KEY)) ?? NEVER_SYNCED;
   }

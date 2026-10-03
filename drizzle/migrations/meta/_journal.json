@@ -190,6 +190,27 @@
       "when": 1790997168130,
       "tag": "0026_advisor_fixes",
       "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "7",
+      "when": 1790998812220,
+      "tag": "0027_marathons",
+      "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "7",
+      "when": 1790998842794,
+      "tag": "0028_marathon_tracks",
+      "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1791001274358,
+      "tag": "0029_marathon_results_delay",
+      "breakpoints": true
     }
   ]
 }

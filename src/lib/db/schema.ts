@@ -7,6 +7,37 @@ import { openDB, type IDBPDatabase, type DBSchema } from "idb";
 import type { ItemId, ItemState, ReaderModel } from "../srs";
 
 export const DATABASE_NAME = "yomukana";
+
+/**
+ * Each marathon a reader runs in has a database of its own, with the same
+ * stores: a track that starts from nothing, kept apart so nothing read there
+ * changes their own progress, and nothing of theirs leaks into the race.
+ */
+const MARATHON_PREFIX = `${DATABASE_NAME}-marathon-`;
+
+export function marathonDatabaseName(marathonId: string): string {
+  return `${MARATHON_PREFIX}${marathonId}`;
+}
+
+/**
+ * The marathons with a track on this device, by id. Asked of the browser
+ * rather than kept in a list, so a list can never disagree with what is
+ * there. Empty where the browser cannot say, which only means a streak
+ * counts this device's own reading alone.
+ */
+export async function marathonDatabases(): Promise<string[]> {
+  // Firefox before 126 has no databases(), and any browser can refuse
+  // storage outright. Neither is something the reader can fix.
+  try {
+    const databases = await indexedDB.databases();
+    return databases
+      .map((database) => database.name ?? "")
+      .filter((name) => name.startsWith(MARATHON_PREFIX))
+      .map((name) => name.slice(MARATHON_PREFIX.length));
+  } catch {
+    return [];
+  }
+}
 /**
  * Bump this whenever a store or an index is added.
  *
@@ -130,16 +161,24 @@ export type ProgressDb = IDBPDatabase<KakukanaDb>;
 export const READER_KEY = "reader";
 
 /**
- * Opens the database, or returns null when the browser will not give us one.
+ * Opens the reader's database, or a marathon's when named, or returns null
+ * when the browser will not give us one.
  *
  * Private windows, blocked site data and some embedded webviews all refuse
  * IndexedDB, and no amount of care prevents it. The app has to keep working
  * without persistence rather than show the reader an error they cannot act on.
  * This is the exception CLAUDE.md 5.6 allows.
  */
-export async function openProgressDb(): Promise<ProgressDb | null> {
+export async function openProgressDb(name: string = DATABASE_NAME): Promise<ProgressDb | null> {
   try {
-    return await openDB<KakukanaDb>(DATABASE_NAME, DATABASE_VERSION, {
+    return await openDB<KakukanaDb>(name, DATABASE_VERSION, {
+      // A marathon's track is deleted whole when it ends or the reader leaves
+      // it, and an open connection would hold that off until the tab closes.
+      // So a track gives way. The reader's own database never does: nothing
+      // deletes it while the app is open.
+      blocking(_current, _next, event) {
+        if (name !== DATABASE_NAME) (event.target as IDBDatabase).close();
+      },
       upgrade(db, oldVersion) {
         if (oldVersion < 1) {
           db.createObjectStore("items", { keyPath: "id" });

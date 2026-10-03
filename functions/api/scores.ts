@@ -12,7 +12,7 @@ import {
   RELEARN_MAX_PER_HOUR,
   leastTimeTo,
 } from "../../src/lib/sync/score-limits";
-import type { Badge } from "../../src/lib/sync/badge-rules";
+import type { Worn } from "../../src/lib/sync/badge-rules";
 import { readerOf } from "./auth";
 import { badgesFor } from "./badges";
 import { pool } from "./db";
@@ -22,7 +22,7 @@ import { judgeScore, type ScoreLimits } from "./score-check";
 
 const MINUTE = 60_000;
 
-const LIMITS: ScoreLimits = {
+export const LIMITS: ScoreLimits = {
   relearning: [
     { windowMs: 10 * MINUTE, maxGain: RELEARN_MAX_PER_10_MIN },
     { windowMs: 60 * MINUTE, maxGain: RELEARN_MAX_PER_HOUR },
@@ -128,7 +128,7 @@ interface GlobalRow extends ProfileRow {
 function lineOf(
   row: GlobalRow,
   viewer: string | null,
-  badges: ReadonlyMap<string, Badge[]>,
+  badges: ReadonlyMap<string, Worn[]>,
 ): Record<string, unknown> {
   return {
     ...profileOf(row, badges.get(row.user_id) ?? []),

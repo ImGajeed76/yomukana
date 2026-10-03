@@ -3,10 +3,14 @@
   import { Button } from "$lib/components/ui/button";
   import { m } from "$lib/paraglide/messages";
   import type { Standing, Standings } from "$lib/sync/boards";
+  import type { MarathonSummary } from "$lib/sync/marathons";
+  import { shortStatus } from "./marathons/format";
 
   interface Props {
     /** Where the reader stands on each board, or null before it has arrived. */
     standings: Standings | null;
+    /** The marathons they are in, newest first. */
+    marathons: readonly MarathonSummary[];
     /** Their score: the same number on every board, so shown once. */
     score: number;
     /** Whether they are signed in. Following and groups need an account. */
@@ -17,7 +21,7 @@
     onCreate: () => void;
   }
 
-  let { standings, score, isSignedIn, selected, onSelect, onCreate }: Props = $props();
+  let { standings, marathons, score, isSignedIn, selected, onSelect, onCreate }: Props = $props();
 
   function place(standing: Standing | null): string {
     if (standing === null) return "";
@@ -44,6 +48,13 @@
       id: group.id,
       name: group.name,
       place: place(group),
+    })),
+    // A marathon's place moves by the minute and is on its board; here it
+    // says the thing that decides whether to look: when it starts or ends.
+    ...marathons.map((marathon) => ({
+      id: `marathon:${marathon.id}`,
+      name: marathon.name,
+      place: shortStatus(marathon, Date.now()),
     })),
   ]);
 </script>

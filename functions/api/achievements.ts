@@ -28,8 +28,9 @@ interface DayRow {
 
 /**
  * Sentences a day, by the reader's day: in their time zone, turning at 4 am
- * as the streak does. Only sentences a person could have typed: finished no
- * later than now, and no faster than FASTEST_KEY_MS a key.
+ * as the streak does, on their own track and in marathons together. Only
+ * sentences a person could have typed: finished no later than now, and no
+ * faster than FASTEST_KEY_MS a key.
  */
 async function daysOf(userId: string, timeZone: string): Promise<DayRow[]> {
   const result = await pool.query<DayRow>(
@@ -37,9 +38,13 @@ async function daysOf(userId: string, timeZone: string): Promise<DayRow[]> {
        (extract(epoch from ((finished_at at time zone $2) - interval '4 hours')::date) / 86400)::int as day,
        count(*) as sentences,
        count(*) filter (where (record->>'errors')::numeric = 0) as perfect
-     from attempts
-     where user_id = $1
-       and finished_at <= now() + interval '5 minutes'
+     -- Sentences read in marathons count as well: reading is reading.
+     from (
+       select finished_at, record from attempts where user_id = $1
+       union all
+       select finished_at, record from marathon_attempts where user_id = $1
+     ) a
+     where finished_at <= now() + interval '5 minutes'
        and jsonb_typeof(record->'durationMs') = 'number'
        and jsonb_typeof(record->'keyCount') = 'number'
        and jsonb_typeof(record->'errors') = 'number'

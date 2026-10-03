@@ -210,6 +210,9 @@ export async function resetPassword(
 /** Signs this device out. The synced copy stays for the next sign-in. */
 export async function signOut(progress: Progress): Promise<void> {
   await progress.saveSyncState(NEVER_SYNCED);
+  // Marathon tracks belong to the account, and stay on the server with it.
+  // Loaded on demand, like everything else about sync.
+  await (await import("./marathons")).forgetAllTracks();
   const client = await connect();
   // Signing out locally is what matters, and it has already happened. If the
   // server cannot be told, its session cookie simply expires on its own.

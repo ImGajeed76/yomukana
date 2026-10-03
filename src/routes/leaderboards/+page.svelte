@@ -5,7 +5,8 @@
   import BoardOverview from "$lib/components/BoardOverview.svelte";
   import FollowingBoard from "$lib/components/FollowingBoard.svelte";
   import GlobalBoard from "$lib/components/GlobalBoard.svelte";
-  import AddGroupDialog from "$lib/components/groups/AddGroupDialog.svelte";
+  import AddBoardDialog from "$lib/components/AddBoardDialog.svelte";
+  import MarathonBoard from "$lib/components/marathons/MarathonBoard.svelte";
   import ScanDialog from "$lib/components/ScanDialog.svelte";
   import GroupBoard from "$lib/components/groups/GroupBoard.svelte";
   import { Button } from "$lib/components/ui/button";
@@ -19,6 +20,7 @@
     type Standings,
   } from "$lib/sync/boards";
   import { canScan } from "$lib/qr/scanner";
+  import { loadMarathons, type MarathonSummary } from "$lib/sync/marathons";
   import { sync } from "$lib/sync/sync";
 
   const progress = new Progress();
@@ -37,7 +39,18 @@
   /** Where the reader stands on every board, which also lists their groups. */
   let standings = $state.raw<Standings | null>(null);
   let groups = $derived(standings?.groups ?? []);
-  /** The board on show: FOLLOWING, GLOBAL, or a group's id. */
+  // Raw: replaced whole on every load. See CLAUDE.md 1.8.
+  /** The marathons the reader is in, newest first. */
+  let marathons = $state.raw<readonly MarathonSummary[]>([]);
+
+  /** What `board` holds for a marathon: its id after this. */
+  const MARATHON = "marathon:";
+
+  async function refreshMarathons(): Promise<void> {
+    const result = await loadMarathons();
+    if ("value" in result) marathons = result.value;
+  }
+  /** The board on show: FOLLOWING, GLOBAL, a group's id, or MARATHON and a marathon's id. */
   let board = $state(FOLLOWING);
   let isCreating = $state(false);
   /** Whether this is a phone or tablet with a camera, the only kind anyone scans with. */
@@ -87,6 +100,7 @@
       if (account === null) return;
       standings = await lastShownStandings(progress);
       void refreshStandings();
+      void refreshMarathons();
       if ((await sync(progress)) === "synced") {
         score = scoreOf(progress.store, new Date(), share);
         // Asked again once the score just synced is on the server, so the
@@ -133,6 +147,7 @@
       <div class="hidden lg:col-span-2 lg:block">
         <BoardOverview
           {standings}
+          {marathons}
           {score}
           isSignedIn={account !== null}
           selected={board}
@@ -151,7 +166,7 @@
           role="group"
           aria-label={m.leaderboards_groups_label_boards()}
         >
-          {#each [{ id: FOLLOWING, name: m.leaderboards_following_title() }, { id: GLOBAL, name: m.leaderboards_global_title() }, ...groups] as option (option.id)}
+          {#each [{ id: FOLLOWING, name: m.leaderboards_following_title() }, { id: GLOBAL, name: m.leaderboards_global_title() }, ...groups, ...marathons.map( (marathon) => ({ id: `${MARATHON}${marathon.id}`, name: marathon.name }) )] as option (option.id)}
             <Button
               variant="ghost"
               size="sm"
@@ -184,6 +199,16 @@
 
       {#if board === GLOBAL}
         <GlobalBoard {progress} {account} ownScore={score} />
+      {:else if board.startsWith(MARATHON) && account !== null}
+        <MarathonBoard
+          {progress}
+          marathonId={board.slice(MARATHON.length)}
+          isInviting={justCreated === board}
+          onGone={() => {
+            show(FOLLOWING);
+            void refreshMarathons();
+          }}
+        />
       {:else if board === FOLLOWING || account === null}
         <FollowingBoard {account} {progress} {isSynced} ownScore={score} {demo} />
       {:else}
@@ -205,12 +230,14 @@
   </div>
 </main>
 
-<AddGroupDialog
+<AddBoardDialog
   bind:open={isCreating}
-  onCreated={(id: string) => {
+  onCreated={(made: { kind: "group" | "marathon"; id: string }) => {
+    const id = made.kind === "marathon" ? `${MARATHON}${made.id}` : made.id;
     justCreated = id;
     show(id);
-    void refreshStandings();
+    if (made.kind === "marathon") void refreshMarathons();
+    else void refreshStandings();
   }}
 />
 

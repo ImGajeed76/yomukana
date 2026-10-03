@@ -15,6 +15,10 @@
   import { timeAgo } from "$lib/stats";
   import { nameOf, rankBoard, type RankedEntry } from "$lib/sync/board";
   import { loadGlobalDisplayBoard } from "$lib/sync/global";
+  import { countdownFor, statusLine } from "$lib/components/marathons/format";
+  import RaceCountdown from "$lib/components/marathons/RaceCountdown.svelte";
+  import { liveScore, marathonStatus } from "$lib/sync/marathon-rules";
+  import { loadMarathonDisplay, type MarathonDisplay } from "$lib/sync/marathons";
   import {
     boardOf,
     loadDisplayBoard,
@@ -61,8 +65,70 @@
   let gains = $state.raw(new Map<string, number>());
   /** Readers whose score went up in the last refresh, lit up for a moment. */
   let raised = $state.raw(new Set<string>());
-  /** The clock the offline note is worked out from, ticked rather than read on every render. */
+  /**
+   * The clock the offline note and a marathon's countdown are worked out from,
+   * ticked every second rather than read on every render.
+   */
   let now = $state(Date.now());
+
+  /**
+   * A marathon's times, when the screen shows a marathon: its header says
+   * when it ends, and counts down through the last day.
+   */
+  let marathonTimes = $state.raw<MarathonDisplay | null>(null);
+
+  /**
+   * The podium, once a marathon's results are final: the first three places
+   * as medals, which read from across a room where a small "1" does not.
+   */
+  const MEDALS = ["🥇", "🥈", "🥉"];
+  let countdown = $derived(marathonTimes === null ? null : countdownFor(marathonTimes, now));
+  let isFinal = $derived(
+    marathonTimes !== null && marathonStatus(marathonTimes, now) === "finished",
+  );
+
+  /**
+   * What stands left of a name: the place, a medal for the podium once a
+   * marathon is final, or nothing for someone at 0, who has no place yet.
+   */
+  function rankLabel(entry: RankedEntry): string {
+    if (entry.score <= 0) return "";
+    if (isFinal && entry.rank <= MEDALS.length) return MEDALS[entry.rank - 1] ?? "";
+    return String(entry.rank);
+  }
+
+  /**
+   * One kind of screen link for groups and marathons, as for invites. A code
+   * that is not a group's may be a marathon's. A marathon's scores are drawn
+   * as they stand now, falling between syncs (see liveScore), and the next
+   * refresh moves the rows.
+   */
+  async function loadGroupOrMarathon(
+    code: string,
+  ): Promise<{ value: DisplayBoard } | { problem: GroupProblem }> {
+    const group = await loadDisplayBoard(code);
+    if (!("problem" in group) || group.problem !== "not-found") return group;
+    const found = await loadMarathonDisplay(code);
+    if ("problem" in found) return group;
+    const marathon = found.value;
+    marathonTimes = marathon;
+    const at = Date.now();
+    return {
+      value: {
+        name: marathon.name,
+        members: marathon.runners.map((runner) => ({
+          username: runner.username,
+          displayName: runner.displayName,
+          cardColor: runner.cardColor,
+          score: liveScore(runner, marathon.endsAt, at),
+          scoredAt: runner.scoredAt,
+          role: "member",
+          isYou: false,
+          badges: runner.badges,
+        })),
+      },
+    };
+  }
 
   /**
    * How often the screen asks again. Scores arrive with each reader's sync,
@@ -126,7 +192,7 @@
         ? (await import("$lib/sync/display-simulator")).createDisplaySimulator()
         : invite === GLOBAL
           ? () => loadGlobalDisplayBoard(m.leaderboards_global_title())
-          : () => loadDisplayBoard(invite);
+          : () => loadGroupOrMarathon(invite);
       if (stopped.signal.aborted) return;
       void refresh(load);
       timer = setInterval(() => {
@@ -135,7 +201,7 @@
     })();
     const clock = setInterval(() => {
       now = Date.now();
-    }, 15_000);
+    }, 1000);
     return () => {
       stopped.abort();
       clearInterval(timer);
@@ -212,6 +278,12 @@
   <title>{board?.name ?? m.common_app_name()}</title>
 </svelte:head>
 
+{#if countdown !== null}
+  {#key countdown.at}
+    <RaceCountdown at={countdown.at} kind={countdown.kind} />
+  {/key}
+{/if}
+
 <main class={["display flex min-h-0 w-full flex-1 flex-col", !isPointerActive && "cursor-none"]}>
   {#if board === null}
     <!-- The only loading state: the first. After this the board changes in place. -->
@@ -228,7 +300,14 @@
     </div>
   {:else}
     <header class="display-header flex items-end justify-between gap-8">
-      <h1 class="display-title min-w-0 truncate font-semibold tracking-tight">{board.name}</h1>
+      <div class="flex min-w-0 flex-col">
+        <h1 class="display-title min-w-0 truncate font-semibold tracking-tight">{board.name}</h1>
+        {#if marathonTimes !== null}
+          <p class="display-status text-muted-foreground tabular-nums">
+            {statusLine(marathonTimes, now)}
+          </p>
+        {/if}
+      </div>
       <!--
         Nothing here most of the time. A small spinner while it fetches, and
         a note when the connection is gone, because then the board on the
@@ -279,7 +358,7 @@
             ]}
           >
             <span class="display-rank shrink-0 text-muted-foreground tabular-nums"
-              >{entry.rank}</span
+              >{rankLabel(entry)}</span
             >
             <span
               class={[
@@ -368,6 +447,11 @@
   .display-title {
     font-size: calc(var(--line) * 1.6);
     line-height: 1.2;
+  }
+
+  /* A marathon's countdown: what a class watches on its last evening. */
+  .display-status {
+    font-size: calc(var(--line) * 0.8);
   }
 
   .display-meta {

@@ -17,8 +17,9 @@ import { scoreOf } from "../stats/score";
 import { streak } from "../stats/streak-state.svelte";
 import { seals } from "./seals-state.svelte";
 import { loadTextShare } from "../stats/text-share";
-import { connect, type SyncClient } from "./client";
+import { connect } from "./client";
 import { publishScore, publishStreak } from "./friends";
+import { publishMarathonScore } from "./marathons";
 import {
   attemptIdOf,
   lastReviewOf,
@@ -27,6 +28,9 @@ import {
   newerItem,
   reviveItem,
 } from "./merge";
+import { OWN_TRACK, remoteFor, type Result, type Track, type TrackRemote } from "./track-remote";
+
+export { OWN_TRACK, type Track } from "./track-remote";
 
 export type SyncOutcome =
   /** Everything is up to date both ways. */
@@ -58,11 +62,6 @@ const PAGE_SIZE = 500;
  */
 const PULL_OVERLAP_MS = 60_000;
 
-interface Result<T> {
-  readonly data: T | null;
-  readonly error: { readonly message: string } | null;
-}
-
 /** The data from a Data API call, or a thrown error for the outer catch to report. */
 function must<T>(result: Result<T>): T {
   if (result.error !== null) throw new Error(result.error.message);
@@ -84,21 +83,13 @@ function newestOf(
 }
 
 async function pullItems(
-  client: SyncClient,
+  remote: TrackRemote,
   since: string | undefined,
 ): Promise<{ items: ItemState[]; upTo: string | undefined }> {
   const items: ItemState[] = [];
   let upTo = since;
   for (let from = 0; ; from += PAGE_SIZE) {
-    const rows = must(
-      await client
-        .from("items")
-        .select("state, updated_at")
-        .gt("updated_at", overlapped(since))
-        .order("updated_at")
-        .order("item_id")
-        .range(from, from + PAGE_SIZE - 1),
-    );
+    const rows = must(await remote.pullItems(overlapped(since), from, from + PAGE_SIZE - 1));
     for (const row of rows) items.push(reviveItem(row.state));
     upTo = newestOf(rows, upTo);
     if (rows.length < PAGE_SIZE) return { items, upTo };
@@ -106,21 +97,13 @@ async function pullItems(
 }
 
 async function pullAttempts(
-  client: SyncClient,
+  remote: TrackRemote,
   since: string | undefined,
 ): Promise<{ attempts: AttemptRecord[]; upTo: string | undefined }> {
   const attempts: AttemptRecord[] = [];
   let upTo = since;
   for (let from = 0; ; from += PAGE_SIZE) {
-    const rows = must(
-      await client
-        .from("attempts")
-        .select("record, updated_at")
-        .gt("updated_at", overlapped(since))
-        .order("updated_at")
-        .order("attempt_id")
-        .range(from, from + PAGE_SIZE - 1),
-    );
+    const rows = must(await remote.pullAttempts(overlapped(since), from, from + PAGE_SIZE - 1));
     for (const row of rows) attempts.push(row.record);
     upTo = newestOf(rows, upTo);
     if (rows.length < PAGE_SIZE) return { attempts, upTo };
@@ -133,7 +116,7 @@ function* pages<T>(rows: readonly T[]): Generator<T[]> {
     yield rows.slice(from, from + PAGE_SIZE);
 }
 
-async function pushItems(client: SyncClient, progress: Progress, after: number): Promise<void> {
+async function pushItems(remote: TrackRemote, progress: Progress, after: number): Promise<void> {
   const items = await progress.itemsReviewedAfter(after);
   for (const page of pages(items)) {
     const rows = page.map((state) => ({
@@ -141,16 +124,11 @@ async function pushItems(client: SyncClient, progress: Progress, after: number):
       state,
       reviewed_at: new Date(lastReviewOf(state)).toISOString(),
     }));
-    // An older copy is turned away by a trigger rather than by the request, so
-    // a device that was offline for a week cannot undo this week. See
-    // drizzle/migrations/0001_merge_rules.sql.
-    must(
-      await client.from("items").upsert(rows, { onConflict: "user_id,item_id" }).select("item_id"),
-    );
+    must(await remote.pushItems(rows));
   }
 }
 
-async function pushAttempts(client: SyncClient, progress: Progress, after: number): Promise<void> {
+async function pushAttempts(remote: TrackRemote, progress: Progress, after: number): Promise<void> {
   const attempts = await progress.attemptsFinishedAfter(after);
   for (const page of pages(attempts)) {
     const rows = page.map((record) => ({
@@ -158,33 +136,42 @@ async function pushAttempts(client: SyncClient, progress: Progress, after: numbe
       record,
       finished_at: new Date(record.finishedAt).toISOString(),
     }));
-    must(
-      await client
-        .from("attempts")
-        .upsert(rows, { onConflict: "user_id,attempt_id", ignoreDuplicates: true })
-        .select("attempt_id"),
-    );
+    must(await remote.pushAttempts(rows));
   }
 }
 
-async function pushReader(client: SyncClient, progress: Progress): Promise<void> {
-  must(
-    await client
-      .from("readers")
-      .upsert({ model: progress.store.reader }, { onConflict: "user_id" })
-      .select("user_id"),
-  );
-}
-
-async function pushSession(client: SyncClient, progress: Progress): Promise<void> {
+async function pushSession(remote: TrackRemote, progress: Progress): Promise<void> {
   const session = await progress.session();
   if (session === null) return;
-  must(
-    await client
-      .from("sessions")
-      .upsert({ record: session }, { onConflict: "user_id" })
-      .select("user_id"),
-  );
+  must(await remote.pushSession(session));
+}
+
+/**
+ * What goes out besides the rows. For the reader's own track: their streak
+ * and score for friends, and asking for seals. For a marathon: the score now
+ * and the score at its end if nothing more is read, which is what places are
+ * decided by. Past the end both are the score at the end.
+ */
+async function publish(progress: Progress, track: Track): Promise<void> {
+  const share = await loadTextShare();
+  if (track.kind === "marathon") {
+    const at = new Date(Math.min(Date.now(), track.endsAt));
+    await publishMarathonScore(
+      track.id,
+      scoreOf(progress.store, at, share),
+      scoreOf(progress.store, new Date(track.endsAt), share),
+    );
+    // Sentences read in a marathon count towards seals too.
+    void seals.check();
+    return;
+  }
+  await Promise.all([
+    publishStreak(streak.value),
+    publishScore(scoreOf(progress.store, new Date(), share)),
+  ]);
+  // The server works seals out from what was just sent, so it is asked
+  // after the push. Not awaited: a slow answer must not hold up the sync.
+  void seals.check();
 }
 
 /**
@@ -193,7 +180,7 @@ async function pushSession(client: SyncClient, progress: Progress): Promise<void
  * Pull first, then push, so what goes up has already been merged with what came
  * down and the server gets the reader's whole progress rather than one device's.
  */
-export async function sync(progress: Progress): Promise<SyncOutcome> {
+export async function sync(progress: Progress, track: Track = OWN_TRACK): Promise<SyncOutcome> {
   const state = await progress.syncState();
   if (state.account === null) return "off";
 
@@ -204,16 +191,17 @@ export async function sync(progress: Progress): Promise<SyncOutcome> {
     const client = await connect();
     const session = await client.auth.getSession();
     if (session.data?.user == null) return "expired";
+    const remote = remoteFor(client, track);
 
     // Taken before reading anything to push, so a sentence finished while this
     // runs is newer than the mark and goes up next time rather than never.
     const startedAt = Date.now();
 
     const [pulledItems, pulledAttempts, reader, remoteSession] = await Promise.all([
-      pullItems(client, state.pulledUpTo.items),
-      pullAttempts(client, state.pulledUpTo.attempts),
-      client.from("readers").select("model").maybeSingle(),
-      client.from("sessions").select("record").maybeSingle(),
+      pullItems(remote, state.pulledUpTo.items),
+      pullAttempts(remote, state.pulledUpTo.attempts),
+      remote.pullReader(),
+      remote.pullSession(),
     ]);
     const readerRow = reader.error === null ? reader.data : null;
     const sessionRow = remoteSession.error === null ? remoteSession.data : null;
@@ -232,20 +220,15 @@ export async function sync(progress: Progress): Promise<SyncOutcome> {
 
     // All at once: none of them depends on another, and each is a round trip
     // to Frankfurt, so one after the other they added up to seconds. The
-    // score is worked out after the merge, so friends see everything just
+    // score is worked out after the merge, so it counts everything just
     // pulled in too.
     await Promise.all([
-      pushItems(client, progress, state.pushedUpTo),
-      pushAttempts(client, progress, state.pushedUpTo),
-      pushReader(client, progress),
-      pushSession(client, progress),
-      publishStreak(streak.value),
-      loadTextShare().then((share) => publishScore(scoreOf(progress.store, new Date(), share))),
+      pushItems(remote, progress, state.pushedUpTo),
+      pushAttempts(remote, progress, state.pushedUpTo),
+      remote.pushReader(progress.store.reader).then(must),
+      pushSession(remote, progress),
+      publish(progress, track),
     ]);
-
-    // The server works seals out from what was just sent, so it is asked
-    // after the push. Not awaited: a slow answer must not hold up the sync.
-    void seals.check();
 
     // The reader may have signed out or deleted everything while this ran.
     // Writing the old record back would sign them in again.

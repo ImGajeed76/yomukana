@@ -1,3 +1,8 @@
+<script lang="ts" module>
+  /** What was made, or what went wrong, already in the reader's words. */
+  export type ScreenLinkResult = { code: string } | { problem: string };
+</script>
+
 <script lang="ts">
   import { untrack } from "svelte";
   import { Check, Copy, ExternalLink } from "@lucide/svelte";
@@ -6,47 +11,55 @@
   import * as Dialog from "$lib/components/ui/dialog";
   import { Spinner } from "$lib/components/ui/spinner";
   import { m } from "$lib/paraglide/messages";
-  import { makeDisplayLink, stopDisplayLink, type GroupProblem } from "$lib/sync/groups";
-  import { groupProblemMessage } from "./problems";
 
   interface Props {
     /** Whether the dialog is showing. */
     open: boolean;
-    groupId: string;
-    groupName: string;
+    /** The group's or marathon's name. */
+    name: string;
     /** The screen link's code, or null when there is none. */
     displayCode: string | null;
+    /** Makes a new link, replacing any old one. */
+    makeLink: () => Promise<ScreenLinkResult>;
+    /** Turns the link off. What went wrong, or null. */
+    stopLink: () => Promise<string | null>;
     /** Called with the new code, or null once the link is turned off. */
     onChange: (code: string | null) => void;
   }
 
-  // `$bindable()` marks the prop as bindable, it is not a default. The rule
-  // cannot tell a rune from a value.
-  // eslint-disable-next-line @typescript-eslint/no-useless-default-assignment
-  let { open = $bindable(), groupId, groupName, displayCode, onChange }: Props = $props();
+  let {
+    // `$bindable()` marks the prop as bindable, it is not a default. The rule
+    // cannot tell a rune from a value.
+    // eslint-disable-next-line @typescript-eslint/no-useless-default-assignment
+    open = $bindable(),
+    name,
+    displayCode,
+    makeLink,
+    stopLink,
+    onChange,
+  }: Props = $props();
 
   /** The change on its way to the server, if any, so its own place shows the wait. */
   let pending = $state<"make" | "replace" | "off" | null>(null);
   let isBusy = $derived(pending !== null);
-  let problem = $state<GroupProblem | null>(null);
+  let problem = $state<string | null>(null);
   let isCopied = $state(false);
 
   let link = $derived(displayCode === null ? "" : `${location.origin}/display/${displayCode}`);
 
   async function make(kind: "make" | "replace"): Promise<void> {
     pending = kind;
-    const result = await makeDisplayLink(groupId);
+    const result = await makeLink();
     pending = null;
     problem = "problem" in result ? result.problem : null;
-    if ("value" in result) onChange(result.value.code);
+    if ("code" in result) onChange(result.code);
   }
 
   async function turnOff(): Promise<void> {
     pending = "off";
-    const result = await stopDisplayLink(groupId);
+    problem = await stopLink();
     pending = null;
-    problem = "problem" in result ? result.problem : null;
-    if (!("problem" in result)) onChange(null);
+    if (problem === null) onChange(null);
   }
 
   // Opening this is asking for a link, so there is one without a second
@@ -70,14 +83,14 @@
 </script>
 
 <!--
-  For an admin putting the board up in a classroom. The link is opened on
+  For an admin putting a group's or a marathon's board up in a classroom. The link is opened on
   the computer attached to the projector, not on theirs, so copying it comes
   first. What it gives away is said plainly, on its own line.
 -->
 <Dialog.Root bind:open>
   <Dialog.Content class="max-h-svh overflow-y-auto sm:max-w-[448px]">
     <Dialog.Header>
-      <Dialog.Title>{m.leaderboards_groups_screen_title({ name: groupName })}</Dialog.Title>
+      <Dialog.Title>{m.leaderboards_groups_screen_title({ name })}</Dialog.Title>
       <Dialog.Description>
         {displayCode === null && pending === null
           ? m.leaderboards_groups_screen_off()
@@ -128,7 +141,7 @@
     {/if}
 
     {#if problem !== null}
-      <StatusLine message={groupProblemMessage(problem)} isError={true} />
+      <StatusLine message={problem} isError={true} />
     {/if}
 
     {#if displayCode !== null}
