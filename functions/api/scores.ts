@@ -87,7 +87,17 @@ scores.post("/score", async (c) => {
     },
     LIMITS,
   );
-  if (verdict === "implausible") return refuse(c, "implausible");
+  if (verdict === "implausible") {
+    // Kept for a person to look at later. A body with no number in it is a
+    // broken request, not a claim, so there is nothing to keep.
+    if (Number.isFinite(score)) {
+      await pool.query("insert into score_refusals (user_id, score) values ($1, $2)", [
+        userId,
+        score,
+      ]);
+    }
+    return refuse(c, "implausible");
+  }
 
   const updated = await pool.query<ProfileRow>(
     `update profiles set score = $1, scored_at = now(),

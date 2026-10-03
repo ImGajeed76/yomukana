@@ -233,6 +233,23 @@ export const scoreSubmissions = pgTable(
   (table) => [index("score_submissions_by_reader").on(table.userId, table.acceptedAt)],
 ).enableRLS();
 
+/**
+ * Scores the API function turned down, and when, so a person can later see
+ * who sent numbers nobody could have reached. Only logged, never acted on.
+ * Closed to the Data API like the group tables.
+ */
+export const scoreRefusals = pgTable(
+  "score_refusals",
+  {
+    userId: text("user_id")
+      .notNull()
+      .references(() => profiles.userId, { onDelete: "cascade" }),
+    score: doublePrecision("score").notNull(),
+    refusedAt: timestamp("refused_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [index("score_refusals_by_reader").on(table.userId, table.refusedAt)],
+).enableRLS();
+
 export const friends = pgTable(
   "friends",
   {
