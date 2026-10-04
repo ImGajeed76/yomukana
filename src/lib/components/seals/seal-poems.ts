@@ -26,6 +26,15 @@ export const SEAL_POEMS: Readonly<Record<SealKind, SealPoem>> = {
   },
   // Pure snow on the white peak of Fuji: flawless.
   perfect: { text: "田子の浦にうち出でてみれば白妙の富士の高嶺に雪は降りつつ", author: "山部赤人" },
+  // Out in front, where nobody else is walking: from Bashō's last gathering, 1694.
+  wins: { text: "此道や行く人なしに秋の暮", author: "松尾芭蕉" },
+  // Among the best is never luck: a swordsman's saying.
+  podium: {
+    text: "勝ちに不思議の勝ちあり、負けに不思議の負けなし",
+    author: "松浦静山『剣談』",
+  },
+  // Setting out, and glad to be called a traveller: 笈の小文, 1687.
+  finished: { text: "旅人と我名よばれん初しぐれ", author: "松尾芭蕉" },
   // Friends who come from far away.
   invited: { text: "朋有り遠方より来たる、亦楽しからずや", author: "『論語』" },
   // Cherry blossoms, and all they bring to mind.

@@ -5,8 +5,8 @@
 // be pinned in tests.
 //
 // The function works every seal out from what the server holds: synced
-// sentences for the reading ones, group joins and follows for the people ones,
-// the account for the rest. Synced sentences are written by the reader's own
+// sentences for the reading ones, final marathon results for the racing ones,
+// group joins and follows for the people ones, the account for the rest. Synced sentences are written by the reader's own
 // browser, so a reading seal is exactly as trustworthy as the score: fine
 // between friends, which is what the card is for.
 
@@ -33,7 +33,17 @@ export type SealLook =
   | "abyss";
 
 export type SealKind =
-  "streak" | "days" | "sentences" | "perfect" | "invited" | "followers" | "joined" | "years";
+  | "streak"
+  | "days"
+  | "sentences"
+  | "perfect"
+  | "wins"
+  | "podium"
+  | "finished"
+  | "invited"
+  | "followers"
+  | "joined"
+  | "years";
 
 interface SealStep {
   readonly count: number;
@@ -107,6 +117,35 @@ export const SEAL_KINDS: readonly SealKindRule[] = [
       { count: 1000, tier: 3, kanji: "完", look: "azure" },
       { count: 5000, tier: 4, kanji: "匠", look: "violet" },
       { count: 10000, tier: 5, kanji: "璧", look: "jade" },
+    ],
+  },
+  // Marathons. Fewer steps and higher tiers than reading, because a race
+  // happens when someone makes one, not whenever the reader likes: ten wins
+  // is a long time of racing, and first place starts at rare. Finishing stops
+  // at rare: it asks only for showing up, so it never looks like winning.
+  {
+    kind: "wins",
+    steps: [
+      { count: 1, tier: 3, kanji: "勝", look: "gold" },
+      { count: 3, tier: 4, kanji: "覇", look: "gold" },
+      { count: 10, tier: 5, kanji: "王", look: "obsidian" },
+    ],
+  },
+  {
+    kind: "podium",
+    steps: [
+      { count: 1, tier: 2, kanji: "壇", look: "silver" },
+      { count: 3, tier: 3, kanji: "誉", look: "azure" },
+      { count: 10, tier: 4, kanji: "栄", look: "violet" },
+      { count: 25, tier: 5, kanji: "殿", look: "gold" },
+    ],
+  },
+  {
+    kind: "finished",
+    steps: [
+      { count: 1, tier: 1, kanji: "走", look: "jade" },
+      { count: 5, tier: 2, kanji: "駆", look: "tide" },
+      { count: 10, tier: 3, kanji: "遥", look: "azure" },
     ],
   },
   {
@@ -195,6 +234,14 @@ export interface SealFacts {
   readonly sentences: number;
   /** Sentences finished without a single wrong key. */
   readonly perfectSentences: number;
+  /**
+   * Marathons won, and finished in the top three, counting only marathons
+   * with PODIUM_MIN_RUNNERS who really ran. Ties share the place.
+   */
+  readonly marathonWins: number;
+  readonly marathonPodiums: number;
+  /** Marathons with final results in which they read MARATHON_MIN_SENTENCES. */
+  readonly marathonsFinished: number;
   /** People who joined groups they run. */
   readonly invited: number;
   readonly followers: number;
@@ -222,6 +269,9 @@ export function sealsEarned(facts: SealFacts): string[] {
     days: facts.daysRead,
     sentences: facts.sentences,
     perfect: facts.perfectSentences,
+    wins: facts.marathonWins,
+    podium: facts.marathonPodiums,
+    finished: facts.marathonsFinished,
     invited: facts.invited,
     followers: facts.followers,
     joined: 0,

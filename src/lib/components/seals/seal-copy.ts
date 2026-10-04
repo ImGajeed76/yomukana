@@ -39,6 +39,16 @@ const NAMES: Readonly<Record<string, (inputs: { year: string }) => string>> = {
   "perfect-1000": m.seal_name_perfect_1000,
   "perfect-5000": m.seal_name_perfect_5000,
   "perfect-10000": m.seal_name_perfect_10000,
+  "wins-1": m.seal_name_wins_1,
+  "wins-3": m.seal_name_wins_3,
+  "wins-10": m.seal_name_wins_10,
+  "podium-1": m.seal_name_podium_1,
+  "podium-3": m.seal_name_podium_3,
+  "podium-10": m.seal_name_podium_10,
+  "podium-25": m.seal_name_podium_25,
+  "finished-1": m.seal_name_finished_1,
+  "finished-5": m.seal_name_finished_5,
+  "finished-10": m.seal_name_finished_10,
   "invited-1": m.seal_name_invited_1,
   "invited-5": m.seal_name_invited_5,
   "invited-10": m.seal_name_invited_10,
@@ -80,6 +90,12 @@ export function sealMeaning(seal: Seal, earnedAt: number | null): string {
       return m.seal_meaning_sentences({ count });
     case "perfect":
       return m.seal_meaning_perfect({ count });
+    case "wins":
+      return seal.count === 1 ? m.seal_meaning_wins_one() : m.seal_meaning_wins({ count });
+    case "podium":
+      return seal.count === 1 ? m.seal_meaning_podium_one() : m.seal_meaning_podium({ count });
+    case "finished":
+      return seal.count === 1 ? m.seal_meaning_finished_one() : m.seal_meaning_finished({ count });
     case "invited":
       return seal.count === 1 ? m.seal_meaning_invited_one() : m.seal_meaning_invited({ count });
     case "followers":
@@ -133,6 +149,16 @@ const LINES: Readonly<Record<string, (inputs: { month: string }) => string>> = {
   "perfect-1000": m.seal_poem_perfect_1000,
   "perfect-5000": m.seal_poem_perfect_5000,
   "perfect-10000": m.seal_poem_perfect_10000,
+  "wins-1": m.seal_poem_wins_1,
+  "wins-3": m.seal_poem_wins_3,
+  "wins-10": m.seal_poem_wins_10,
+  "podium-1": m.seal_poem_podium_1,
+  "podium-3": m.seal_poem_podium_3,
+  "podium-10": m.seal_poem_podium_10,
+  "podium-25": m.seal_poem_podium_25,
+  "finished-1": m.seal_poem_finished_1,
+  "finished-5": m.seal_poem_finished_5,
+  "finished-10": m.seal_poem_finished_10,
   "invited-1": m.seal_poem_invited_1,
   "invited-5": m.seal_poem_invited_5,
   "invited-10": m.seal_poem_invited_10,
@@ -169,6 +195,9 @@ const MOTTOS: Readonly<Record<SealKind, () => string>> = {
   days: m.seal_motto_days,
   sentences: m.seal_motto_sentences,
   perfect: m.seal_motto_perfect,
+  wins: m.seal_motto_wins,
+  podium: m.seal_motto_podium,
+  finished: m.seal_motto_finished,
   invited: m.seal_motto_invited,
   followers: m.seal_motto_followers,
   years: m.seal_motto_years,
@@ -185,6 +214,9 @@ const CLASSICS: Readonly<Record<SealKind, () => string>> = {
   days: m.seal_classic_days,
   sentences: m.seal_classic_sentences,
   perfect: m.seal_classic_perfect,
+  wins: m.seal_classic_wins,
+  podium: m.seal_classic_podium,
+  finished: m.seal_classic_finished,
   invited: m.seal_classic_invited,
   followers: m.seal_classic_followers,
   years: m.seal_classic_years,
@@ -214,6 +246,9 @@ const KINDS: Readonly<Record<SealKind, () => string>> = {
   days: m.seal_kind_days,
   sentences: m.seal_kind_sentences,
   perfect: m.seal_kind_perfect,
+  wins: m.seal_kind_wins,
+  podium: m.seal_kind_podium,
+  finished: m.seal_kind_finished,
   invited: m.seal_kind_invited,
   followers: m.seal_kind_followers,
   years: m.seal_kind_years,

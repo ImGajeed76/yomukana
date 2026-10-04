@@ -23,8 +23,16 @@ export const MARATHON_MEMBERS_MAX = 1000;
 export const MARATHONS_PER_READER_MAX = 20;
 
 /**
- * Runners a marathon needs for its places to earn seals. Fewer, and two
- * friends could hand each other first place.
+ * Sentences a runner must read in a marathon to have run it, for seals. A
+ * runner who joins, reads three sentences and leaves has not run a race, and
+ * should not be the crowd that makes someone else's first place count.
+ */
+export const MARATHON_MIN_SENTENCES = 15;
+
+/**
+ * Runners who read MARATHON_MIN_SENTENCES that a marathon needs for its
+ * places to earn seals. Fewer, and two friends could hand each other first
+ * place.
  */
 export const PODIUM_MIN_RUNNERS = 5;
 

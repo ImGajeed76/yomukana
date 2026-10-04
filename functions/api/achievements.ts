@@ -3,13 +3,16 @@
 //
 // Reading seals come from the reader's synced sentences, counted by day in
 // Postgres in the reader's own time zone, so a long history is a few hundred
-// rows here rather than every sentence. The people seals come from group
-// joins and follows, the account seals from when the account was made.
+// rows here rather than every sentence. Marathon seals come from final
+// results, so a marathon that ended before these seals existed counts too.
+// The people seals come from group joins and follows, the account seals from
+// when the account was made.
 // Rules: src/lib/sync/seal-rules.ts. Once earned, a seal is kept.
 
 import { Hono } from "hono";
 import { FASTEST_KEY_MS, sealsEarned, type SealFacts } from "../../src/lib/sync/seal-rules";
 import { DAY_GOAL, readingDayIn, streakOfDays } from "../../src/lib/stats/streak";
+import { MARATHON_MIN_SENTENCES, PODIUM_MIN_RUNNERS } from "../../src/lib/sync/marathon-rules";
 import { readerOf } from "./auth";
 import { pool } from "./db";
 import { refuse } from "./problems";
@@ -27,10 +30,23 @@ interface DayRow {
 }
 
 /**
+ * Whether a synced sentence is one a person could have typed: finished no
+ * later than now, and no faster than FASTEST_KEY_MS a key. A condition on a
+ * row's `finished_at` and `record`, with the key time as parameter `param`.
+ */
+function isTypedByAPerson(param: string): string {
+  return `finished_at <= now() + interval '5 minutes'
+    and jsonb_typeof(record->'durationMs') = 'number'
+    and jsonb_typeof(record->'keyCount') = 'number'
+    and jsonb_typeof(record->'errors') = 'number'
+    and (record->>'keyCount')::numeric > 0
+    and (record->>'durationMs')::numeric >= (record->>'keyCount')::numeric * ${param}`;
+}
+
+/**
  * Sentences a day, by the reader's day: in their time zone, turning at 4 am
- * as the streak does, on their own track and in marathons together. Only
- * sentences a person could have typed: finished no later than now, and no
- * faster than FASTEST_KEY_MS a key.
+ * as the streak does, on their own track and in marathons together, only
+ * those a person could have typed.
  */
 async function daysOf(userId: string, timeZone: string): Promise<DayRow[]> {
   const result = await pool.query<DayRow>(
@@ -44,22 +60,64 @@ async function daysOf(userId: string, timeZone: string): Promise<DayRow[]> {
        union all
        select finished_at, record from marathon_attempts where user_id = $1
      ) a
-     where finished_at <= now() + interval '5 minutes'
-       and jsonb_typeof(record->'durationMs') = 'number'
-       and jsonb_typeof(record->'keyCount') = 'number'
-       and jsonb_typeof(record->'errors') = 'number'
-       and (record->>'keyCount')::numeric > 0
-       and (record->>'durationMs')::numeric >= (record->>'keyCount')::numeric * $3
+     where ${isTypedByAPerson("$3")}
      group by 1`,
     [userId, timeZone, FASTEST_KEY_MS],
   );
   return result.rows;
 }
 
+interface MarathonRow {
+  wins: string;
+  podiums: string;
+  finished: string;
+}
+
+/**
+ * The reader's marathons with final results, counted three ways. A runner
+ * counts as having run one once they read MARATHON_MIN_SENTENCES in it that
+ * a person could have typed. Places come from the score at the end, as the
+ * board's do, among everyone who ran, with ties sharing the place; they
+ * earn seals only in a marathon with PODIUM_MIN_RUNNERS who really ran.
+ */
+async function marathonsOf(userId: string): Promise<MarathonRow> {
+  const result = await pool.query<MarathonRow>(
+    `with mine as (
+       select r.marathon_id from marathon_members m
+       join marathons r on r.marathon_id = m.marathon_id
+       where m.user_id = $1 and m.entered_at is not null
+         and now() >= r.ends_at + make_interval(mins => r.results_delay_minutes)
+     ),
+     runners as (
+       select m.marathon_id, m.user_id, m.end_score,
+         (select count(*) from marathon_attempts a
+          where a.marathon_id = m.marathon_id and a.user_id = m.user_id
+            and ${isTypedByAPerson("$2")}) as sentences
+       from marathon_members m join mine on mine.marathon_id = m.marathon_id
+       where m.entered_at is not null
+     ),
+     placed as (
+       select user_id, sentences,
+         rank() over (partition by marathon_id order by round(end_score) desc) as place,
+         count(*) filter (where sentences >= $3) over (partition by marathon_id) as real_runners
+       from runners
+     )
+     select
+       count(*) filter (where place = 1 and real_runners >= $4) as wins,
+       count(*) filter (where place <= 3 and real_runners >= $4) as podiums,
+       count(*) as finished
+     from placed
+     where user_id = $1 and sentences >= $3`,
+    [userId, FASTEST_KEY_MS, MARATHON_MIN_SENTENCES, PODIUM_MIN_RUNNERS],
+  );
+  return result.rows[0] ?? { wins: "0", podiums: "0", finished: "0" };
+}
+
 /** Everything a seal is earned from, for one reader. Null when they have no profile. */
 async function factsOf(userId: string, timeZone: string, now: number): Promise<SealFacts | null> {
-  const [days, invited, followers, account] = await Promise.all([
+  const [days, marathons, invited, followers, account] = await Promise.all([
     daysOf(userId, timeZone),
+    marathonsOf(userId),
     // People in groups the reader runs, other than the reader.
     pool.query<{ count: string }>(
       `select count(distinct m.user_id) from group_members m
@@ -97,6 +155,9 @@ async function factsOf(userId: string, timeZone: string, now: number): Promise<S
     daysRead,
     sentences,
     perfectSentences,
+    marathonWins: Number(marathons.wins),
+    marathonPodiums: Number(marathons.podiums),
+    marathonsFinished: Number(marathons.finished),
     invited: Number(invited.rows[0]?.count ?? 0),
     followers: Number(followers.rows[0]?.count ?? 0),
     joinedAt: joinedAt.getTime(),

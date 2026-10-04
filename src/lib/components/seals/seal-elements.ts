@@ -13,13 +13,16 @@ import type { SealShapeName } from "./seal-shapes";
  * The scene painted inside each kind: fire for a streak, water for days
  * kept, leaves for reading (言の葉, "leaves of words", is the old poetic word
  * for language), ice for flawless, wind for invites, blossom for followers,
- * mountains for years.
+ * mountains for years and for a marathon's places, wind for running one.
  */
 const SCENE_OF: Record<SealKind, SealScene> = {
   streak: "fire",
   days: "water",
   sentences: "leaves",
   perfect: "ice",
+  wins: "earth",
+  podium: "earth",
+  finished: "wind",
   invited: "wind",
   followers: "blossom",
   years: "earth",
