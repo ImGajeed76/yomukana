@@ -14,6 +14,7 @@
   import { Progress } from "$lib/db";
   import { m } from "$lib/paraglide/messages";
   import { streak } from "$lib/stats/streak-state.svelte";
+  import { isKeptByFreeze } from "$lib/stats/streak";
   import { page } from "$app/state";
   import { demoWearables, loadTextShare, scoreOf } from "$lib/stats";
   import {
@@ -167,6 +168,7 @@
       {score}
       badges={profile.badges}
       streak={streak.value?.current ?? 0}
+      isStreakFrozen={streak.value !== null && isKeptByFreeze(streak.value)}
     />
 
     <section class="flex flex-col gap-5 rounded-lg border border-border bg-card p-6">

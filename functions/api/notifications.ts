@@ -29,6 +29,9 @@ const NUDGE_FROM_HOUR = 14;
 /** Friends shown to nudge at once. */
 const NUDGEABLE_MAX = 3;
 
+/** For the follow list: more than anyone follows back, as a bound on one query. */
+const FOLLOW_LIST_MAX = 200;
+
 /** How wide a quarter-hour schedule tick reaches: reminders due in it go out. */
 const TICK_MINUTES = 15;
 
@@ -73,14 +76,16 @@ interface Push {
 }
 
 /**
- * Sends one message to every device a reader said yes on. A device the push
- * service says is gone is forgotten, so it is not tried again.
+ * Sends one message to every device a reader said yes on, and says how many
+ * push services took it. A device the push service says is gone is
+ * forgotten, so it is not tried again.
  */
-async function pushTo(userId: string, push: Push): Promise<void> {
+async function pushTo(userId: string, push: Push): Promise<number> {
   const subscriptions = await pool.query<SubscriptionRow>(
     "select endpoint, p256dh, auth from push_subscriptions where user_id = $1",
     [userId],
   );
+  let delivered = 0;
   await Promise.all(
     subscriptions.rows.map(async (row) => {
       const sent = await webpush
@@ -92,13 +97,16 @@ async function pushTo(userId: string, push: Push): Promise<void> {
         .catch((error: unknown) => error);
       const status =
         typeof sent === "object" && sent !== null && "statusCode" in sent ? sent.statusCode : null;
-      if (status === 404 || status === 410) {
+      if (sent === null) {
+        delivered += 1;
+      } else if (status === 404 || status === 410) {
         await pool.query("delete from push_subscriptions where endpoint = $1", [row.endpoint]);
-      } else if (sent !== null) {
+      } else {
         console.error("push failed", status);
       }
     }),
   );
+  return delivered;
 }
 
 async function bodyOf(c: Context): Promise<Record<string, unknown>> {
@@ -110,6 +118,28 @@ export const notifications = new Hono();
 
 /** The public half of the key pushes are signed with, which a browser needs to subscribe. */
 notifications.get("/push/key", (c) => c.json({ publicKey: PUBLIC_KEY }));
+
+/**
+ * A test push to the caller's own devices, from the settings, so a reader
+ * can see that pushes reach them. Says how many push services took it: none
+ * means the problem is between the server and the push service, one or more
+ * with nothing on screen means it is on the device. Only ever to the caller.
+ */
+notifications.post("/push/test", async (c) => {
+  const userId = await readerOf(c.req.raw);
+  if (userId === null) return refuse(c, "unauthorized");
+  const locale = await pool.query<{ locale: Locale }>(
+    "select locale from notification_settings where user_id = $1",
+    [userId],
+  );
+  const inLocale = { locale: locale.rows[0]?.locale ?? "en" };
+  const delivered = await pushTo(userId, {
+    title: m.push_test_title({}, inLocale),
+    body: m.push_test_body({}, inLocale),
+    tag: "test",
+  });
+  return c.json({ delivered });
+});
 
 /**
  * This device says yes: where to reach it, and the reader's time zone and
@@ -241,7 +271,11 @@ interface NudgeableRow {
  * a streak running, today not done, their afternoon, nudges allowed, a
  * device to reach, and not nudged by the caller today already.
  */
-async function nudgeable(callerId: string, username: string | null): Promise<NudgeableRow[]> {
+async function nudgeable(
+  callerId: string,
+  username: string | null,
+  limit: number = NUDGEABLE_MAX,
+): Promise<NudgeableRow[]> {
   const result = await pool.query<NudgeableRow>(
     `select p.user_id, p.username, p.display_name, p.card_color, p.streak_days, s.locale
      from friends f
@@ -262,22 +296,29 @@ async function nudgeable(callerId: string, username: string | null): Promise<Nud
        )
      order by p.streak_days desc
      limit $5`,
-    [callerId, username, NUDGE_FROM_HOUR, DAY_GOAL, NUDGEABLE_MAX],
+    [callerId, username, NUDGE_FROM_HOUR, DAY_GOAL, limit],
   );
   return result.rows;
 }
 
-/** Who the caller could nudge now, for the dialog after their own goal. */
+/**
+ * Who the caller could nudge now. For the dialog after their own goal, the
+ * few with the longest streaks, and nobody when they turned suggestions off.
+ * With `?all`, for the follow list, every one of them: a button there is
+ * something the reader goes looking for, not a suggestion put to them.
+ */
 notifications.get("/nudgeable", async (c) => {
   const userId = await readerOf(c.req.raw);
   if (userId === null) return refuse(c, "unauthorized");
-  // A reader who turned suggestions off is shown nobody.
-  const own = await pool.query<{ shows_nudges: boolean }>(
-    "select shows_nudges from notification_settings where user_id = $1",
-    [userId],
-  );
-  if (own.rows[0]?.shows_nudges === false) return c.json([]);
-  const rows = await nudgeable(userId, null);
+  const isAll = c.req.query("all") !== undefined;
+  if (!isAll) {
+    const own = await pool.query<{ shows_nudges: boolean }>(
+      "select shows_nudges from notification_settings where user_id = $1",
+      [userId],
+    );
+    if (own.rows[0]?.shows_nudges === false) return c.json([]);
+  }
+  const rows = await nudgeable(userId, null, isAll ? FOLLOW_LIST_MAX : NUDGEABLE_MAX);
   return c.json(
     rows.map((row) => ({
       username: row.username,

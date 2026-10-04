@@ -167,6 +167,10 @@ export const profiles = pgTable(
     // that has broken since, however long ago the reader last synced.
     streakDays: integer("streak_days").notNull().default(0),
     streakAliveUntil: timestamp("streak_alive_until", { withTimezone: true }),
+    // When the last reading day on which the reader met the goal began. Once
+    // a whole day has gone by since without it, the streak is only alive on a
+    // freeze, and the card says so, without the reader syncing again.
+    streakLastGoalAt: timestamp("streak_last_goal_at", { withTimezone: true }),
     updatedAt: changedAt(),
   },
   (table) => [

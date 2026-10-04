@@ -13,6 +13,7 @@
     isPushSupported,
     loadNotificationSettings,
     saveNotificationSettings,
+    sendTestPush,
     turnOffPush,
     turnOnPush,
     type NotificationSettings,
@@ -21,8 +22,10 @@
   let isSignedIn = $state<boolean | null>(null);
   let isOnHere = $state(false);
   let settings = $state.raw<NotificationSettings | null>(null);
-  let pending = $state<"on" | "off" | null>(null);
+  let pending = $state<"on" | "off" | "test" | null>(null);
   let problem = $state<"denied" | "service" | "failed" | null>(null);
+  /** How the last test went: taken by the push service, or not. */
+  let test = $state<"sent" | "refused" | null>(null);
 
   // Signed in, and on here? Both need the browser, so both are asked here.
   $effect(() => {
@@ -46,6 +49,19 @@
     if (outcome !== "on") return;
     isOnHere = true;
     settings = await loadNotificationSettings();
+  }
+
+  /**
+   * A push to this reader's own devices, to see that one arrives. The server
+   * says whether the push service took it, which tells "it never left" apart
+   * from "it left and the device did not show it".
+   */
+  async function sendTest(): Promise<void> {
+    pending = "test";
+    const delivered = await sendTestPush();
+    pending = null;
+    problem = delivered === null ? "failed" : null;
+    test = delivered === null ? null : delivered > 0 ? "sent" : "refused";
   }
 
   async function turnOff(): Promise<void> {
@@ -161,11 +177,24 @@
           />
         </div>
       </div>
-      <div class="border-t border-border pt-4">
+      <!-- The two things done with this device's pushes, quietly, under the settings. -->
+      <div class="-ml-3 flex flex-wrap gap-1 border-t border-border pt-4">
         <Button
           variant="ghost"
           size="sm"
-          class="-ml-3 text-muted-foreground"
+          class="text-muted-foreground"
+          disabled={pending !== null}
+          onclick={() => {
+            void sendTest();
+          }}
+        >
+          {#if pending === "test"}<Spinner aria-label={m.common_status_loading()} />{/if}
+          {m.settings_notifications_button_test()}
+        </Button>
+        <Button
+          variant="ghost"
+          size="sm"
+          class="text-muted-foreground"
           disabled={pending !== null}
           onclick={() => {
             void turnOff();
@@ -175,6 +204,11 @@
           {m.settings_notifications_button_off()}
         </Button>
       </div>
+      {#if test === "sent"}
+        <StatusLine message={m.settings_notifications_status_test()} isError={false} />
+      {:else if test === "refused"}
+        <StatusLine message={m.settings_notifications_status_test_failed()} isError={true} />
+      {/if}
     {/if}
 
     {#if problem === "denied"}

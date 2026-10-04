@@ -1,5 +1,6 @@
 <script lang="ts">
   import { X } from "@lucide/svelte";
+  import type { Snippet } from "svelte";
   import WornBadge from "$lib/components/badges/WornBadge.svelte";
   import { Button } from "$lib/components/ui/button";
   import { ScrollArea } from "$lib/components/ui/scroll-area";
@@ -14,9 +15,11 @@
     onRemove?: (entry: RankedEntry) => void;
     /** What the remove button says to a screen reader. */
     removeLabel?: (entry: RankedEntry) => string;
+    /** Something to do with one line, after the score: a nudge on the follow list. */
+    action?: Snippet<[RankedEntry]>;
   }
 
-  let { ranked, describe, onRemove, removeLabel = nameOf }: Props = $props();
+  let { ranked, describe, onRemove, removeLabel = nameOf, action }: Props = $props();
 
   /** The scroll area, and the part of it that scrolls. */
   let listArea = $state<HTMLElement | null>(null);
@@ -158,6 +161,12 @@
         <span class="w-16 shrink-0 text-left text-base font-semibold tabular-nums"
           >{Math.round(entry.score)}</span
         >
+        <!-- A slot of its own on every line, empty or not, so the scores line up. -->
+        {#if action !== undefined}
+          <div class="flex size-8 shrink-0 items-center justify-center">
+            {@render action(entry)}
+          </div>
+        {/if}
         <!--
           Removing is a quiet action, so with a mouse it waits for hover or
           focus. A touch screen has no hover, so there it stays in view. The

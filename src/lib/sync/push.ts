@@ -120,11 +120,28 @@ export async function saveNotificationSettings(
   return (await response.json()) as NotificationSettings;
 }
 
-/** Friends to nudge now, or none when the server could not be reached. */
+/** Friends to suggest nudging after the reader's goal, or none when the server could not be reached. */
 export async function loadNudgeable(): Promise<Nudgeable[]> {
   const response = await callApi("/nudgeable");
   if (response?.ok !== true) return [];
   return (await response.json()) as Nudgeable[];
+}
+
+/** Everyone the reader could nudge right now, for the follow list. */
+export async function loadAllNudgeable(): Promise<Nudgeable[]> {
+  const response = await callApi("/nudgeable?all");
+  if (response?.ok !== true) return [];
+  return (await response.json()) as Nudgeable[];
+}
+
+/**
+ * Sends a test push to the reader's own devices. How many push services took
+ * it, or null when the server could not be reached.
+ */
+export async function sendTestPush(): Promise<number | null> {
+  const response = await callApi("/push/test", { method: "POST" });
+  if (response?.ok !== true) return null;
+  return ((await response.json()) as { delivered: number }).delivered;
 }
 
 /** Nudges one of them. Whether it went. */

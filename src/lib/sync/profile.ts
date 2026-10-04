@@ -23,6 +23,8 @@ export interface Profile {
   readonly badges?: readonly Worn[];
   /** Days in their reading streak, while it is alive. Missing from a profile kept from before streaks. */
   readonly streak?: number;
+  /** Whether that streak is only still running on a freeze. Missing from a profile kept from before. */
+  readonly isStreakFrozen?: boolean;
 }
 
 /** A profile at /@username, and how the visitor stands to it. */

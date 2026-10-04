@@ -6,7 +6,7 @@
 // drizzle/schema.ts and drizzle/migrations/0003_friend_lookup.sql.
 
 import type { Progress } from "../db";
-import type { Streak } from "../stats/streak";
+import { dayStart, type Streak } from "../stats/streak";
 import { isBadgeColor, type Worn } from "./badge-rules";
 import type { BoardEntry } from "./board";
 import { callApi } from "./api";
@@ -52,9 +52,16 @@ export async function publishScore(score: number): Promise<void> {
  */
 export async function publishStreak(streak: Streak | null): Promise<void> {
   if (streak === null) return;
+  // When the last day the goal was met began, so the server can tell on its
+  // own, days later, that the streak is only alive on a freeze.
+  const lastGoal = streak.days.findLast((day) => day.status === "done");
   await callApi("/streak", {
     method: "POST",
-    body: JSON.stringify({ days: streak.current, aliveUntil: streak.aliveUntil }),
+    body: JSON.stringify({
+      days: streak.current,
+      aliveUntil: streak.aliveUntil,
+      ...(lastGoal === undefined ? {} : { lastGoalAt: dayStart(lastGoal.day) }),
+    }),
   });
 }
 

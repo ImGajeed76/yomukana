@@ -211,6 +211,13 @@
       "when": 1791001274358,
       "tag": "0029_marathon_results_delay",
       "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "7",
+      "when": 1791079831053,
+      "tag": "0030_streak_last_goal",
+      "breakpoints": true
     }
   ]
 }

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import IceDrop from "$lib/components/streak/IceDrop.svelte";
   import StreakFlame from "$lib/components/streak/StreakFlame.svelte";
   import type { Snippet } from "svelte";
   import WornBadge from "$lib/components/badges/WornBadge.svelte";
@@ -17,6 +18,12 @@
     badges?: readonly Worn[];
     /** Days in their reading streak. Left off at 0, when there is none to show. */
     streak?: number;
+    /**
+     * Whether the streak is only still running because a freeze covered a
+     * missed day. Drawn as the ice drop, so "a streak, but last active three
+     * days ago" explains itself.
+     */
+    isStreakFrozen?: boolean;
     /** Buttons under the name, like Follow. */
     children?: Snippet;
   }
@@ -28,6 +35,7 @@
     score,
     badges = [],
     streak = 0,
+    isStreakFrozen = false,
     children,
   }: Props = $props();
 
@@ -75,8 +83,17 @@
         {#if streak > 0}
           <div class="flex flex-col items-end">
             <span class="text-xs text-muted-foreground">{m.streak_label()}</span>
-            <span class="flex items-center gap-1 text-2xl leading-none font-semibold tabular-nums">
-              <StreakFlame class="size-5" />{streak}
+            <span
+              class="flex items-center gap-1 text-2xl leading-none font-semibold tabular-nums"
+              title={isStreakFrozen ? m.streak_card_frozen() : undefined}
+            >
+              {#if isStreakFrozen}
+                <IceDrop class="size-5" />
+                <span class="sr-only">{m.streak_card_frozen()}</span>
+              {:else}
+                <StreakFlame class="size-5" />
+              {/if}
+              {streak}
             </span>
           </div>
         {/if}

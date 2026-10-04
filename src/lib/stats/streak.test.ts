@@ -1,5 +1,13 @@
 import { describe, expect, test } from "bun:test";
-import { dayStart, freezeSaveToTell, isBigMoment, momentOf, readingDay, streakOf } from "./streak";
+import {
+  dayStart,
+  freezeSaveToTell,
+  isBigMoment,
+  isKeptByFreeze,
+  momentOf,
+  readingDay,
+  streakOf,
+} from "./streak";
 
 const HOUR = 3_600_000;
 /** A day far from any edge of the calendar, to count from. */
@@ -157,6 +165,26 @@ describe("momentOf", () => {
     );
     expect(big?.isFreezeEarned).toBe(true);
     expect(big?.freezes).toBe(1);
+  });
+});
+
+describe("isKeptByFreeze", () => {
+  test("yesterday missed and frozen, today not read yet", () => {
+    expect(isKeptByFreeze(streakOf(read(0, 5), noon(2)))).toBe(true);
+  });
+
+  test("not on the day after a goal, which is today and not over", () => {
+    expect(isKeptByFreeze(streakOf(read(0, 5), noon(1)))).toBe(false);
+  });
+
+  test("not once the reader is back: today done after a frozen day", () => {
+    const back = streakOf([...read(0, 5), ...read(2, 5)], noon(2));
+    expect(back.isTodayDone).toBe(true);
+    expect(isKeptByFreeze(back)).toBe(false);
+  });
+
+  test("not when there is no streak left to keep", () => {
+    expect(isKeptByFreeze(streakOf(read(0, 5), noon(5)))).toBe(false);
   });
 });
 

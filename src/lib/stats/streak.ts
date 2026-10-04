@@ -250,6 +250,18 @@ export function isBigMoment(moment: StreakMoment): boolean {
  * reader has not been told yet: the popup on their first visit after a missed
  * day. `toldUpTo` is the newest such day they were already shown.
  */
+/**
+ * Whether the streak running now is only alive because a freeze covered
+ * yesterday: the last day before today was missed and frozen. The server
+ * says the same of anyone's card from when their last goal day began, see
+ * isStreakFrozen in functions/api/profiles.ts.
+ */
+export function isKeptByFreeze(streak: Streak): boolean {
+  if (streak.current === 0) return false;
+  const lastClosed = streak.days.findLast((day) => day.status !== "today");
+  return lastClosed?.status === "frozen";
+}
+
 export function freezeSaveToTell(streak: Streak, toldUpTo: number | null): number | null {
   if (streak.current === 0) return null;
   for (let index = streak.days.length - 1; index >= 0; index--) {

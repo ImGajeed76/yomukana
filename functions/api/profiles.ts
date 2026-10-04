@@ -24,7 +24,10 @@ export interface ProfileRow {
   scored_at: Date | null;
   streak_days: number;
   streak_alive_until: Date | null;
+  streak_last_goal_at: Date | null;
 }
+
+const DAY_MS = 86_400_000;
 
 /** A profile as the app sees it, with the badges it wears. */
 export function profileOf(row: ProfileRow, badges: readonly Worn[]): Record<string, unknown> {
@@ -37,7 +40,19 @@ export function profileOf(row: ProfileRow, badges: readonly Worn[]): Record<stri
     scoredAt: row.scored_at === null ? null : row.scored_at.getTime(),
     badges,
     streak: streakOf(row),
+    isStreakFrozen: isStreakFrozen(row),
   };
+}
+
+/**
+ * Whether a running streak is only alive on a freeze: a whole reading day
+ * has gone by since the last one on which the reader met the goal. Worked
+ * out here from when that day began, so it turns true on its own the day
+ * after they stop, without their device saying anything.
+ */
+function isStreakFrozen(row: ProfileRow): boolean {
+  if (streakOf(row) === 0 || row.streak_last_goal_at === null) return false;
+  return Date.now() >= row.streak_last_goal_at.getTime() + 2 * DAY_MS;
 }
 
 /**
@@ -193,9 +208,18 @@ profiles.post("/streak", async (c) => {
     return refuse(c, "invalid");
   }
   const until = new Date(Math.min(aliveUntil, Date.now() + STREAK_ALIVE_MAX_MS));
+  // When the last goal day began, if the app sent it; an app from before this
+  // sends none, and its card simply never shows a freeze. Never in the future.
+  const lastGoalAt = fields.lastGoalAt;
+  const lastGoal =
+    typeof lastGoalAt === "number" && Number.isFinite(lastGoalAt)
+      ? new Date(Math.min(lastGoalAt, Date.now()))
+      : null;
   const updated = await pool.query(
-    "update profiles set streak_days = $1, streak_alive_until = $2 where user_id = $3",
-    [days, until, userId],
+    `update profiles set streak_days = $1, streak_alive_until = $2,
+       streak_last_goal_at = coalesce($3, streak_last_goal_at)
+     where user_id = $4`,
+    [days, until, lastGoal, userId],
   );
   return updated.rowCount === 0 ? refuse(c, "not-found") : c.body(null, 204);
 });

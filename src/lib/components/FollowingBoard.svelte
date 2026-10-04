@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { Check, Copy, QrCode as QrCodeIcon } from "@lucide/svelte";
+  import { BellRing, Check, Copy, QrCode as QrCodeIcon } from "@lucide/svelte";
+  import { loadAllNudgeable, nudge } from "$lib/sync/push";
   import QrCode from "$lib/components/profile/QrCode.svelte";
   import * as Dialog from "$lib/components/ui/dialog";
   import BoardList from "$lib/components/BoardList.svelte";
@@ -63,11 +64,30 @@
   };
 
   async function refresh(): Promise<void> {
-    const board = await loadBoard();
+    const [board, canNudge] = await Promise.all([loadBoard(), loadAllNudgeable()]);
+    nudgeable = new Set(canNudge.map((friend) => friend.username));
     hasFailed = board === null;
     if (board === null) return;
     loaded = board;
     await rememberBoard(progress, board);
+  }
+
+  /**
+   * Who on the board could be nudged right now: they follow back, their
+   * streak is at risk today, it is their afternoon, they allow it, and the
+   * reader has not nudged them today. The server decides; see
+   * functions/api/notifications.ts.
+   */
+  let nudgeable = $state.raw<ReadonlySet<string>>(new Set());
+  /** Each nudge on its way or sent, by username. */
+  let nudges = $state.raw<Readonly<Record<string, "sending" | "sent">>>({});
+
+  async function sendNudge(username: string): Promise<void> {
+    nudges = { ...nudges, [username]: "sending" };
+    // A refusal means they read meanwhile or someone was quicker: either way
+    // there is nothing left to do, so it shows as done.
+    await nudge(username);
+    nudges = { ...nudges, [username]: "sent" };
   }
 
   // The board as it was last time, drawn at once, then asked for again. The
@@ -225,7 +245,39 @@
       }}
       removeLabel={(entry: RankedEntry) =>
         m.leaderboards_following_button_remove({ username: nameOf(entry) })}
+      action={nudgeable.size > 0 || Object.keys(nudges).length > 0 ? nudgeAction : undefined}
     />
+
+    <!--
+      A nudge, on the line of a friend whose streak is at risk today and only
+      then: a button on every line would be noise, and one on a line that can
+      never be nudged would be a promise it cannot keep. The bell turns into a
+      check once sent and stays there for the day.
+    -->
+    {#snippet nudgeAction(entry: RankedEntry)}
+      {@const state = nudges[entry.username]}
+      {#if state === "sent"}
+        <Check class="size-4 text-muted-foreground" aria-label={m.nudge_status_sent()} />
+      {:else if nudgeable.has(entry.username)}
+        <Button
+          variant="ghost"
+          size="icon"
+          class="size-8 text-primary"
+          aria-label={m.leaderboards_following_button_nudge({ username: nameOf(entry) })}
+          title={m.leaderboards_following_button_nudge({ username: nameOf(entry) })}
+          disabled={state === "sending"}
+          onclick={() => {
+            void sendNudge(entry.username);
+          }}
+        >
+          {#if state === "sending"}
+            <Spinner aria-label={m.common_status_loading()} />
+          {:else}
+            <BellRing class="size-4" />
+          {/if}
+        </Button>
+      {/if}
+    {/snippet}
 
     {#if standing.kind === "alone"}
       <p class="text-sm text-muted-foreground">{m.leaderboards_following_empty()}</p>

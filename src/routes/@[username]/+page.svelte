@@ -7,6 +7,7 @@
   import { Progress } from "$lib/db";
   import { m } from "$lib/paraglide/messages";
   import { streak } from "$lib/stats/streak-state.svelte";
+  import { isKeptByFreeze } from "$lib/stats/streak";
   import { addFriend, removeFriendByName, type FriendProblem } from "$lib/sync/friends";
   import { viewProfile, viewProfileSignedOut, type ProfileView } from "$lib/sync/profile";
 
@@ -85,6 +86,9 @@
         score={view.score}
         badges={view.badges}
         streak={view.isYou ? (streak.value?.current ?? view.streak ?? 0) : (view.streak ?? 0)}
+        isStreakFrozen={view.isYou && streak.value !== null
+          ? isKeptByFreeze(streak.value)
+          : view.isStreakFrozen === true}
       />
 
       <div class="flex flex-wrap gap-2">

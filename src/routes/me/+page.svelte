@@ -6,6 +6,7 @@
   import { Progress } from "$lib/db";
   import { m } from "$lib/paraglide/messages";
   import { streak } from "$lib/stats/streak-state.svelte";
+  import { isKeptByFreeze } from "$lib/stats/streak";
   import { loadTextShare, scoreOf } from "$lib/stats";
   import { showOwnProfile, type Profile } from "$lib/sync/profile";
 
@@ -74,6 +75,7 @@
         {score}
         badges={profile.badges}
         streak={streak.value?.current ?? 0}
+        isStreakFrozen={streak.value !== null && isKeptByFreeze(streak.value)}
       />
       <QrCode value={link} label={m.settings_profile_label_qr()} class="w-full" />
       <div class="flex flex-wrap gap-2">
