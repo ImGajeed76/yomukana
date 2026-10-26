@@ -8,6 +8,7 @@
   import { Button } from "$lib/components/ui/button";
   import { Spinner } from "$lib/components/ui/spinner";
   import type { Progress } from "$lib/db";
+  import { pollWhileVisible } from "$lib/poll";
   import type { ItemStore } from "$lib/srs";
   import { scoreOf } from "$lib/stats/score";
   import { loadTextShare, type TextShare } from "$lib/stats/text-share";
@@ -91,12 +92,12 @@
       if (isInviting && marathon?.isAdmin === true) isInviteOpen = true;
       if (marathon?.isRunning === true) await readOwnTrack(id, marathon.endsAt);
     })();
-    const timer = setInterval(() => {
-      void refresh(id);
+    // Final results never change, so there is nothing left to ask for.
+    return pollWhileVisible(() => {
+      if (marathon === null || marathonStatus(marathon, Date.now()) !== "finished") {
+        void refresh(id);
+      }
     }, REFRESH_MS);
-    return () => {
-      clearInterval(timer);
-    };
   });
 
   /**

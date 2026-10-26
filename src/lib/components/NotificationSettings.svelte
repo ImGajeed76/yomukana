@@ -89,11 +89,10 @@
       : `${String(Math.floor(settings.reminderMinute / 60)).padStart(2, "0")}:${String(settings.reminderMinute % 60).padStart(2, "0")}`,
   );
 
+  // Whole hours: reminders go out once an hour, see neon.ts.
   function minuteOf(value: string): number | null {
-    const [hours, minutes] = value.split(":").map(Number);
-    if (hours === undefined || minutes === undefined) return null;
-    if (!Number.isInteger(hours) || !Number.isInteger(minutes)) return null;
-    return hours * 60 + minutes;
+    const hours = Number(value.split(":")[0]);
+    return value === "" || !Number.isInteger(hours) ? null : hours * 60;
   }
 </script>
 
@@ -147,12 +146,16 @@
           <Input
             id="notify-time"
             type="time"
+            step={3600}
             class="w-32"
             value={time}
             disabled={!settings.isReminderOn}
             onchange={(event: Event) => {
-              const minute = minuteOf((event.currentTarget as HTMLInputElement).value);
-              if (minute !== null) void change({ reminderMinute: minute });
+              const field = event.currentTarget as HTMLInputElement;
+              const minute = minuteOf(field.value);
+              if (minute === null) return;
+              field.value = `${String(minute / 60).padStart(2, "0")}:00`;
+              void change({ reminderMinute: minute });
             }}
           />
         </div>

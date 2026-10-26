@@ -37,14 +37,16 @@ export default defineConfig({
     },
   },
 
-  // Every quarter of an hour: whoever's reminder time it is, and who has not
-  // read today, gets their reminder. See functions/api/notifications.ts.
+  // Hourly reminders, see functions/api/notifications.ts. Each run wakes
+  // Postgres for five minutes, so not more often. REMINDERS in the env file
+  // turns it off on dev, since triggers cannot differ by branch.
   triggers: {
     reminders: {
       type: "schedule",
       function: "api",
-      cron: "*/15 * * * *",
+      cron: "0 * * * *",
       functionPath: "/cron/reminders",
+      enabled: required("REMINDERS") === "on",
     },
   },
 

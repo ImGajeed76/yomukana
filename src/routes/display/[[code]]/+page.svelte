@@ -12,6 +12,7 @@
   import { Button } from "$lib/components/ui/button";
   import { Spinner } from "$lib/components/ui/spinner";
   import { m } from "$lib/paraglide/messages";
+  import { pollWhileVisible } from "$lib/poll";
   import { timeAgo } from "$lib/stats";
   import { nameOf, rankBoard, type RankedEntry } from "$lib/sync/board";
   import { loadGlobalDisplayBoard } from "$lib/sync/global";
@@ -184,7 +185,7 @@
 
   $effect(() => {
     const invite = code;
-    let timer: ReturnType<typeof setInterval> | undefined;
+    let stopPolling: (() => void) | undefined;
     // Set when the page goes away before the simulator has loaded.
     const stopped = new AbortController();
     void (async () => {
@@ -195,7 +196,7 @@
           : () => loadGroupOrMarathon(invite);
       if (stopped.signal.aborted) return;
       void refresh(load);
-      timer = setInterval(() => {
+      stopPolling = pollWhileVisible(() => {
         void refresh(load);
       }, REFRESH_MS);
     })();
@@ -204,7 +205,7 @@
     }, 1000);
     return () => {
       stopped.abort();
-      clearInterval(timer);
+      stopPolling?.();
       clearInterval(clock);
     };
   });

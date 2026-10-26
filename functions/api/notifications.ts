@@ -32,8 +32,8 @@ const NUDGEABLE_MAX = 3;
 /** For the follow list: more than anyone follows back, as a bound on one query. */
 const FOLLOW_LIST_MAX = 200;
 
-/** How wide a quarter-hour schedule tick reaches: reminders due in it go out. */
-const TICK_MINUTES = 15;
+/** How wide an hourly schedule tick reaches: reminders due in it go out. */
+const TICK_MINUTES = 60;
 
 const PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY ?? "";
 webpush.setVapidDetails("https://yomukana.app", PUBLIC_KEY, process.env.VAPID_PRIVATE_KEY ?? "");
@@ -370,7 +370,7 @@ interface DueRow {
 }
 
 /**
- * The quarter-hour schedule: everyone whose reminder time falls in this tick,
+ * The hourly schedule: everyone whose reminder time falls in this tick,
  * who has not been reminded today and has not met today's goal.
  */
 notifications.post("/cron/reminders", async (c) => {
