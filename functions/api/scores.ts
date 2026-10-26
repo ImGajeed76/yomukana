@@ -7,9 +7,9 @@
 
 import { Hono } from "hono";
 import {
-  RELEARN_MAX_PER_10_MIN,
-  RELEARN_MAX_PER_DAY,
-  RELEARN_MAX_PER_HOUR,
+  RELEARNING_WINDOWS,
+  SHORTEST_STEP_MS,
+  lastTimeAt,
   leastTimeTo,
 } from "../../src/lib/sync/score-limits";
 import type { Worn } from "../../src/lib/sync/badge-rules";
@@ -20,15 +20,11 @@ import { refuse } from "./problems";
 import { profileOf, profileWithBadges, type ProfileRow } from "./profiles";
 import { judgeScore, type ScoreLimits } from "./score-check";
 
-const MINUTE = 60_000;
-
 export const LIMITS: ScoreLimits = {
-  relearning: [
-    { windowMs: 10 * MINUTE, maxGain: RELEARN_MAX_PER_10_MIN },
-    { windowMs: 60 * MINUTE, maxGain: RELEARN_MAX_PER_HOUR },
-    { windowMs: 24 * 60 * MINUTE, maxGain: RELEARN_MAX_PER_DAY },
-  ],
+  relearning: RELEARNING_WINDOWS,
   leastTimeTo,
+  lastTimeAt,
+  shortestStepMs: SHORTEST_STEP_MS,
 };
 
 /**
@@ -64,8 +60,8 @@ scores.post("/score", async (c) => {
       "select peak_score, peak_at from profiles where user_id = $1",
       [userId],
     ),
-    pool.query<{ score: number; accepted_at: Date }>(
-      "select score, accepted_at from score_submissions where user_id = $1 order by accepted_at",
+    pool.query<{ score: number; best: number; accepted_at: Date }>(
+      "select score, best, accepted_at from score_submissions where user_id = $1 order by accepted_at",
       [userId],
     ),
     // The time comes from Postgres, like the timestamps in the log, so the two
@@ -82,8 +78,15 @@ scores.post("/score", async (c) => {
     now,
     {
       createdAt: createdAt.getTime(),
-      peak: best.peak_at === null ? null : { score: best.peak_score, at: best.peak_at.getTime() },
-      recent: accepted.rows.map((row) => ({ score: row.score, at: row.accepted_at.getTime() })),
+      peak:
+        best.peak_at === null
+          ? null
+          : { score: best.peak_score, at: best.peak_at.getTime(), best: best.peak_score },
+      recent: accepted.rows.map((row) => ({
+        score: row.score,
+        at: row.accepted_at.getTime(),
+        best: row.best,
+      })),
     },
     LIMITS,
   );
@@ -108,9 +111,11 @@ scores.post("/score", async (c) => {
   );
   const row = updated.rows[0];
   if (row === undefined) return refuse(c, "not-found");
-  await pool.query("insert into score_submissions (user_id, score) values ($1, $2)", [
+  // With the best as it stands now, this score included, as the update above has it.
+  await pool.query("insert into score_submissions (user_id, score, best) values ($1, $2, $3)", [
     userId,
     score,
+    Math.max(score, best.peak_score),
   ]);
   await pool.query(
     `delete from score_submissions

@@ -34,12 +34,26 @@ export interface ScoreLimits {
   readonly relearning: readonly GainLimit[];
   /** The least time, in milliseconds, the fastest plausible reader needs to reach `score` from nothing. */
   readonly leastTimeTo: (score: number) => number;
+  /**
+   * The latest time the fastest path still stands at `score`, where a step
+   * up from it starts: the end of a break or a night, if it took one there.
+   */
+  readonly lastTimeAt: (score: number) => number;
+  /**
+   * How long ago a score must have been accepted for the step up from it to
+   * be held to the path. Over a few sentences, how fast a score grows
+   * depends on which sentences come up, not on the reader, so shorter steps
+   * are left to the relearning limits.
+   */
+  readonly shortestStepMs: number;
 }
 
 /** A score the server accepted, and when, by its own clock. */
 export interface AcceptedScore {
   readonly score: number;
   readonly at: number;
+  /** The best accepted up to and including this one. */
+  readonly best: number;
 }
 
 /** What the server knows about a reader's scores so far. */
@@ -85,7 +99,7 @@ export function judgeScore(
 ): ScoreVerdict {
   if (!Number.isFinite(score) || score < 0) return "implausible";
 
-  const start: AcceptedScore = { score: 0, at: record.createdAt };
+  const start: AcceptedScore = { score: 0, at: record.createdAt, best: 0 };
   const history = [start, ...record.recent];
   const last = history.at(-1) ?? start;
   if (score <= last.score) return "accept";
@@ -100,12 +114,14 @@ export function judgeScore(
   // A new best: along the fastest path there is, from every point the server
   // knows the reader stood at. The account's start is one, so the whole path
   // has to fit in the account's age. Each accepted score is another, placed
-  // on the path by the best reached so far then, since a score that dipped
-  // after a break still stands for everything learned before it.
+  // on the path by the best reached by then, since a score that dipped
+  // overnight still stands for everything learned before it. One accepted
+  // too recently is skipped: the path says nothing about so short a step.
   const needed = limits.leastTimeTo(score);
   for (const entry of [...history, peak]) {
-    const reached = entry.at >= peak.at ? Math.max(entry.score, peak.score) : entry.score;
-    if (needed - limits.leastTimeTo(reached) > now - entry.at) return "implausible";
+    if (entry !== start && now - entry.at < limits.shortestStepMs) continue;
+    const reached = entry.at >= peak.at ? Math.max(entry.best, peak.score) : entry.best;
+    if (needed - limits.lastTimeAt(reached) > now - entry.at) return "implausible";
   }
   return "accept";
 }

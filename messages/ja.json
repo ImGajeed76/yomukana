@@ -8,7 +8,7 @@
   "account_button_set_password": "新しいパスワードを設定",
   "account_button_sign_in": "ログイン",
   "account_confirm_description": "{email} に届いた6桁のコードを入力してください。",
-  "account_confirm_resend_prompt": "届きませんか？",
+  "account_confirm_resend_prompt": "届きませんか？迷惑メールフォルダも確認してください。",
   "account_confirm_title": "メールを確認してください",
   "account_description_password": "8文字以上。",
   "account_error_code_expired": "コードの有効期限が切れています。",

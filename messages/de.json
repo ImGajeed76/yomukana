@@ -8,7 +8,7 @@
   "account_button_set_password": "Neues Passwort setzen",
   "account_button_sign_in": "Anmelden",
   "account_confirm_description": "Gib den 6-stelligen Code ein, der an {email} ging.",
-  "account_confirm_resend_prompt": "Nichts angekommen?",
+  "account_confirm_resend_prompt": "Nichts angekommen? Schau im Spam-Ordner nach.",
   "account_confirm_title": "Schau in dein Postfach",
   "account_description_password": "Mindestens 8 Zeichen.",
   "account_error_code_expired": "Der Code ist abgelaufen.",

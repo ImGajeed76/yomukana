@@ -53,6 +53,15 @@ import {
 } from "../../src/lib/srs";
 import { scoreOf } from "../../src/lib/stats/score";
 import { countUses, textShareFrom } from "../../src/lib/stats/text-share";
+import {
+  RELEARNING_WINDOWS,
+  SHORTEST_STEP_MS,
+  lastTimeAt,
+  lastTimeOn,
+  leastTimeOn,
+  leastTimeTo,
+} from "../../src/lib/sync/score-limits";
+import { judgeScore, type AcceptedScore, type ScoreLimits } from "../../functions/api/score-check";
 
 // The reader.
 
@@ -137,6 +146,118 @@ function typeSentence(segments: readonly Segment[], startAt: number): Attempt {
   return attempt;
 }
 
+/**
+ * How far the path may lag behind this reader, as a share of the time it
+ * took and at most PATH_ERROR_MINUTES: a path drawn exactly under every high
+ * needs hundreds of points. Out of TIME_MARGIN in
+ * src/lib/sync/score-limits.ts, so a real reader still has 1.5 / 1.1, about
+ * a third, of room.
+ */
+const PATH_SLACK = 1.1;
+
+/**
+ * How far the path may lag behind or run ahead of this reader, in minutes. A
+ * step up is judged by the path's time between two scores, so an error at
+ * either end makes the step look slower than it was. Both ends together
+ * stay well inside the margin on SHORTEST_STEP_MS.
+ */
+const PATH_ERROR_MINUTES = 5;
+
+/**
+ * How long the score has to stand still to be kept as a stretch of the path:
+ * the breaks between sittings and the nights, not the moment between two
+ * sentences.
+ */
+const STILL_MINUTES = 5;
+
+/**
+ * The fastest path in as few points as it takes, close to the reader. The
+ * check draws straight lines between the points, and a score jumps once a
+ * sentence rather than growing smoothly, so a line between hand-picked
+ * points cuts under some of the jumps: it says a score needs longer than
+ * this reader took, and refuses it. So this starts from every new high and
+ * joins neighbours only where the line between them stays within
+ * PATH_SLACK and PATH_ERROR_MINUTES of every high in between.
+ * Minutes are rounded down, which only makes it faster.
+ */
+function pathNear(syncs: readonly Sample[], startedAt: number): [number, number][] {
+  const minutesOf = (at: number): number => (at - startedAt) / 60_000;
+  const highs: [number, number][] = [[0, 0]];
+  for (const sync of syncs) {
+    const [highMinutes, highScore] = highs.at(-1) ?? [0, 0];
+    if (sync.score <= highScore) continue;
+    // Where it stood still, a break or a night, so the check can start a step
+    // from the end of it: the score stays put until the sentence that lifts
+    // it ends. See lastTimeAt in src/lib/sync/score-limits.ts.
+    const minutes = minutesOf(sync.at);
+    if (minutes - highMinutes >= STILL_MINUTES) highs.push([minutes - 0.01, highScore]);
+    highs.push([minutes, sync.score]);
+  }
+  // Whether the line from one high to another stays close to every high in
+  // between. Never across a stretch it stood still, which stays two points.
+  const isClose = (from: number, to: number): boolean => {
+    for (let index = from + 1; index <= to; index++) {
+      if (highs[index]?.[1] === highs[index - 1]?.[1]) return false;
+    }
+    const [fromMinutes, fromScore] = highs[from] ?? [0, 0];
+    const [toMinutes, toScore] = highs[to] ?? [0, 0];
+    for (let index = from + 1; index < to; index++) {
+      const [minutes, score] = highs[index] ?? [0, 0];
+      const line =
+        fromMinutes + ((score - fromScore) / (toScore - fromScore)) * (toMinutes - fromMinutes);
+      const lag = Math.min(minutes * (PATH_SLACK - 1), PATH_ERROR_MINUTES);
+      if (line > minutes + lag || line < minutes - PATH_ERROR_MINUTES) return false;
+    }
+    return true;
+  };
+  const path: [number, number][] = [[0, 0]];
+  let from = 0;
+  while (from < highs.length - 1) {
+    let to = from + 1;
+    while (to + 1 < highs.length && isClose(from, to + 1)) to++;
+    const [minutes, score] = highs[to] ?? [0, 0];
+    path.push([Math.floor(minutes * 100) / 100, score]);
+    from = to;
+  }
+  return path;
+}
+
+/** How long the server keeps accepted scores, as KEEP_INTERVAL in functions/api/scores.ts. */
+const KEEP_MS = 2 * DAY_MS;
+
+/**
+ * Sends each score to the server's own check, as the app does after every
+ * sentence, and returns the ones it turns away. This reader is the fastest
+ * plausible one, so anything it returns is a refusal a real reader can get.
+ */
+function refusedSyncs(
+  syncs: readonly Sample[],
+  startedAt: number,
+  path: Pick<ScoreLimits, "leastTimeTo" | "lastTimeAt">,
+): Sample[] {
+  const limits: ScoreLimits = {
+    relearning: RELEARNING_WINDOWS,
+    shortestStepMs: SHORTEST_STEP_MS,
+    ...path,
+  };
+  const refused: Sample[] = [];
+  let peak: AcceptedScore | null = null;
+  let recent: AcceptedScore[] = [];
+  for (const sync of syncs) {
+    if (
+      judgeScore(sync.score, sync.at, { createdAt: startedAt, peak, recent }, limits) !== "accept"
+    ) {
+      refused.push(sync);
+      continue;
+    }
+    const best = Math.max(sync.score, peak?.score ?? 0);
+    const accepted = { score: sync.score, at: sync.at, best };
+    recent = [...recent.filter((entry) => entry.at >= sync.at - KEEP_MS), accepted];
+    if (sync.score > (peak?.score ?? 0)) peak = accepted;
+  }
+  return refused;
+}
+
 /** The largest rise from any sample to a later one within `window` milliseconds. */
 function largestGain(samples: readonly Sample[], window: number): number {
   let best = 0;
@@ -175,6 +296,8 @@ async function main(): Promise<void> {
   let recent: string[] = [];
   const seenAt = new Map<string, number>();
   const samples: Sample[] = [];
+  /** The score the app would send after each sentence. */
+  const syncs: Sample[] = [];
   let sentencesRead = 0;
   let keyErrors = 0;
 
@@ -251,6 +374,7 @@ async function main(): Promise<void> {
         seenAt.set(candidate.id, at);
         recent = [candidate.id, ...recent].slice(0, RECENT_MEMORY);
         sentencesRead++;
+        syncs.push({ at, score: scoreOf(store, new Date(at), share) });
 
         at += BETWEEN_SENTENCES_MS;
       }
@@ -271,34 +395,14 @@ async function main(): Promise<void> {
   };
   const dayGain = (day: number): number => endOfDay(day) - endOfDay(day - 1);
 
-  // The fastest path itself: the highest score reached by each point after
-  // starting, as the table the score check reads. See src/lib/sync/score-limits.ts.
+  // The fastest path itself, as the table the score check reads. See
+  // src/lib/sync/score-limits.ts.
+  const path = pathNear(syncs, origin);
   console.log("");
-  console.log("fastest path, [minutes since starting, highest score by then]:");
-  const checkpoints = [
-    5,
-    10,
-    20,
-    30,
-    45,
-    60,
-    90,
-    120,
-    180,
-    240,
-    300,
-    360,
-    420,
-    480,
-    ...Array.from({ length: days }, (_, day) => (day + 1) * 1440),
-  ];
-  for (const minutes of checkpoints) {
-    const cutoff = origin + minutes * 60_000;
-    const best = samples
-      .filter((sample) => sample.at <= cutoff)
-      .reduce((high, sample) => Math.max(high, sample.score), 0);
-    console.log(`  [${String(minutes)}, ${String(best)}],`);
-  }
+  console.log(
+    `fastest path, [minutes since starting, highest score by then], ${String(path.length)} points:`,
+  );
+  for (const [minutes, score] of path) console.log(`  [${String(minutes)}, ${String(score)}],`);
 
   console.log("");
   console.log(`sentences read: ${String(sentencesRead)}, wrong keys: ${String(keyErrors)}`);
@@ -308,8 +412,28 @@ async function main(): Promise<void> {
   for (const day of [1, 2, 7, 30]) {
     if (day <= days) console.log(`gain on day ${String(day)}: ${String(dayGain(day))}`);
   }
+
+  // Both must be none: a refusal here is one an honest reader can get too.
+  // The table in use, and the path just measured, before it replaces it.
   console.log("");
-  console.log();
+  for (const [name, along] of [
+    ["the table in score-limits.ts", { leastTimeTo, lastTimeAt }],
+    [
+      "the path above",
+      {
+        leastTimeTo: (score: number) => leastTimeOn(path, score),
+        lastTimeAt: (score: number) => lastTimeOn(path, score),
+      },
+    ],
+  ] as const) {
+    const refused = refusedSyncs(syncs, origin, along);
+    console.log(`syncs refused by ${name}: ${String(refused.length)} of ${String(syncs.length)}`);
+    for (const sync of refused.slice(0, 5)) {
+      const minutes = ((sync.at - origin) / 60_000).toFixed(2);
+      console.log(`  minute ${minutes}: ${String(sync.score)}`);
+    }
+  }
+  console.log("");
   console.log(`ran in ${String(Math.round((performance.now() - startedAt) / 1000))} s`);
 }
 

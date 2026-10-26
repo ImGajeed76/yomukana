@@ -8,7 +8,7 @@
   "account_button_set_password": "Set new password",
   "account_button_sign_in": "Sign in",
   "account_confirm_description": "Enter the 6-digit code sent to {email}.",
-  "account_confirm_resend_prompt": "Didn't get it?",
+  "account_confirm_resend_prompt": "Didn't get it? Check your spam folder.",
   "account_confirm_title": "Check your email",
   "account_description_password": "At least 8 characters.",
   "account_error_code_expired": "That code has expired.",

@@ -48,8 +48,8 @@ marathonScores.post("/marathons/:id/score", async (c) => {
        where m.marathon_id = $1 and m.user_id = $2`,
       [marathonId, userId],
     ),
-    pool.query<{ score: number; accepted_at: Date }>(
-      `select score, accepted_at from marathon_score_submissions
+    pool.query<{ score: number; best: number; accepted_at: Date }>(
+      `select score, best, accepted_at from marathon_score_submissions
        where marathon_id = $1 and user_id = $2 order by accepted_at`,
       [marathonId, userId],
     ),
@@ -70,8 +70,15 @@ marathonScores.post("/marathons/:id/score", async (c) => {
     now,
     {
       createdAt: runStart(row.entered_at.getTime(), startsAt),
-      peak: row.peak_at === null ? null : { score: row.peak_score, at: row.peak_at.getTime() },
-      recent: accepted.rows.map((each) => ({ score: each.score, at: each.accepted_at.getTime() })),
+      peak:
+        row.peak_at === null
+          ? null
+          : { score: row.peak_score, at: row.peak_at.getTime(), best: row.peak_score },
+      recent: accepted.rows.map((each) => ({
+        score: each.score,
+        at: each.accepted_at.getTime(),
+        best: each.best,
+      })),
     },
     LIMITS,
   );
@@ -90,9 +97,11 @@ marathonScores.post("/marathons/:id/score", async (c) => {
      where marathon_id = $3 and user_id = $4`,
     [score, endScore, marathonId, userId],
   );
+  // With the best as it stands now, this score included, as the update above has it.
   await pool.query(
-    "insert into marathon_score_submissions (marathon_id, user_id, score) values ($1, $2, $3)",
-    [marathonId, userId, score],
+    `insert into marathon_score_submissions (marathon_id, user_id, score, best)
+     values ($1, $2, $3, $4)`,
+    [marathonId, userId, score, Math.max(score, row.peak_score)],
   );
   await pool.query(
     `delete from marathon_score_submissions

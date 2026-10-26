@@ -218,6 +218,13 @@
       "when": 1791079831053,
       "tag": "0030_streak_last_goal",
       "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1793022764110,
+      "tag": "0031_submission_best",
+      "breakpoints": true
     }
   ]
 }

@@ -232,6 +232,10 @@ export const scoreSubmissions = pgTable(
       .notNull()
       .references(() => profiles.userId, { onDelete: "cascade" }),
     score: doublePrecision("score").notNull(),
+    // The reader's best up to and including this score. Rows go after two
+    // days, and the check places each score by the best reached by then, so
+    // it is kept on the row rather than worked out from the rows left.
+    best: doublePrecision("best").notNull().default(0),
     acceptedAt: timestamp("accepted_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [index("score_submissions_by_reader").on(table.userId, table.acceptedAt)],
@@ -576,6 +580,8 @@ export const marathonScoreSubmissions = pgTable(
     marathonId: uuid("marathon_id").notNull(),
     userId: text("user_id").notNull(),
     score: doublePrecision("score").notNull(),
+    // The runner's best up to and including this score, as on score_submissions.
+    best: doublePrecision("best").notNull().default(0),
     acceptedAt: timestamp("accepted_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [

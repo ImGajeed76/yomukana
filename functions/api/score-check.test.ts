@@ -22,6 +22,9 @@ const LIMITS: ScoreLimits = {
     { windowMs: DAY, maxGain: 6000 },
   ],
   leastTimeTo,
+  // The made-up path never stands still, so its last time at a score is its first.
+  lastTimeAt: leastTimeTo,
+  shortestStepMs: 10 * MINUTE,
 };
 
 const SIGNED_UP = 1_000_000_000_000;
@@ -41,8 +44,8 @@ describe("judgeScore", () => {
     // reader adds 500, not the 4,000 a first day brings.
     const record: ScoreRecord = {
       createdAt: SIGNED_UP,
-      peak: { score: 5000, at: SIGNED_UP + DAY },
-      recent: [{ score: 5000, at: SIGNED_UP + 9 * DAY }],
+      peak: { score: 5000, at: SIGNED_UP + DAY, best: 5000 },
+      recent: [{ score: 5000, at: SIGNED_UP + 9 * DAY, best: 5000 }],
     };
     const now = SIGNED_UP + 10 * DAY;
     expect(judgeScore(5400, now, record, LIMITS)).toBe("accept");
@@ -52,8 +55,8 @@ describe("judgeScore", () => {
   test("counts days offline, as long as the path fits inside them", () => {
     const record: ScoreRecord = {
       createdAt: SIGNED_UP,
-      peak: { score: 5000, at: SIGNED_UP + DAY },
-      recent: [{ score: 5000, at: SIGNED_UP + DAY }],
+      peak: { score: 5000, at: SIGNED_UP + DAY, best: 5000 },
+      recent: [{ score: 5000, at: SIGNED_UP + DAY, best: 5000 }],
     };
     // Four days on, the fastest reader could be 2,000 further.
     const now = SIGNED_UP + 5 * DAY;
@@ -65,8 +68,8 @@ describe("judgeScore", () => {
     // Best of 8,000, fallen to 3,000 over a month away, back to 5,000 in an hour.
     const record: ScoreRecord = {
       createdAt: SIGNED_UP,
-      peak: { score: 8000, at: SIGNED_UP + 10 * DAY },
-      recent: [{ score: 3000, at: SIGNED_UP + 40 * DAY }],
+      peak: { score: 8000, at: SIGNED_UP + 10 * DAY, best: 8000 },
+      recent: [{ score: 3000, at: SIGNED_UP + 40 * DAY, best: 8000 }],
     };
     expect(judgeScore(5000, SIGNED_UP + 40 * DAY + HOUR, record, LIMITS)).toBe("accept");
   });
@@ -74,19 +77,48 @@ describe("judgeScore", () => {
   test("still limits how fast climbing back can go", () => {
     const record: ScoreRecord = {
       createdAt: SIGNED_UP,
-      peak: { score: 8000, at: SIGNED_UP + 10 * DAY },
-      recent: [{ score: 3000, at: SIGNED_UP + 40 * DAY }],
+      peak: { score: 8000, at: SIGNED_UP + 10 * DAY, best: 8000 },
+      recent: [{ score: 3000, at: SIGNED_UP + 40 * DAY, best: 8000 }],
     };
     expect(judgeScore(7900, SIGNED_UP + 40 * DAY + 10 * MINUTE, record, LIMITS)).toBe(
       "implausible",
     );
   });
 
+  test("does not hold a step from a score accepted moments ago to the path", () => {
+    // A sentence a minute ago, then another: over a step that short, how much
+    // a score grows depends on the sentences, not on the reader.
+    const record: ScoreRecord = {
+      createdAt: SIGNED_UP,
+      peak: { score: 5050, at: SIGNED_UP + 10 * DAY - MINUTE, best: 5050 },
+      recent: [
+        { score: 5000, at: SIGNED_UP + DAY, best: 5000 },
+        { score: 5050, at: SIGNED_UP + 10 * DAY - MINUTE, best: 5050 },
+      ],
+    };
+    expect(judgeScore(5100, SIGNED_UP + 10 * DAY, record, LIMITS)).toBe("accept");
+  });
+
+  test("places a score that fell by the best before it, even once there is a newer best", () => {
+    // Best of 8,000, fallen to 3,000 over a month away, back past it to 8,100
+    // a day later, and on to 8,200 the day after. Placed at 3,000, the step
+    // from the low point would need most of a week.
+    const record: ScoreRecord = {
+      createdAt: SIGNED_UP,
+      peak: { score: 8100, at: SIGNED_UP + 41 * DAY, best: 8100 },
+      recent: [
+        { score: 3000, at: SIGNED_UP + 40 * DAY, best: 8000 },
+        { score: 8100, at: SIGNED_UP + 41 * DAY, best: 8100 },
+      ],
+    };
+    expect(judgeScore(8200, SIGNED_UP + 42 * DAY, record, LIMITS)).toBe("accept");
+  });
+
   test("always accepts a drop, because scores fall when people stop", () => {
     const record: ScoreRecord = {
       createdAt: SIGNED_UP,
-      peak: { score: 8000, at: SIGNED_UP + DAY },
-      recent: [{ score: 8000, at: SIGNED_UP + DAY }],
+      peak: { score: 8000, at: SIGNED_UP + DAY, best: 8000 },
+      recent: [{ score: 8000, at: SIGNED_UP + DAY, best: 8000 }],
     };
     expect(judgeScore(2000, SIGNED_UP + DAY + MINUTE, record, LIMITS)).toBe("accept");
   });

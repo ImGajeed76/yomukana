@@ -5,8 +5,8 @@
   interface Props {
     disabled: boolean;
     /**
-     * What is happening with the code, said in place of "Didn't get it?". One
-     * line either way, so nothing below it moves.
+     * What is happening with the code, said in place of "Didn't get it?",
+     * which also points to the spam folder, where codes sometimes land.
      */
     message: string | null;
     /** Whether the message is a refusal, shown in red and read out at once. */
