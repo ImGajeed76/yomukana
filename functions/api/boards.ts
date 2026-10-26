@@ -26,12 +26,12 @@ boards.get("/boards", async (c) => {
     // Personal to the caller, so not a view: them and the people they follow.
     pool.query<Standing>(
       `with circle as (
-         select user_id, score from profiles
+         select user_id, live_score(score, scored_at, score_curve, curve_at) as score from profiles
          where user_id = $1
             or user_id in (select followee_id from friends where follower_id = $1)
        )
        select rank, size from (
-         select user_id, rank() over (order by score desc) as rank, count(*) over () as size
+         select user_id, rank() over (order by round(score) desc) as rank, count(*) over () as size
          from circle
        ) ranked
        where user_id = $1`,

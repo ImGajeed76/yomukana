@@ -155,6 +155,11 @@ export const profiles = pgTable(
     isListed: boolean("is_listed").notNull().default(false),
     score: doublePrecision("score").notNull().default(0),
     scoredAt: timestamp("scored_at", { withTimezone: true }),
+    // The score the device expects on each of CURVE_DAYS if nothing more is
+    // read, and when it worked that out, so boards can show the score falling
+    // between syncs. See src/lib/sync/score-curve.ts.
+    scoreCurve: doublePrecision("score_curve").array(),
+    curveAt: timestamp("curve_at", { withTimezone: true }),
     // The best score the API function has accepted, and when. A new best is
     // held to the fastest path a reader can take; getting back to an old one
     // after a break only to how fast a reader relearns. See

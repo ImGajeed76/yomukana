@@ -20,6 +20,7 @@ import { loadTextShare } from "../stats/text-share";
 import { connect } from "./client";
 import { publishScore, publishStreak } from "./friends";
 import { publishMarathonScore } from "./marathons";
+import { CURVE_DAYS, CURVE_EVERY_MS } from "./score-curve";
 import {
   attemptIdOf,
   lastReviewOf,
@@ -61,6 +62,11 @@ const PAGE_SIZE = 500;
  * a minute of rows twice costs a few bytes and missing one costs a review.
  */
 const PULL_OVERLAP_MS = 60_000;
+
+const DAY_MS = 86_400_000;
+
+/** When this page last had a score curve kept by the server, in epoch milliseconds. */
+let curveSentAt = 0;
 
 /** The data from a Data API call, or a thrown error for the outer catch to report. */
 function must<T>(result: Result<T>): T {
@@ -165,10 +171,18 @@ async function publish(progress: Progress, track: Track): Promise<void> {
     void seals.check();
     return;
   }
-  await Promise.all([
+  const now = Date.now();
+  // The curve costs six more scores, so it goes now and then rather than
+  // after every sentence. A failed send tries again with the next sync.
+  const curve =
+    now - curveSentAt < CURVE_EVERY_MS
+      ? null
+      : CURVE_DAYS.map((days) => scoreOf(progress.store, new Date(now + days * DAY_MS), share));
+  const [, isKept] = await Promise.all([
     publishStreak(streak.value),
-    publishScore(scoreOf(progress.store, new Date(), share)),
+    publishScore(scoreOf(progress.store, new Date(now), share), curve),
   ]);
+  if (curve !== null && isKept) curveSentAt = now;
   // The server works seals out from what was just sent, so it is asked
   // after the push. Not awaited: a slow answer must not hold up the sync.
   void seals.check();

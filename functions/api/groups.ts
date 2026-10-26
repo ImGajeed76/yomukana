@@ -29,7 +29,7 @@ import { DISPLAY_CODE_LENGTH, INVITE_CODE_LENGTH, isCode, isUuid, randomCode } f
 import { inTransaction, pool } from "./db";
 import { isOffensiveName } from "./names";
 import { refuse } from "./problems";
-import type { ProfileRow } from "./profiles";
+import { liveScoreOf, type ProfileRow } from "./profiles";
 import type { CardColor } from "../../src/lib/sync/profile-rules";
 
 type Role = "admin" | "member";
@@ -81,7 +81,7 @@ function lineOf(
     username: row.username,
     displayName: row.display_name,
     cardColor: row.card_color,
-    score: row.score,
+    score: liveScoreOf(row),
     scoredAt: row.scored_at === null ? null : row.scored_at.getTime(),
     role: row.role,
     isYou: row.user_id === viewer,

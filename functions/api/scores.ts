@@ -13,6 +13,7 @@ import {
   leastTimeTo,
 } from "../../src/lib/sync/score-limits";
 import type { Worn } from "../../src/lib/sync/badge-rules";
+import { isCurveFor } from "../../src/lib/sync/score-curve";
 import { readerOf } from "./auth";
 import { badgesFor } from "./badges";
 import { pool } from "./db";
@@ -46,8 +47,12 @@ scores.post("/score", async (c) => {
   const userId = await readerOf(c.req.raw);
   if (userId === null) return refuse(c, "unauthorized");
   const body: unknown = await c.req.json().catch(() => null);
-  const score =
-    typeof body === "object" && body !== null && "score" in body ? Number(body.score) : Number.NaN;
+  const fields = typeof body === "object" && body !== null ? (body as Record<string, unknown>) : {};
+  const score = "score" in fields ? Number(fields.score) : Number.NaN;
+  // Sent now and then, not with every score. One that would ever show more
+  // than the score itself would get past the check below, so it is refused.
+  const curve = fields.curve ?? null;
+  if (curve !== null && !isCurveFor(curve, score)) return refuse(c, "invalid");
 
   // When the account was made, by the auth service's clock: where every
   // path starts. Plus the reader's best so far, and what was accepted lately.
@@ -102,12 +107,16 @@ scores.post("/score", async (c) => {
     return refuse(c, "implausible");
   }
 
+  // A score sent without a curve keeps the last one: see scoreAt for how an
+  // older curve is read against a newer score.
   const updated = await pool.query<ProfileRow>(
     `update profiles set score = $1, scored_at = now(),
        peak_score = greatest(peak_score, $1),
-       peak_at = case when $1 > peak_score then now() else peak_at end
+       peak_at = case when $1 > peak_score then now() else peak_at end,
+       score_curve = coalesce($3::double precision[], score_curve),
+       curve_at = case when $3::double precision[] is null then curve_at else now() end
      where user_id = $2 returning *`,
-    [score, userId],
+    [score, userId, curve],
   );
   const row = updated.rows[0];
   if (row === undefined) return refuse(c, "not-found");
@@ -149,15 +158,14 @@ function lineOf(
  */
 scores.get("/global", async (c) => {
   const viewer = await readerOf(c.req.raw);
-  const ranked = `select p.*, rank() over (order by p.score desc) as rank
-                  from profiles p where p.is_listed`;
+  // Ranked by the score as it is now, by the view, so a reader who stopped
+  // weeks ago slips down without having to come back and say so.
+  const ranked = `select p.*, s.rank from global_standings s join profiles p on p.user_id = s.user_id`;
   const [top, own] = await Promise.all([
-    pool.query<GlobalRow>(`${ranked} order by p.score desc, p.username limit $1`, [
-      GLOBAL_BOARD_SIZE,
-    ]),
+    pool.query<GlobalRow>(`${ranked} order by s.rank, p.username limit $1`, [GLOBAL_BOARD_SIZE]),
     viewer === null
       ? Promise.resolve(null)
-      : pool.query<GlobalRow>(`select * from (${ranked}) listed where user_id = $1`, [viewer]),
+      : pool.query<GlobalRow>(`${ranked} where p.user_id = $1`, [viewer]),
   ]);
   const ownRow = own?.rows[0];
   const isOwnShown = ownRow === undefined || top.rows.some((row) => row.user_id === viewer);

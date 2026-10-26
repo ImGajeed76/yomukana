@@ -4,6 +4,7 @@ import { Hono } from "hono";
 import { toCodePoints } from "../../src/lib/japanese/text";
 import type { Worn } from "../../src/lib/sync/badge-rules";
 import { DISPLAY_NAME_MAX, isCardColor, type CardColor } from "../../src/lib/sync/profile-rules";
+import { scoreAt } from "../../src/lib/sync/score-curve";
 import { isValidUsername, normaliseUsername, randomUsername } from "../../src/lib/sync/username";
 import { readerOf } from "./auth";
 import { badgesFor } from "./badges";
@@ -22,12 +23,32 @@ export interface ProfileRow {
   is_listed: boolean;
   score: number;
   scored_at: Date | null;
+  score_curve: number[] | null;
+  curve_at: Date | null;
   streak_days: number;
   streak_alive_until: Date | null;
   streak_last_goal_at: Date | null;
 }
 
 const DAY_MS = 86_400_000;
+
+/**
+ * A stored score as it is now, fallen since it was sent if the reader has
+ * not read since. Every score the function hands out goes through this.
+ */
+export function liveScoreOf(
+  row: Pick<ProfileRow, "score" | "scored_at" | "score_curve" | "curve_at">,
+): number {
+  return scoreAt(
+    {
+      score: row.score,
+      scoredAt: row.scored_at?.getTime() ?? null,
+      curve: row.score_curve,
+      curveAt: row.curve_at?.getTime() ?? null,
+    },
+    Date.now(),
+  );
+}
 
 /** A profile as the app sees it, with the badges it wears. */
 export function profileOf(row: ProfileRow, badges: readonly Worn[]): Record<string, unknown> {
@@ -36,7 +57,7 @@ export function profileOf(row: ProfileRow, badges: readonly Worn[]): Record<stri
     displayName: row.display_name,
     cardColor: row.card_color,
     isListed: row.is_listed,
-    score: row.score,
+    score: liveScoreOf(row),
     scoredAt: row.scored_at === null ? null : row.scored_at.getTime(),
     badges,
     streak: streakOf(row),

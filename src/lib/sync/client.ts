@@ -86,6 +86,8 @@ interface Database {
           is_listed: boolean;
           score: number;
           scored_at: string | null;
+          score_curve: number[] | null;
+          curve_at: string | null;
         },
         Record<string, never>
       >;

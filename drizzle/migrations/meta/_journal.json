@@ -225,6 +225,13 @@
       "when": 1793022764110,
       "tag": "0031_submission_best",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1793025591601,
+      "tag": "0032_score_curve",
+      "breakpoints": true
     }
   ]
 }

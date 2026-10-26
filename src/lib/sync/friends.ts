@@ -12,6 +12,7 @@ import type { BoardEntry } from "./board";
 import { callApi } from "./api";
 import { connect, type SyncClient } from "./client";
 import { ensureProfile } from "./profile";
+import { scoreAt } from "./score-curve";
 import { normaliseUsername } from "./username";
 
 export type FriendProblem = "not-found" | "self" | "offline" | "unknown";
@@ -33,15 +34,22 @@ async function currentUserId(client: SyncClient): Promise<string | null> {
  * functions/api/score-check.ts). A score it turns down is simply not shown to
  * anyone yet. Nothing on this device changes, and the next sync tries again,
  * with more time behind it.
+ *
+ * With it, now and then, the curve boards draw its fall on (see
+ * score-curve.ts). Returns whether the server kept them.
  */
-export async function publishScore(score: number): Promise<void> {
+export async function publishScore(
+  score: number,
+  curve: readonly number[] | null,
+): Promise<boolean> {
   const send = (): Promise<Response | null> =>
-    callApi("/score", { method: "POST", body: JSON.stringify({ score }) });
-  const response = await send();
+    callApi("/score", { method: "POST", body: JSON.stringify({ score, curve }) });
+  let response = await send();
   // No profile yet: this reader just signed in for the first time. The API
   // function makes one with a random name, which they can change in settings,
   // and the score goes onto it.
-  if (response?.status === 404 && (await ensureProfile()) !== null) await send();
+  if (response?.status === 404 && (await ensureProfile()) !== null) response = await send();
+  return response?.ok === true;
 }
 
 /**
@@ -80,7 +88,9 @@ export async function loadBoard(): Promise<BoardEntry[] | null> {
     // Side by side, so the badges cost no extra wait. The view shows the same
     // people the profiles do: the reader and whoever they follow.
     const [rows, worn] = await Promise.all([
-      client.from("profiles").select("user_id, username, display_name, score, scored_at"),
+      client
+        .from("profiles")
+        .select("user_id, username, display_name, score, scored_at, score_curve, curve_at"),
       client
         .from("followed_badges")
         .select("user_id, emoji, tag, color, seal, earned_at")
@@ -101,11 +111,21 @@ export async function loadBoard(): Promise<BoardEntry[] | null> {
       badges.set(row.user_id, list);
     }
 
+    const now = Date.now();
     return rows.data.map((row) => ({
       userId: row.user_id,
       username: row.username,
       displayName: row.display_name,
-      score: row.score,
+      // As it is now: fallen since it was sent, if they have not read since.
+      score: scoreAt(
+        {
+          score: row.score,
+          scoredAt: row.scored_at === null ? null : Date.parse(row.scored_at),
+          curve: row.score_curve,
+          curveAt: row.curve_at === null ? null : Date.parse(row.curve_at),
+        },
+        now,
+      ),
       scoredAt: row.scored_at === null ? null : Date.parse(row.scored_at),
       isYou: row.user_id === userId,
       badges: badges.get(row.user_id) ?? [],
