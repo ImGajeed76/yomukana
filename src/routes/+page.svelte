@@ -372,6 +372,7 @@
       endsAt,
       allowsLateEntry: true,
       resultsDelay,
+      showsInvite: false,
       isAdmin: false,
       isRunning: true,
       runnerCount: 23,

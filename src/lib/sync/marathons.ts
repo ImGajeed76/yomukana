@@ -20,6 +20,8 @@ export interface MarathonHeader {
   readonly allowsLateEntry: boolean;
   /** Minutes after the end before the results are final. One of RESULTS_DELAY_MINUTES. */
   readonly resultsDelay: number;
+  /** Whether the display link also shows the invite, while people can still join. */
+  readonly showsInvite: boolean;
 }
 
 /** A marathon in the reader's list of them. */
@@ -71,6 +73,8 @@ export interface MarathonInvite extends MarathonHeader {
 export interface MarathonDisplay extends MarathonHeader {
   readonly runners: readonly Runner[];
   readonly watchers: number;
+  /** The invite, when the admin shows it on the screen and people can still join to run. */
+  readonly inviteCode: string | null;
 }
 
 /** Why a marathon call did not work, in terms the reader can act on. */
@@ -134,7 +138,10 @@ export async function loadMarathon(id: string): Promise<Result<Marathon>> {
 export async function updateMarathon(
   id: string,
   changes: Partial<
-    Pick<MarathonHeader, "name" | "startsAt" | "endsAt" | "allowsLateEntry" | "resultsDelay">
+    Pick<
+      MarathonHeader,
+      "name" | "startsAt" | "endsAt" | "allowsLateEntry" | "resultsDelay" | "showsInvite"
+    >
   >,
 ): Promise<Result<MarathonHeader>> {
   return resultOf(await callApi(`/marathons/${id}`, send("PATCH", changes)));

@@ -9,16 +9,19 @@
     label: string;
     /** Width classes. The code is square and fills the width it is given. */
     class?: ClassValue;
+    /**
+     * The blank margin scanners need around a code, in squares. The standard
+     * asks for four; less only where the code already sits on light paper
+     * that carries the margin on.
+     */
+    quietZone?: number;
   }
 
-  let { value, label, class: className = "" }: Props = $props();
+  let { value, label, class: className = "", quietZone = 4 }: Props = $props();
 
   let canvas = $state<HTMLCanvasElement | null>(null);
   /** The drawn width in CSS pixels, measured, so a phone gets a code as wide as its screen. */
   let width = $state(0);
-
-  /** The blank margin scanners need around a code, in squares. The standard asks for four. */
-  const QUIET_ZONE = 4;
 
   $effect(() => {
     const element = canvas;
@@ -38,7 +41,7 @@
   $effect(() => {
     const element = canvas;
     if (element === null || width === 0) return;
-    const { data } = encode(value, { ecc: "M", border: QUIET_ZONE });
+    const { data } = encode(value, { ecc: "M", border: quietZone });
     // Whole device pixels per square, so every square is the same size and
     // neighbours meet without hairline gaps. What is left over is margin.
     const pixels = Math.round(width * window.devicePixelRatio);

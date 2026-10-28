@@ -8,6 +8,7 @@
 import type { Badge } from "./badge-rules";
 import { CARD_COLORS, type CardColor } from "./profile-rules";
 import type { DisplayBoard, GroupMember, GroupProblem } from "./groups";
+import type { MarathonDisplay, Runner } from "./marathons";
 
 const ADJECTIVES = ["quiet", "brave", "sleepy", "swift", "gentle", "clever", "bright", "calm"];
 const ANIMALS = ["tanuki", "kitsune", "neko", "tori", "kame", "usagi", "kuma", "saru", "koi"];
@@ -108,6 +109,188 @@ export function createDisplaySimulator(): () => Promise<
 
     return {
       value: { name: "Simulated class", members: readers.map((reader) => reader.member) },
+    };
+  };
+}
+
+/** How many in the pretend race fight over the podium, and how often one of them spurts. */
+const LEADERS = 6;
+const SPURT_CHANCE = 0.4;
+
+/**
+ * One refresh of a pretend race, changing `runners` in place: those reading
+ * gain a little now and then, `wakeChance` of the others start reading, now
+ * and then a reader puts it down, and now and then one of those near the top
+ * puts on a spurt and climbs past the leader, so the podium changes while you
+ * watch.
+ */
+function advanceRace(runners: Runner[], now: number, wakeChance: number): void {
+  for (const [index, runner] of runners.entries()) {
+    const isReading = runner.scoredAt !== null && now - runner.scoredAt < 300_000;
+    const startsReading = !isReading && Math.random() < wakeChance;
+    if (!(isReading || startsReading) || (isReading && Math.random() < 0.04)) continue;
+    // A reader syncs every few minutes, not every refresh.
+    if (!startsReading && Math.random() > 0.12) continue;
+    const score = runner.score + 3 + Math.random() * 22;
+    runners[index] = { ...runner, score, endScore: score * 0.95, scoredAt: now };
+  }
+  if (Math.random() >= SPURT_CHANCE) return;
+  const contenders = [...runners].sort((one, other) => other.score - one.score).slice(0, LEADERS);
+  const runner = contenders[1 + Math.floor(Math.random() * (contenders.length - 1))];
+  const index = runner === undefined ? -1 : runners.indexOf(runner);
+  if (runner === undefined || index < 0) return;
+  const ahead = contenders[0]?.score ?? runner.score;
+  const score = Math.max(runner.score, ahead) + 4 + Math.random() * 20;
+  runners[index] = { ...runner, score, endScore: score * 0.95, scoredAt: now };
+}
+
+/**
+ * A marathon a day into its race, for `/display?debug=race`: `people`
+ * runners (`&people=60`, 30 if not given), some reading right now, some
+ * earlier today, some not since yesterday, the readers gaining points with
+ * each refresh and now and then one waking up or putting it down. It ends in
+ * three days, or after `endsIn` seconds (`&end=70`), and then its results
+ * come half a minute later, to watch the count to the end and the podium.
+ */
+export function createRaceSimulator(
+  hasInvite: boolean,
+  endsIn: number | null,
+  people: number,
+): () => Promise<MarathonDisplay> {
+  const opened = Date.now();
+  const startsAt = opened - 86_400_000;
+  const endsAt = opened + (endsIn ?? 3 * 86_400) * 1000;
+  const today = new Date(opened).setHours(0, 0, 0, 0);
+  const runners: Runner[] = Array.from({ length: people > 0 ? people : 30 }, (_, index) => {
+    const { member } = newReader(index);
+    const roll = Math.random();
+    // Reading now, earlier today, or not since yesterday. The leaders are
+    // all reading now, so the podium is fought over.
+    const earlierToday = today + Math.random() * Math.max(0, opened - 600_000 - today);
+    const scoredAt =
+      index < LEADERS || roll < 0.35 || earlierToday <= today
+        ? opened - Math.random() * 180_000
+        : roll < 0.7
+          ? earlierToday
+          : opened - 30 * 3_600_000;
+    // The leaders a few points apart, so one spurt changes the podium.
+    const score = index < LEADERS ? 900 - index * 12 - Math.random() * 8 : member.score * 0.85;
+    return {
+      username: member.username,
+      displayName: member.displayName,
+      cardColor: member.cardColor,
+      badges: member.badges,
+      score,
+      endScore: score * 0.95,
+      scoredAt,
+      enteredAt: startsAt,
+      isAdmin: index === 0,
+      isYou: false,
+    };
+  });
+
+  return async () => {
+    await new Promise((resolve) => setTimeout(resolve, 200 + Math.random() * 400));
+    const now = Date.now();
+    if (now < endsAt) advanceRace(runners, now, 0.03);
+    return {
+      id: "simulated-race",
+      name: "Simulated marathon",
+      startsAt,
+      endsAt,
+      allowsLateEntry: true,
+      resultsDelay: endsIn === null ? 60 : 0.5,
+      showsInvite: hasInvite,
+      runners: [...runners],
+      watchers: 0,
+      inviteCode: hasInvite ? "pretend1" : null,
+    };
+  };
+}
+
+/** The most runners the pretend lobby grows to: as many as a marathon takes. */
+const LOBBY_LARGEST = 1000;
+
+/**
+ * A marathon that has not started, for `/display?debug=lobby`: the room
+ * starts empty and fills as people join, one every few seconds, and now and
+ * then someone leaves again. With `hasInvite` (`&invite` on the address) it
+ * shows its invite on the screen too. It starts in an hour and a half, or
+ * after `startsIn` seconds (`&start=70`), to watch the countdown and the start.
+ * With `people` (`&people=250`) that many are already there when it opens,
+ * to see the room crowded.
+ *
+ * At the start it carries on into the race with the same people, everyone
+ * from zero, most of them reading straight away, as createRaceSimulator's
+ * race does. It ends two weeks later, or `endsIn` seconds after the start
+ * (`&end=60`), its results half a minute after that.
+ */
+export function createLobbySimulator(
+  hasInvite: boolean,
+  startsIn: number | null,
+  people: number,
+  endsIn: number | null,
+): () => Promise<MarathonDisplay> {
+  const startsAt = Date.now() + (startsIn ?? 90 * 60) * 1000;
+  const endsAt = startsAt + (endsIn ?? 14 * 86_400) * 1000;
+  const runners: Runner[] = [];
+  let joined = 0;
+  let isFirst = true;
+  let hasStarted = false;
+
+  return async () => {
+    await new Promise((resolve) => setTimeout(resolve, 200 + Math.random() * 400));
+    const now = Date.now();
+    if (now >= startsAt && now < endsAt) {
+      // Off: most start reading at once, the rest wander in over the next minutes.
+      advanceRace(runners, now, hasStarted ? 0.05 : 0.7);
+      hasStarted = true;
+    }
+    // Before the start, now and then someone changes their mind.
+    if (!hasStarted && runners.length > 3 && Math.random() < 0.05) {
+      runners.splice(Math.floor(Math.random() * runners.length), 1);
+    }
+    // Empty at first, or as full as asked, so everyone after falls in. Late
+    // joiners keep coming during the race, more slowly.
+    const arriving = isFirst
+      ? people
+      : hasStarted
+        ? Math.random() < 0.15
+          ? 1
+          : 0
+        : Math.random() < 0.15
+          ? 2
+          : Math.random() < 0.6
+            ? 1
+            : 0;
+    isFirst = false;
+    for (let count = 0; count < arriving && runners.length < LOBBY_LARGEST; count++) {
+      const { member } = newReader(joined);
+      joined += 1;
+      runners.push({
+        username: member.username,
+        displayName: member.displayName,
+        cardColor: member.cardColor,
+        badges: member.badges,
+        score: 0,
+        endScore: 0,
+        scoredAt: null,
+        enteredAt: Date.now(),
+        isAdmin: joined === 1,
+        isYou: false,
+      });
+    }
+    return {
+      id: "simulated-lobby",
+      name: "Simulated marathon",
+      startsAt,
+      endsAt,
+      allowsLateEntry: true,
+      resultsDelay: endsIn === null ? 60 : 0.5,
+      showsInvite: hasInvite,
+      runners: [...runners],
+      watchers: 0,
+      inviteCode: hasInvite ? "pretend1" : null,
     };
   };
 }

@@ -1,0 +1,1 @@
+ALTER TABLE "marathons" ADD COLUMN "shows_invite" boolean DEFAULT false NOT NULL;

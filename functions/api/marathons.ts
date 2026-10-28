@@ -36,6 +36,7 @@ interface MarathonRow {
   results_delay_minutes: number;
   invite_code: string | null;
   display_code: string | null;
+  shows_invite: boolean;
 }
 
 interface MemberRow extends ProfileRow {
@@ -92,6 +93,7 @@ function headerOf(row: MarathonRow): Record<string, unknown> {
     endsAt: row.ends_at.getTime(),
     allowsLateEntry: row.allows_late_entry,
     resultsDelay: row.results_delay_minutes,
+    showsInvite: row.shows_invite,
   };
 }
 
@@ -303,7 +305,8 @@ marathons.get("/marathons/:id", async (c) => {
 });
 
 /**
- * Admin only: the name and whether people may join late, any time. The
+ * Admin only: the name, whether people may join late and whether the
+ * display link shows the invite, any time. The
  * times only before it starts: moving a race under people already running
  * it would change what their score was measured against.
  */
@@ -327,6 +330,10 @@ marathons.patch("/marathons/:id", async (c) => {
   if ("allowsLateEntry" in body) {
     if (typeof body.allowsLateEntry !== "boolean") return refuse(c, "invalid");
     add("allows_late_entry", body.allowsLateEntry);
+  }
+  if ("showsInvite" in body) {
+    if (typeof body.showsInvite !== "boolean") return refuse(c, "invalid");
+    add("shows_invite", body.showsInvite);
   }
   if ("resultsDelay" in body) {
     // Until it ends: after that, runners have been told when the results come.
@@ -551,5 +558,15 @@ marathons.get("/marathon-display/:code", async (c) => {
   ]);
   const marathon = result.rows[0];
   if (marathon === undefined) return refuse(c, "not-found");
-  return c.json({ ...headerOf(marathon), ...(await boardOf(marathon, null)) });
+  // The invite, only if the admin chose to show it there, and only while it
+  // can still be used to run: a code that leads to "too late" is worse than none.
+  const isJoinable = canEnter(
+    { ...headerTimes(marathon), allowsLateEntry: marathon.allows_late_entry },
+    Date.now(),
+  );
+  return c.json({
+    ...headerOf(marathon),
+    ...(await boardOf(marathon, null)),
+    inviteCode: marathon.shows_invite && isJoinable ? marathon.invite_code : null,
+  });
 });

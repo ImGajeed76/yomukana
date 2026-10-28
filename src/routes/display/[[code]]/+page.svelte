@@ -1,11 +1,15 @@
 <script lang="ts">
-  import { Maximize, Minimize, WifiOff } from "@lucide/svelte";
+  import { List, Maximize, Minimize, WifiOff } from "@lucide/svelte";
+  import type { Component, Snippet } from "svelte";
   import { flip } from "svelte/animate";
   import { prefersReducedMotion } from "svelte/motion";
   import { page } from "$app/state";
   import FlagCredit from "$lib/components/FlagCredit.svelte";
   import MadeBy from "$lib/components/MadeBy.svelte";
   import AutoScroll from "$lib/components/display/AutoScroll.svelte";
+  import type { LobbyMember } from "$lib/components/display/lobby/lobby-scene";
+  import type { RoomPhase } from "$lib/components/display/lobby/race";
+  import type { Countdown } from "$lib/components/display/lobby/start-count";
   import WornBadge from "$lib/components/badges/WornBadge.svelte";
   import { groupProblemMessage } from "$lib/components/groups/problems";
   import { CARD_BACKGROUNDS } from "$lib/components/profile/colors";
@@ -18,7 +22,9 @@
   import { loadGlobalDisplayBoard } from "$lib/sync/global";
   import { countdownFor, statusLine } from "$lib/components/marathons/format";
   import RaceCountdown from "$lib/components/marathons/RaceCountdown.svelte";
-  import { liveScore, marathonStatus } from "$lib/sync/marathon-rules";
+  import { readRoomChoice, saveRoomChoice } from "$lib/components/display/lobby/room-choice";
+  import JoinSign from "$lib/components/marathons/JoinSign.svelte";
+  import { canEnter, liveScore, marathonStatus } from "$lib/sync/marathon-rules";
   import { loadMarathonDisplay, type MarathonDisplay } from "$lib/sync/marathons";
   import {
     boardOf,
@@ -38,12 +44,23 @@
 
   /**
    * `?debug` on this machine feeds the page a pretend class instead of the
-   * API, so the screen can be watched changing. Never anywhere but localhost:
-   * on the real site the flag is ignored and the simulator never downloads.
+   * API, so the screen can be watched changing, and `?debug=lobby` a marathon
+   * that has not started, filling up. Never anywhere but localhost: on the
+   * real site the flag is ignored and the simulator never downloads.
    */
   const isDebug =
     page.url.searchParams.has("debug") &&
     (location.hostname === "localhost" || location.hostname === "127.0.0.1");
+  const isDebugLobby = isDebug && page.url.searchParams.get("debug") === "lobby";
+  /** `?debug=race`: a marathon a day into its race. See createRaceSimulator. */
+  const isDebugRace = isDebug && page.url.searchParams.get("debug") === "race";
+  /** `?debug=mochi`: the room button's two pictures, rendered to save (see MochiPortrait). */
+  let MochiPortrait = $state.raw<Component | null>(null);
+  if (isDebug && page.url.searchParams.get("debug") === "mochi") {
+    void import("$lib/components/display/lobby/MochiPortrait.svelte").then((module) => {
+      MochiPortrait = module.default;
+    });
+  }
 
   let code = $derived(page.params.code ?? "");
   /**
@@ -111,7 +128,11 @@
     if (!("problem" in group) || group.problem !== "not-found") return group;
     const found = await loadMarathonDisplay(code);
     if ("problem" in found) return group;
-    const marathon = found.value;
+    return showMarathon(found.value);
+  }
+
+  /** A marathon's board, as the screen draws it. Its times go to the header and the lobby. */
+  function showMarathon(marathon: MarathonDisplay): { value: DisplayBoard } {
     marathonTimes = marathon;
     const at = Date.now();
     return {
@@ -189,11 +210,30 @@
     // Set when the page goes away before the simulator has loaded.
     const stopped = new AbortController();
     void (async () => {
-      const load: Load = isDebug
-        ? (await import("$lib/sync/display-simulator")).createDisplaySimulator()
-        : invite === GLOBAL
-          ? () => loadGlobalDisplayBoard(m.leaderboards_global_title())
-          : () => loadGroupOrMarathon(invite);
+      const simulator = isDebug ? await import("$lib/sync/display-simulator") : null;
+      const asked = (name: string): number | null => {
+        const value = Number.parseInt(page.url.searchParams.get(name) ?? "", 10);
+        return Number.isNaN(value) ? null : value;
+      };
+      const hasInvite = page.url.searchParams.has("invite");
+      const marathon = isDebugLobby
+        ? simulator?.createLobbySimulator(
+            hasInvite,
+            asked("start"),
+            asked("people") ?? 0,
+            asked("end"),
+          )
+        : isDebugRace
+          ? simulator?.createRaceSimulator(hasInvite, asked("end"), asked("people") ?? 0)
+          : undefined;
+      const load: Load =
+        marathon !== undefined
+          ? async () => showMarathon(await marathon())
+          : simulator !== null
+            ? simulator.createDisplaySimulator()
+            : invite === GLOBAL
+              ? () => loadGlobalDisplayBoard(m.leaderboards_global_title())
+              : () => loadGroupOrMarathon(invite);
       if (stopped.signal.aborted) return;
       void refresh(load);
       stopPolling = pollWhileVisible(() => {
@@ -215,12 +255,99 @@
     new Map(board?.members.map((member) => [member.username, member.cardColor]) ?? []),
   );
 
+  /**
+   * A marathon's board hangs in a little wagashi shop where everyone in it
+   * is a daifuku (see display/lobby/): milling about before the start, racing
+   * while it runs, on the podium after. The lobby stays a few seconds past
+   * the start, and the count a few past either end, for the room's moment
+   * at zero.
+   */
+  const AFTER_ZERO_MS = 6000;
+  /** The room counts the last minute down itself, on its screen. */
+  const ROOM_COUNTDOWN_MS = 60_000;
+  let roomPhase = $derived.by<RoomPhase | null>(() => {
+    if (marathonTimes === null) return null;
+    if (now < marathonTimes.startsAt + AFTER_ZERO_MS) return "lobby";
+    const status = marathonStatus(marathonTimes, now);
+    return status === "finished" ? "final" : status === "counting" ? "counting" : "race";
+  });
+  let isLobby = $derived(roomPhase !== null);
+  /**
+   * Whether this machine shows the room, rather than the plain board. The
+   * room is all motion, so with reduced motion the plain board comes first,
+   * and the switch is there for anyone who wants the room anyway.
+   */
+  let isRoomChosen = $state(readRoomChoice(!prefersReducedMotion.current));
+  /** The room, loaded the first time it shows, so three.js stays out of every other page. */
+  let LobbyStage = $state.raw<Component<{
+    members: readonly LobbyMember[];
+    children: Snippet;
+    sign?: Snippet;
+    phase: RoomPhase;
+    countdown: Countdown | null;
+    gains: ReadonlyMap<string, number>;
+    gainsFrom: number | null;
+  }> | null>(null);
+  let isRoomShown = $derived(isLobby && isRoomChosen && LobbyStage !== null);
+  /** The start or the end, through the room's last minute and its moment after, or null. */
+  let roomCountdown = $derived.by<Countdown | null>(() => {
+    if (!isRoomShown || marathonTimes === null) return null;
+    for (const [at, kind] of [
+      [marathonTimes.startsAt, "start"],
+      [marathonTimes.endsAt, "end"],
+    ] as const) {
+      if (now >= at - ROOM_COUNTDOWN_MS && now < at + AFTER_ZERO_MS) return { at, kind };
+    }
+    return null;
+  });
+  /**
+   * The invite, when the organiser shows it on the screen and people can
+   * still join to run. The server only sends it then; this also takes it
+   * down the second joining closes, without waiting for the next refresh.
+   */
+  let inviteLink = $derived(
+    marathonTimes?.inviteCode != null && canEnter(marathonTimes, now)
+      ? `${location.origin}/join/${marathonTimes.inviteCode}`
+      : null,
+  );
+  $effect(() => {
+    if (!isLobby || !isRoomChosen || LobbyStage !== null) return;
+    void import("$lib/components/display/lobby/LobbyStage.svelte").then((module) => {
+      LobbyStage = module.default;
+    });
+  });
+  /** Places on the board, for the podium: none for anyone on 0, who has no place yet. */
+  let places = $derived(
+    new Map(ranked.map((entry) => [entry.username, entry.score > 0 ? entry.rank : null])),
+  );
+  // In the order they joined, so the first ones are the ones in the room.
+  let lobbyMembers = $derived(
+    (board?.members ?? []).map((member) => ({
+      username: member.username,
+      name: member.displayName ?? member.username,
+      color: member.cardColor,
+      rank: places.get(member.username) ?? null,
+      readAt: member.scoredAt,
+    })),
+  );
+
   /** The first character of a name, whole, so an emoji or a kanji is not cut in half. */
   function initialOf(entry: RankedEntry): string {
     return (
       graphemes.segment(nameOf(entry))[Symbol.iterator]().next().value?.segment ?? ""
     ).toUpperCase();
   }
+
+  // This page never scrolls (the board scrolls itself), so the space the app
+  // keeps for a scrollbar would only show as a strip down the right edge,
+  // across the lobby's room. Given back while the page is open.
+  $effect(() => {
+    const root = document.documentElement;
+    root.style.scrollbarGutter = "auto";
+    return () => {
+      root.style.removeProperty("scrollbar-gutter");
+    };
+  });
 
   // Keeps the screen on. A screen that sleeps after ten minutes is a black
   // rectangle for the rest of the lesson. The browser drops the lock when the
@@ -270,8 +397,17 @@
   });
 
   async function toggleFullscreen(): Promise<void> {
-    if (document.fullscreenElement === null) await document.documentElement.requestFullscreen();
-    else await document.exitFullscreen();
+    if (document.fullscreenElement !== null) {
+      await document.exitFullscreen();
+      return;
+    }
+    await document.documentElement.requestFullscreen();
+    // A board is wide, so on a phone it asks to stay sideways. Only some
+    // browsers allow it, and only in full screen; the others refuse, or have
+    // no lock at all (Safari), and the page turns itself instead (see the
+    // style below).
+    const orientation: Partial<Pick<ScreenOrientation, "lock">> = screen.orientation;
+    await orientation.lock?.("landscape").catch(() => undefined);
   }
 </script>
 
@@ -279,14 +415,25 @@
   <title>{board?.name ?? m.common_app_name()}</title>
 </svelte:head>
 
-{#if countdown !== null}
-  {#key countdown.at}
-    <RaceCountdown at={countdown.at} kind={countdown.kind} />
-  {/key}
-{/if}
-
-<main class={["display flex min-h-0 w-full flex-1 flex-col", !isPointerActive && "cursor-none"]}>
-  {#if board === null}
+<main
+  class={[
+    "display relative flex min-h-0 w-full flex-1 flex-col",
+    isLobby && "overflow-hidden",
+    !isPointerActive && "cursor-none",
+  ]}
+>
+  <!--
+    The room counts down on its own screen; this is for everything else.
+    Inside the page, so it turns with it on a phone held upright.
+  -->
+  {#if countdown !== null && countdown.kind !== roomCountdown?.kind}
+    {#key countdown.at}
+      <RaceCountdown at={countdown.at} kind={countdown.kind} />
+    {/key}
+  {/if}
+  {#if MochiPortrait !== null}
+    <MochiPortrait />
+  {:else if board === null}
     <!-- The only loading state: the first. After this the board changes in place. -->
     <div class="flex flex-1 items-center justify-center">
       {#if problem === null}
@@ -300,20 +447,13 @@
       {/if}
     </div>
   {:else}
-    <header class="display-header flex items-end justify-between gap-8">
-      <div class="flex min-w-0 flex-col">
-        <h1 class="display-title min-w-0 truncate font-semibold tracking-tight">{board.name}</h1>
-        {#if marathonTimes !== null}
-          <p class="display-status text-muted-foreground tabular-nums">
-            {statusLine(marathonTimes, now)}
-          </p>
-        {/if}
-      </div>
-      <!--
-        Nothing here most of the time. A small spinner while it fetches, and
-        a note when the connection is gone, because then the board on the
-        wall may be behind and whoever set it up should know.
-      -->
+    <!--
+      Nothing here most of the time. A small spinner while it fetches, and a
+      note when the connection is gone, because then the board on the wall
+      may be behind and whoever set it up should know. The buttons show only
+      while someone moves the mouse.
+    -->
+    {#snippet controls()}
       <div class="display-meta flex shrink-0 items-center gap-3 text-muted-foreground">
         {#if isOffline}
           <WifiOff class="display-icon" aria-hidden="true" />
@@ -322,6 +462,45 @@
           </span>
         {:else if isRefreshing}
           <Spinner class="display-icon" aria-label={m.common_status_loading()} />
+        {/if}
+        {#if isLobby}
+          <Button
+            variant="ghost"
+            size="icon"
+            class={[
+              "group transition-opacity duration-150",
+              isPointerActive ? "opacity-100" : "pointer-events-none opacity-0",
+            ]}
+            aria-label={isRoomChosen
+              ? m.marathon_display_button_board()
+              : m.marathon_display_button_room()}
+            onclick={() => {
+              isRoomChosen = !isRoomChosen;
+              saveRoomChoice(isRoomChosen);
+            }}
+          >
+            {#if isRoomChosen}
+              <List class="size-5" />
+            {:else}
+              <!--
+                One of the room's daifuku, as a picture so this board loads
+                nothing of the room. It glances up when the button is hovered.
+                Rendered by /display?debug=mochi.
+              -->
+              <span class="relative size-8" aria-hidden="true">
+                <img
+                  src="/lobby/mochi.png"
+                  alt=""
+                  class="absolute inset-0 size-full group-hover:opacity-0 group-focus-visible:opacity-0"
+                />
+                <img
+                  src="/lobby/mochi-look.png"
+                  alt=""
+                  class="absolute inset-0 size-full opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100"
+                />
+              </span>
+            {/if}
+          </Button>
         {/if}
         {#if document.fullscreenEnabled}
           <Button
@@ -346,66 +525,135 @@
           </Button>
         {/if}
       </div>
-    </header>
+    {/snippet}
 
-    <AutoScroll>
-      <ol class="display-rows flex flex-col">
-        {#each ranked as entry (entry.username)}
-          <li
-            animate:flip={{ duration: prefersReducedMotion.current ? 0 : 800 }}
-            class={[
-              "display-row flex items-center rounded-xl transition-colors duration-1000",
-              raised.has(entry.username) && "bg-accent",
-            ]}
-          >
-            <span class="display-rank shrink-0 text-muted-foreground tabular-nums"
-              >{rankLabel(entry)}</span
-            >
-            <span
+    {#snippet boardView(name: string)}
+      <header class="display-header flex items-end justify-between gap-8">
+        <div class="flex min-w-0 flex-col">
+          <h1 class="display-title min-w-0 truncate font-semibold tracking-tight">{name}</h1>
+          {#if marathonTimes !== null}
+            <p class="display-status text-muted-foreground tabular-nums">
+              {statusLine(marathonTimes, now)}
+            </p>
+          {/if}
+        </div>
+        <!-- In the room the controls sit in the page's corner, not on the screen. -->
+        {#if !isRoomShown}
+          <!-- eslint-disable-next-line @typescript-eslint/no-confusing-void-expression -->
+          {@render controls()}
+        {/if}
+      </header>
+
+      <AutoScroll>
+        <ol class="display-rows flex flex-col">
+          {#each ranked as entry (entry.username)}
+            <li
+              animate:flip={{ duration: prefersReducedMotion.current ? 0 : 800 }}
               class={[
-                "display-avatar flex shrink-0 items-center justify-center rounded-full font-semibold text-profile-foreground",
-                CARD_BACKGROUNDS[colors.get(entry.username) ?? "green"],
+                "display-row flex items-center rounded-xl transition-colors duration-1000",
+                raised.has(entry.username) && "bg-accent",
               ]}
-              aria-hidden="true">{initialOf(entry)}</span
             >
-            <span class="flex min-w-0 flex-1 items-baseline gap-[0.5em]">
-              <span class="max-w-full shrink-0 truncate font-medium">{nameOf(entry)}</span>
-              <!-- Only the first badge, as on every board row. -->
-              {#if entry.badges?.[0]}
-                <WornBadge
-                  worn={entry.badges[0]}
-                  class="display-badge self-center"
-                  sealClass="display-seal self-center"
-                />
-              {/if}
-              {#if entry.displayName !== null}
-                <span class="display-meta min-w-0 truncate text-muted-foreground"
-                  >@{entry.username}</span
-                >
-              {/if}
-              {#if climbs.has(entry.username)}
-                <span class="display-meta shrink-0 font-medium text-gain"
-                  >▲{climbs.get(entry.username)}</span
-                >
-              {/if}
-            </span>
-            <!-- What the score gained since the last update, so a climb has a reason on screen. -->
-            <span class="flex shrink-0 items-baseline gap-[0.5em]">
-              {#if gains.has(entry.username)}
-                <span class="display-meta font-medium text-gain tabular-nums"
-                  >+{gains.get(entry.username)}</span
-                >
-              {/if}
-              <span class="font-semibold tabular-nums">{Math.round(entry.score)}</span>
-            </span>
-          </li>
-        {/each}
-      </ol>
-    </AutoScroll>
+              <span class="display-rank shrink-0 text-muted-foreground tabular-nums"
+                >{rankLabel(entry)}</span
+              >
+              <span
+                class={[
+                  "display-avatar flex shrink-0 items-center justify-center rounded-full font-semibold text-profile-foreground",
+                  CARD_BACKGROUNDS[colors.get(entry.username) ?? "green"],
+                ]}
+                aria-hidden="true">{initialOf(entry)}</span
+              >
+              <span class="flex min-w-0 flex-1 items-baseline gap-[0.5em]">
+                <span class="max-w-full shrink-0 truncate font-medium">{nameOf(entry)}</span>
+                <!-- Only the first badge, as on every board row. -->
+                {#if entry.badges?.[0]}
+                  <WornBadge
+                    worn={entry.badges[0]}
+                    class="display-badge self-center"
+                    sealClass="display-seal self-center"
+                  />
+                {/if}
+                {#if entry.displayName !== null}
+                  <span class="display-meta min-w-0 truncate text-muted-foreground"
+                    >@{entry.username}</span
+                  >
+                {/if}
+                {#if climbs.has(entry.username)}
+                  <span class="display-meta shrink-0 font-medium text-gain"
+                    >▲{climbs.get(entry.username)}</span
+                  >
+                {/if}
+              </span>
+              <!-- What the score gained since the last update, so a climb has a reason on screen. -->
+              <span class="flex shrink-0 items-baseline gap-[0.5em]">
+                {#if gains.has(entry.username)}
+                  <span class="display-meta font-medium text-gain tabular-nums"
+                    >+{gains.get(entry.username)}</span
+                  >
+                {/if}
+                <span class="font-semibold tabular-nums">{Math.round(entry.score)}</span>
+              </span>
+            </li>
+          {/each}
+        </ol>
+      </AutoScroll>
+    {/snippet}
+
+    <!--
+      Before the start: the board on a big screen in a room where everyone
+      waits. The lint rule misreads a snippet declared in markup as returning
+      nothing; rendering one is what it is for.
+    -->
+    {#snippet joinSign()}
+      <!-- On the room's sign the paper round the code carries its margin on. -->
+      <JoinSign link={inviteLink ?? ""} quietZone={1} />
+    {/snippet}
+
+    {#if isRoomShown && LobbyStage !== null}
+      <LobbyStage
+        members={lobbyMembers}
+        sign={inviteLink === null ? undefined : joinSign}
+        phase={roomPhase ?? "lobby"}
+        countdown={roomCountdown}
+        {gains}
+        gainsFrom={updatedAt}
+      >
+        <!-- eslint-disable-next-line @typescript-eslint/no-confusing-void-expression -->
+        {@render boardView(board.name)}
+      </LobbyStage>
+      <!-- A backing only while the buttons show, or the note that the board may be behind. -->
+      <div
+        class={[
+          "absolute top-5 right-8 rounded-full px-3 transition-colors duration-150",
+          (isPointerActive || isOffline) && "bg-background/85",
+        ]}
+      >
+        <!-- eslint-disable-next-line @typescript-eslint/no-confusing-void-expression -->
+        {@render controls()}
+      </div>
+    {:else if inviteLink !== null}
+      <!-- The plain board, with the invite beside it while people can still join. -->
+      <div class="flex min-h-0 flex-1">
+        <div class="flex min-h-0 min-w-0 flex-1 flex-col">
+          <!-- eslint-disable-next-line @typescript-eslint/no-confusing-void-expression -->
+          {@render boardView(board.name)}
+        </div>
+        <aside class="display-invite shrink-0 overflow-hidden rounded-xl">
+          <JoinSign link={inviteLink} />
+        </aside>
+      </div>
+    {:else}
+      <!-- eslint-disable-next-line @typescript-eslint/no-confusing-void-expression -->
+      {@render boardView(board.name)}
+    {/if}
 
     <!-- Where the board comes from, small, for anyone in the room who wants to try it. -->
     <footer
-      class="display-footer display-meta flex items-baseline justify-between gap-8 border-t border-border text-muted-foreground"
+      class={[
+        "display-footer display-meta flex items-baseline justify-between gap-8 border-t border-border text-muted-foreground",
+        isLobby && "lobby-footer absolute inset-x-0 bottom-0 bg-background/85",
+      ]}
     >
       <span class="font-medium text-foreground">{m.common_app_name()}</span>
       <!-- A classroom screen is often a Windows PC, where flags on badges need the credit. -->
@@ -424,6 +672,26 @@
   .display {
     --line: clamp(1.25rem, 3.6vh, 3.5rem);
     font-size: var(--line);
+  }
+
+  /*
+    A board is wide. On a phone held upright the page lays itself out on its
+    side, as a landscape screen, so turning the phone shows it the right way
+    up, and the room and the board are never squeezed into a tall strip.
+    Its line is then measured from the screen's short side, which is its
+    width.
+  */
+  @media (orientation: portrait) and (max-width: 768px) {
+    .display {
+      --line: clamp(0.9rem, 3.6vw, 3.5rem);
+      position: fixed;
+      top: 0;
+      left: 100dvw;
+      width: 100dvh;
+      height: 100dvw;
+      transform: rotate(90deg);
+      transform-origin: top left;
+    }
   }
 
   .display-header {
@@ -474,6 +742,14 @@
 
   .display-status {
     font-size: calc(var(--line) * 0.8);
+  }
+
+  /* The invite beside the plain board, big enough to scan from a few rows back. */
+  .display-invite {
+    width: 11em;
+    height: 13em;
+    margin: 4vh 4vw 0 0;
+    font-size: calc(var(--line) * 0.85);
   }
 
   .display-row {

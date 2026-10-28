@@ -67,6 +67,13 @@
      one the other way round. */
   --qr-dark: oklch(0.15 0 0);
   --qr-light: oklch(0.99 0 0);
+  /* The marathon lobby's room is always daytime (display/lobby/room.ts), so
+     the names over the daifuku are the same in both themes. */
+  --lobby-name: oklch(0.22 0.01 50 / 55%);
+  --lobby-gain: oklch(0.86 0.15 155);
+  /* Washi for the sign with the invite, light enough under a QR code. */
+  --lobby-paper: oklch(0.95 0.025 85);
+  --lobby-ink: oklch(0.2 0.01 50);
   --primary-foreground: oklch(0.979 0.021 166.113);
   /* A gain, like "+12" or a climb: the primary green, which reads well on light. */
   --gain: var(--primary);

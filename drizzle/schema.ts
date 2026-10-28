@@ -527,6 +527,10 @@ export const marathons = pgTable(
     inviteCode: text("invite_code"),
     // Shows the board, read-only and without signing in, on a screen.
     displayCode: text("display_code"),
+    // Whether that screen also shows the invite as a QR code, while people
+    // can still join to run. Off unless the admin turns it on: whoever can
+    // see the screen can then join.
+    showsInvite: boolean("shows_invite").notNull().default(false),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [

@@ -48,8 +48,9 @@
   let startsAt = $state(0);
   let endsAt = $state(0);
   let isLateOn = $state(true);
+  let isInviteShown = $state(false);
   /** The change on its way to the server, so its own control shows the wait. */
-  let pending = $state<"name" | "times" | "late" | "results" | "delete" | null>(null);
+  let pending = $state<"name" | "times" | "late" | "invite" | "results" | "delete" | null>(null);
   let isBusy = $derived(pending !== null);
   let problem = $state<MarathonProblem | null>(null);
   let isConfirmingDelete = $state(false);
@@ -63,6 +64,7 @@
     startsAt = marathon.startsAt;
     endsAt = marathon.endsAt;
     isLateOn = marathon.allowsLateEntry;
+    isInviteShown = marathon.showsInvite;
     problem = null;
     isConfirmingDelete = false;
   });
@@ -248,6 +250,27 @@
             onCheckedChange={(checked: boolean) => {
               void save("late", { allowsLateEntry: checked }).then((isSaved) => {
                 if (!isSaved) isLateOn = marathon.allowsLateEntry;
+              });
+            }}
+          />
+        </div>
+
+        <div class="flex items-start justify-between gap-4">
+          <div class="flex flex-col gap-1">
+            <Label for="marathon-settings-screen-invite">
+              {m.marathon_settings_label_screen_invite()}
+            </Label>
+            <span class="text-sm text-balance text-muted-foreground">
+              {m.marathon_settings_hint_screen_invite()}
+            </span>
+          </div>
+          <Switch
+            id="marathon-settings-screen-invite"
+            bind:checked={isInviteShown}
+            disabled={isBusy}
+            onCheckedChange={(checked: boolean) => {
+              void save("invite", { showsInvite: checked }).then((isSaved) => {
+                if (!isSaved) isInviteShown = marathon.showsInvite;
               });
             }}
           />
